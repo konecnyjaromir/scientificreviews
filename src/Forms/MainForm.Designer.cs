@@ -43,6 +43,7 @@
             this.removeWithoutDOIToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.updatePageTagFormatToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.excludeEntriesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.excludeEntriesByTitleToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripMenuItem1 = new System.Windows.Forms.ToolStripSeparator();
             this.exportDatabaseToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.exportDOIsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -55,24 +56,25 @@
             this.toolStripStatusLabel1 = new System.Windows.Forms.ToolStripStatusLabel();
             this.lblInfo = new System.Windows.Forms.ToolStripStatusLabel();
             this.dataGridView1 = new System.Windows.Forms.DataGridView();
-            this.keyDataGridViewTextBoxColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
-            this.typeDataGridViewTextBoxColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
-            this.yearDataGridViewTextBoxColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
-            this.titleDataGridViewTextBoxColumn = new System.Windows.Forms.DataGridViewTextBoxColumn();
-            this.bibtexEntryBindingSource = new System.Windows.Forms.BindingSource(this.components);
-            this.bibtexDataSet = new ScientificReviews.DataSets.BibtexDataSet();
             this.textBox1 = new System.Windows.Forms.TextBox();
             this.splitter1 = new System.Windows.Forms.Splitter();
             this.propertyGrid1 = new System.Windows.Forms.PropertyGrid();
             this.panel1 = new System.Windows.Forms.Panel();
             this.splitter2 = new System.Windows.Forms.Splitter();
-            this.excludeEntriesByTitleToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.toolStrip1 = new System.Windows.Forms.ToolStrip();
+            this.txtSearch = new System.Windows.Forms.ToolStripTextBox();
+            this.toolStripLabel1 = new System.Windows.Forms.ToolStripLabel();
+            this.viewToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.columnsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.toolStripSeparator1 = new System.Windows.Forms.ToolStripSeparator();
+            this.addTag = new System.Windows.Forms.ToolStripButton();
+            this.bindingSource1 = new System.Windows.Forms.BindingSource(this.components);
             this.menuStrip1.SuspendLayout();
             this.statusStrip1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridView1)).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)(this.bibtexEntryBindingSource)).BeginInit();
-            ((System.ComponentModel.ISupportInitialize)(this.bibtexDataSet)).BeginInit();
             this.panel1.SuspendLayout();
+            this.toolStrip1.SuspendLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.bindingSource1)).BeginInit();
             this.SuspendLayout();
             // 
             // menuStrip1
@@ -80,7 +82,8 @@
             this.menuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.projectToolStripMenuItem,
             this.databaseToolStripMenuItem,
-            this.journalCitationReportsToolStripMenuItem});
+            this.journalCitationReportsToolStripMenuItem,
+            this.viewToolStripMenuItem});
             this.menuStrip1.Location = new System.Drawing.Point(0, 0);
             this.menuStrip1.Name = "menuStrip1";
             this.menuStrip1.Size = new System.Drawing.Size(1164, 24);
@@ -186,6 +189,13 @@
             this.excludeEntriesToolStripMenuItem.Text = "Exclude entries";
             this.excludeEntriesToolStripMenuItem.Click += new System.EventHandler(this.excludeEntriesToolStripMenuItem_Click);
             // 
+            // excludeEntriesByTitleToolStripMenuItem
+            // 
+            this.excludeEntriesByTitleToolStripMenuItem.Name = "excludeEntriesByTitleToolStripMenuItem";
+            this.excludeEntriesByTitleToolStripMenuItem.Size = new System.Drawing.Size(213, 22);
+            this.excludeEntriesByTitleToolStripMenuItem.Text = "Exclude entries by title";
+            this.excludeEntriesByTitleToolStripMenuItem.Click += new System.EventHandler(this.excludeEntriesByTitleToolStripMenuItem_Click);
+            // 
             // toolStripMenuItem1
             // 
             this.toolStripMenuItem1.Name = "toolStripMenuItem1";
@@ -272,60 +282,17 @@
             this.dataGridView1.AllowUserToDeleteRows = false;
             this.dataGridView1.AllowUserToOrderColumns = true;
             this.dataGridView1.AllowUserToResizeRows = false;
-            this.dataGridView1.AutoGenerateColumns = false;
             this.dataGridView1.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
-            this.dataGridView1.Columns.AddRange(new System.Windows.Forms.DataGridViewColumn[] {
-            this.keyDataGridViewTextBoxColumn,
-            this.typeDataGridViewTextBoxColumn,
-            this.yearDataGridViewTextBoxColumn,
-            this.titleDataGridViewTextBoxColumn});
-            this.dataGridView1.DataSource = this.bibtexEntryBindingSource;
             this.dataGridView1.Dock = System.Windows.Forms.DockStyle.Left;
             this.dataGridView1.EditMode = System.Windows.Forms.DataGridViewEditMode.EditProgrammatically;
-            this.dataGridView1.Location = new System.Drawing.Point(0, 24);
+            this.dataGridView1.Location = new System.Drawing.Point(0, 49);
             this.dataGridView1.Name = "dataGridView1";
             this.dataGridView1.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
-            this.dataGridView1.Size = new System.Drawing.Size(889, 885);
+            this.dataGridView1.Size = new System.Drawing.Size(889, 860);
             this.dataGridView1.TabIndex = 2;
             this.dataGridView1.CellContentClick += new System.Windows.Forms.DataGridViewCellEventHandler(this.dataGridView1_CellContentClick);
             this.dataGridView1.SelectionChanged += new System.EventHandler(this.dataGridView1_SelectionChanged);
             this.dataGridView1.KeyDown += new System.Windows.Forms.KeyEventHandler(this.dataGridView1_KeyDown);
-            // 
-            // keyDataGridViewTextBoxColumn
-            // 
-            this.keyDataGridViewTextBoxColumn.DataPropertyName = "Key";
-            this.keyDataGridViewTextBoxColumn.HeaderText = "Key";
-            this.keyDataGridViewTextBoxColumn.Name = "keyDataGridViewTextBoxColumn";
-            this.keyDataGridViewTextBoxColumn.Width = 200;
-            // 
-            // typeDataGridViewTextBoxColumn
-            // 
-            this.typeDataGridViewTextBoxColumn.DataPropertyName = "Type";
-            this.typeDataGridViewTextBoxColumn.HeaderText = "Type";
-            this.typeDataGridViewTextBoxColumn.Name = "typeDataGridViewTextBoxColumn";
-            // 
-            // yearDataGridViewTextBoxColumn
-            // 
-            this.yearDataGridViewTextBoxColumn.DataPropertyName = "Year";
-            this.yearDataGridViewTextBoxColumn.HeaderText = "Year";
-            this.yearDataGridViewTextBoxColumn.Name = "yearDataGridViewTextBoxColumn";
-            // 
-            // titleDataGridViewTextBoxColumn
-            // 
-            this.titleDataGridViewTextBoxColumn.DataPropertyName = "Title";
-            this.titleDataGridViewTextBoxColumn.HeaderText = "Title";
-            this.titleDataGridViewTextBoxColumn.Name = "titleDataGridViewTextBoxColumn";
-            this.titleDataGridViewTextBoxColumn.Width = 700;
-            // 
-            // bibtexEntryBindingSource
-            // 
-            this.bibtexEntryBindingSource.DataMember = "BibtexEntry";
-            this.bibtexEntryBindingSource.DataSource = this.bibtexDataSet;
-            // 
-            // bibtexDataSet
-            // 
-            this.bibtexDataSet.DataSetName = "BibtexDataSet";
-            this.bibtexDataSet.SchemaSerializationMode = System.Data.SchemaSerializationMode.IncludeSchema;
             // 
             // textBox1
             // 
@@ -333,14 +300,14 @@
             this.textBox1.Location = new System.Drawing.Point(0, 511);
             this.textBox1.Multiline = true;
             this.textBox1.Name = "textBox1";
-            this.textBox1.Size = new System.Drawing.Size(265, 374);
+            this.textBox1.Size = new System.Drawing.Size(265, 349);
             this.textBox1.TabIndex = 3;
             // 
             // splitter1
             // 
-            this.splitter1.Location = new System.Drawing.Point(889, 24);
+            this.splitter1.Location = new System.Drawing.Point(889, 49);
             this.splitter1.Name = "splitter1";
-            this.splitter1.Size = new System.Drawing.Size(10, 885);
+            this.splitter1.Size = new System.Drawing.Size(10, 860);
             this.splitter1.TabIndex = 5;
             this.splitter1.TabStop = false;
             this.splitter1.SplitterMoved += new System.Windows.Forms.SplitterEventHandler(this.splitter1_SplitterMoved);
@@ -361,9 +328,9 @@
             this.panel1.Controls.Add(this.splitter2);
             this.panel1.Controls.Add(this.propertyGrid1);
             this.panel1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.panel1.Location = new System.Drawing.Point(899, 24);
+            this.panel1.Location = new System.Drawing.Point(899, 49);
             this.panel1.Name = "panel1";
-            this.panel1.Size = new System.Drawing.Size(265, 885);
+            this.panel1.Size = new System.Drawing.Size(265, 860);
             this.panel1.TabIndex = 7;
             // 
             // splitter2
@@ -375,12 +342,61 @@
             this.splitter2.TabIndex = 6;
             this.splitter2.TabStop = false;
             // 
-            // excludeEntriesByTitleToolStripMenuItem
+            // toolStrip1
             // 
-            this.excludeEntriesByTitleToolStripMenuItem.Name = "excludeEntriesByTitleToolStripMenuItem";
-            this.excludeEntriesByTitleToolStripMenuItem.Size = new System.Drawing.Size(213, 22);
-            this.excludeEntriesByTitleToolStripMenuItem.Text = "Exclude entries by title";
-            this.excludeEntriesByTitleToolStripMenuItem.Click += new System.EventHandler(this.excludeEntriesByTitleToolStripMenuItem_Click);
+            this.toolStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.toolStripLabel1,
+            this.txtSearch,
+            this.toolStripSeparator1,
+            this.addTag});
+            this.toolStrip1.Location = new System.Drawing.Point(0, 24);
+            this.toolStrip1.Name = "toolStrip1";
+            this.toolStrip1.Size = new System.Drawing.Size(1164, 25);
+            this.toolStrip1.TabIndex = 8;
+            this.toolStrip1.Text = "toolStrip1";
+            // 
+            // txtSearch
+            // 
+            this.txtSearch.Font = new System.Drawing.Font("Segoe UI", 9F);
+            this.txtSearch.Name = "txtSearch";
+            this.txtSearch.Size = new System.Drawing.Size(300, 25);
+            this.txtSearch.Click += new System.EventHandler(this.txtSearch_Click);
+            this.txtSearch.TextChanged += new System.EventHandler(this.txtSearch_TextChanged);
+            // 
+            // toolStripLabel1
+            // 
+            this.toolStripLabel1.Name = "toolStripLabel1";
+            this.toolStripLabel1.Size = new System.Drawing.Size(42, 22);
+            this.toolStripLabel1.Text = "Search";
+            // 
+            // viewToolStripMenuItem
+            // 
+            this.viewToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.columnsToolStripMenuItem});
+            this.viewToolStripMenuItem.Name = "viewToolStripMenuItem";
+            this.viewToolStripMenuItem.Size = new System.Drawing.Size(63, 20);
+            this.viewToolStripMenuItem.Text = "Window";
+            // 
+            // columnsToolStripMenuItem
+            // 
+            this.columnsToolStripMenuItem.Name = "columnsToolStripMenuItem";
+            this.columnsToolStripMenuItem.Size = new System.Drawing.Size(122, 22);
+            this.columnsToolStripMenuItem.Text = "Columns";
+            this.columnsToolStripMenuItem.Click += new System.EventHandler(this.columnsToolStripMenuItem_Click);
+            // 
+            // toolStripSeparator1
+            // 
+            this.toolStripSeparator1.Name = "toolStripSeparator1";
+            this.toolStripSeparator1.Size = new System.Drawing.Size(6, 25);
+            // 
+            // addTag
+            // 
+            this.addTag.Image = global::ScientificReviews.Properties.Resources.add;
+            this.addTag.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.addTag.Name = "addTag";
+            this.addTag.Size = new System.Drawing.Size(69, 22);
+            this.addTag.Text = "Add tag";
+            this.addTag.Click += new System.EventHandler(this.addTag_Click);
             // 
             // MainForm
             // 
@@ -391,6 +407,7 @@
             this.Controls.Add(this.splitter1);
             this.Controls.Add(this.dataGridView1);
             this.Controls.Add(this.statusStrip1);
+            this.Controls.Add(this.toolStrip1);
             this.Controls.Add(this.menuStrip1);
             this.Icon = ((System.Drawing.Icon)(resources.GetObject("$this.Icon")));
             this.MainMenuStrip = this.menuStrip1;
@@ -403,10 +420,11 @@
             this.statusStrip1.ResumeLayout(false);
             this.statusStrip1.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridView1)).EndInit();
-            ((System.ComponentModel.ISupportInitialize)(this.bibtexEntryBindingSource)).EndInit();
-            ((System.ComponentModel.ISupportInitialize)(this.bibtexDataSet)).EndInit();
             this.panel1.ResumeLayout(false);
             this.panel1.PerformLayout();
+            this.toolStrip1.ResumeLayout(false);
+            this.toolStrip1.PerformLayout();
+            ((System.ComponentModel.ISupportInitialize)(this.bindingSource1)).EndInit();
             this.ResumeLayout(false);
             this.PerformLayout();
 
@@ -420,18 +438,12 @@
         private System.Windows.Forms.StatusStrip statusStrip1;
         private System.Windows.Forms.ToolStripStatusLabel lblStatus;
         private System.Windows.Forms.DataGridView dataGridView1;
-        private System.Windows.Forms.BindingSource bibtexEntryBindingSource;
-        private DataSets.BibtexDataSet bibtexDataSet;
         private System.Windows.Forms.ToolStripMenuItem databaseToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem createEntryKeysToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem removeTagsToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem exportDatabaseToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem removeTypesToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripMenuItem1;
-        private System.Windows.Forms.DataGridViewTextBoxColumn keyDataGridViewTextBoxColumn;
-        private System.Windows.Forms.DataGridViewTextBoxColumn typeDataGridViewTextBoxColumn;
-        private System.Windows.Forms.DataGridViewTextBoxColumn yearDataGridViewTextBoxColumn;
-        private System.Windows.Forms.DataGridViewTextBoxColumn titleDataGridViewTextBoxColumn;
         private System.Windows.Forms.TextBox textBox1;
         private System.Windows.Forms.Splitter splitter1;
         private System.Windows.Forms.ToolStripMenuItem exportDOIsToolStripMenuItem;
@@ -451,5 +463,13 @@
         private System.Windows.Forms.ToolStripMenuItem loadBibTexFileToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem excludeEntriesToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem excludeEntriesByTitleToolStripMenuItem;
+        private System.Windows.Forms.BindingSource bindingSource1;
+        private System.Windows.Forms.ToolStrip toolStrip1;
+        private System.Windows.Forms.ToolStripLabel toolStripLabel1;
+        private System.Windows.Forms.ToolStripTextBox txtSearch;
+        private System.Windows.Forms.ToolStripMenuItem viewToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem columnsToolStripMenuItem;
+        private System.Windows.Forms.ToolStripSeparator toolStripSeparator1;
+        private System.Windows.Forms.ToolStripButton addTag;
     }
 }

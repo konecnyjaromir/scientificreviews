@@ -27,5 +27,7 @@ namespace ScientificReviews
 
         [Browsable(false)]
         public string LastFile { get; set; }
+
+        public string[] Columns { get; set; }
     }
 }

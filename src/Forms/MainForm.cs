@@ -1,6 +1,5 @@
 ﻿
 using ScientificReviews.Bibtex;
-using ScientificReviews.DataSets;
 using ScientificReviews.Helpers;
 using ScientificReviews.JCR;
 using ScientificReviews.JCR.Dto;
@@ -36,26 +35,65 @@ namespace ScientificReviews.Forms
         List<BibtexEntry> entries = new List<BibtexEntry>();
         BibtexExporter bibtexExporter = new BibtexExporter();
 
-        private void LoadData(BibtexEntry[] entries)
+        private void LoadData(BibtexEntry[] entries, string search = "")
         {
-            bibtexDataSet.BibtexEntry.Clear();
-            bibtexDataSet.BibtexEntry.BeginLoadData();
-
-            foreach (var entry in entries)
+            if (search != "")
             {
-                var row = bibtexDataSet.BibtexEntry.NewBibtexEntryRow();
-                row.Key = entry.Key;
-                row.Type = entry.Type;
-                row.Year = entry.GetTagValue("year");
-                row.Title = entry.GetTagValue("title");
-                row.Entry = entry;
-                bibtexDataSet.BibtexEntry.AddBibtexEntryRow(row);
+                List<BibtexEntry> list = new List<BibtexEntry>();
+                foreach (BibtexEntry entry in entries)
+                {
+                    string en = bibtexExporter.EntryToString(entry);
+                    if (en.Contains(search))
+                    {
+                        list.Add(entry);
+                    }
+                }
+                entries = list.ToArray();
             }
-            bibtexDataSet.BibtexEntry.AcceptChanges();
-            bibtexDataSet.BibtexEntry.EndLoadData();
+
+            var dt = BuildTable(entries, Program.AppSettings.Data.Columns);
+
+            bindingSource1.DataSource = dt;
+            dataGridView1.DataSource = bindingSource1;
+
+            // skrýt interní sloupec
+            dataGridView1.Columns["Entry"].Visible = false;
+
             lblInfo.Text = $"{entries.Length} entries";
 
+
+
         }
+
+        private DataTable BuildTable(BibtexEntry[] entries, string[] userColumns)
+        {
+            var table = new DataTable();
+
+            table.Columns.Add("Key", typeof(string));
+            table.Columns.Add("Type", typeof(string));            
+
+            // vytvoření sloupců
+            foreach (var col in userColumns)
+                table.Columns.Add(col, typeof(string));
+
+            table.Columns.Add("Entry", typeof(BibtexEntry)); // interní, skrytý sloupec
+
+            // naplnění dat
+            foreach (var entry in entries)
+            {
+                var row = table.NewRow();
+                foreach (var col in userColumns)
+                    row[col] = entry.GetTagValue(col);
+
+                row["Entry"] = entry;
+                row["Key"] = entry.Key;
+                row["Type"] = entry.Type;
+                table.Rows.Add(row);
+            }
+
+            return table;
+        }
+
         private async void loadBibTexFolderToolStripMenuItem_Click(object sender, EventArgs e)
         {
             try
@@ -202,23 +240,23 @@ namespace ScientificReviews.Forms
         {
             if (e.KeyCode == Keys.Delete)
             {
-                if (bibtexEntryBindingSource.Current!= null)
+                if (bindingSource1.Current != null)
                 {
-                    int currentIndex = bibtexEntryBindingSource.Position;
+                    int currentIndex = bindingSource1.Position;
 
-                    DataRowView drv = bibtexEntryBindingSource.Current as DataRowView;
-                    var row = drv.Row as BibtexDataSet.BibtexEntryRow;
-                    var entry = row.Entry as BibtexEntry;
+                    DataRowView drv = bindingSource1.Current as DataRowView;
+                    var row = drv.Row as DataRow;
+                    var entry = row["Entry"] as BibtexEntry;
                     entries.Remove(entry);
                     LoadData(entries.ToArray());
 
                     // Nastavení indexu na následující řádek
-                    if (currentIndex >= bibtexEntryBindingSource.Count)
+                    if (currentIndex >= bindingSource1.Count)
                     {
                         // Pokud byl poslední záznam odstraněn, posuňte se na poslední řádek
-                        currentIndex = bibtexEntryBindingSource.Count - 1;
+                        currentIndex = bindingSource1.Count - 1;
                     }
-                    bibtexEntryBindingSource.Position = currentIndex;
+                    bindingSource1.Position = currentIndex;
                 }
             }
         }
@@ -235,13 +273,13 @@ namespace ScientificReviews.Forms
 
         private void dataGridView1_SelectionChanged(object sender, EventArgs e)
         {
-            if (bibtexEntryBindingSource.Current is DataRowView == false)
+            if (bindingSource1.Current is DataRowView == false)
                 return;
 
-            DataRowView drv = (DataRowView)bibtexEntryBindingSource.Current;
+            DataRowView drv = (DataRowView)bindingSource1.Current;
             if (drv.Row != null)
             {
-                var entry = (BibtexEntry)((BibtexDataSet.BibtexEntryRow)drv.Row).Entry;
+                var entry = (BibtexEntry)(drv.Row["Entry"]);
                 textBox1.Text = bibtexExporter.EntryToString(entry);
 
                 CustomClass customClass = new CustomClass();
@@ -249,7 +287,7 @@ namespace ScientificReviews.Forms
                 customClass.Add(new CustomProperty("entryType", "Type", entry.Type, "Bibitem", true, true));
                 foreach (var tag in entry.Tags)
                 {
-                    CustomProperty item = new CustomProperty(tag.Key, tag.Key, tag.Value, "Parameters", true, true);                                            
+                    CustomProperty item = new CustomProperty(tag.Key, tag.Key, tag.Value, "Parameters", true, true);
                     customClass.Add(item);
                 }
                 propertyGrid1.SelectedObject = customClass;
@@ -505,7 +543,7 @@ namespace ScientificReviews.Forms
 
         private void excludeEntriesByTitleToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            var frm = InputBoxForm.Show("Zadejte vzor pro filtrování položek:", this);
+            var frm = InputBoxForm.Show("Enter a pattern to filter items:", this);
             if (frm.DialogResult == DialogResult.OK) {
                 string[] patterns = frm.GetText().Split(',');
                 foreach (string item in patterns)
@@ -523,6 +561,49 @@ namespace ScientificReviews.Forms
                     entries = filtered;
                 }                
                 LoadData(entries.ToArray());
+            }
+        }
+
+        private void columnsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            var frm = new InputBoxForm();
+            frm.Text = "Enter a column names splited by dash:";
+            string text = string.Join(",", Program.AppSettings.Data.Columns);
+            frm.SetText(text);
+            frm.ShowDialog(this);
+            if (frm.DialogResult == DialogResult.OK)
+            {
+                Program.AppSettings.Data.Columns = frm.GetText().Split(',');                
+                LoadData(entries.ToArray());
+
+            }
+        }
+
+        private void txtSearch_TextChanged(object sender, EventArgs e)
+        {
+            LoadData(entries.ToArray(), txtSearch.Text);
+        }
+
+        private void txtSearch_Click(object sender, EventArgs e)
+        {
+            
+        }
+
+        private void addTag_Click(object sender, EventArgs e)
+        {
+            DataRowView drv = (DataRowView)bindingSource1.Current;
+            if (drv.Row != null)
+            {
+                var entry = (BibtexEntry)(drv.Row["Entry"]);
+
+                InputGridForm frm = new InputGridForm();
+                frm.Object = new BibtexTag();
+                if (frm.ShowDialog(this) == DialogResult.OK)
+                {
+                    var list = entry.Tags.ToList();
+                    list.Add(frm.Object as  BibtexTag);
+                    entry.Tags = list.ToArray();
+                }
             }
         }
 

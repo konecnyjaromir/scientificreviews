@@ -80,7 +80,9 @@ namespace ScientificReviews
             try
             {
                 AppSettings = new AppSettingsJson<AppSettingsData>(settingsFile);
-                AppSettings.LoadSettings();                
+                AppSettings.LoadSettings();
+                if (AppSettings.Data.Columns == null)
+                    AppSettings.Data.Columns = new string[0];
             }
             catch(Exception)
             {              

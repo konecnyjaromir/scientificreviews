@@ -64,6 +64,12 @@
     <Compile Include="Forms\InputBoxForm.Designer.cs">
       <DependentUpon>InputBoxForm.cs</DependentUpon>
     </Compile>
+    <Compile Include="Forms\InputGridForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\InputGridForm.Designer.cs">
+      <DependentUpon>InputGridForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="Helpers\CustomClass.cs" />
     <Compile Include="JCR\Dto\JCRCsvDto.cs" />
     <Compile Include="JCR\Dto\JournalReportsDto.cs" />
@@ -74,14 +80,6 @@
     <Compile Include="Bibtex\BibtexExporter.cs" />
     <Compile Include="Bibtex\BibtexParser.cs" />
     <Compile Include="Bibtex\BibtexUtils.cs" />
-    <Compile Include="DataSets\BibtexDataSet.cs">
-      <DependentUpon>BibtexDataSet.xsd</DependentUpon>
-    </Compile>
-    <Compile Include="DataSets\BibtexDataSet.Designer.cs">
-      <AutoGen>True</AutoGen>
-      <DesignTime>True</DesignTime>
-      <DependentUpon>BibtexDataSet.xsd</DependentUpon>
-    </Compile>
     <Compile Include="Forms\MainForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -104,6 +102,9 @@
     <EmbeddedResource Include="Forms\InputBoxForm.resx">
       <DependentUpon>InputBoxForm.cs</DependentUpon>
     </EmbeddedResource>
+    <EmbeddedResource Include="Forms\InputGridForm.resx">
+      <DependentUpon>InputGridForm.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Forms\MainForm.resx">
       <DependentUpon>MainForm.cs</DependentUpon>
     </EmbeddedResource>
@@ -118,18 +119,8 @@
     <Compile Include="Properties\Resources.Designer.cs">
       <AutoGen>True</AutoGen>
       <DependentUpon>Resources.resx</DependentUpon>
+      <DesignTime>True</DesignTime>
     </Compile>
-    <None Include="DataSets\BibtexDataSet.xsc">
-      <DependentUpon>BibtexDataSet.xsd</DependentUpon>
-    </None>
-    <None Include="DataSets\BibtexDataSet.xsd">
-      <SubType>Designer</SubType>
-      <Generator>MSDataSetGenerator</Generator>
-      <LastGenOutput>BibtexDataSet.Designer.cs</LastGenOutput>
-    </None>
-    <None Include="DataSets\BibtexDataSet.xss">
-      <DependentUpon>BibtexDataSet.xsd</DependentUpon>
-    </None>
     <None Include="packages.config" />
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>
@@ -146,6 +137,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="education.ico" />
+    <None Include="Resources\add.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
 </Project>

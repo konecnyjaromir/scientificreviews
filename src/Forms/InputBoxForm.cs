@@ -42,6 +42,11 @@ namespace ScientificReviews.Forms
             return textBox1.Text;
         }
 
+        public void SetText(string value)
+        {
+            textBox1.Text = value;
+        }
+
         private void textBox1_KeyDown(object sender, KeyEventArgs e)
         {
             if (e.KeyCode == Keys.Enter)
