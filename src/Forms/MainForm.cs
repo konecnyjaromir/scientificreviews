@@ -603,6 +603,7 @@ namespace ScientificReviews.Forms
                     var list = entry.Tags.ToList();
                     list.Add(frm.Object as  BibtexTag);
                     entry.Tags = list.ToArray();
+                    LoadData(entries.ToArray());
                 }
             }
         }
