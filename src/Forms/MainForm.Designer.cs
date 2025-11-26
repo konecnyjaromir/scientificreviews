@@ -51,6 +51,8 @@
             this.updateJournalsDatabaseToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.createExtraJCRTagsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.removeQ3Q4ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.viewToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.columnsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.statusStrip1 = new System.Windows.Forms.StatusStrip();
             this.lblStatus = new System.Windows.Forms.ToolStripStatusLabel();
             this.toolStripStatusLabel1 = new System.Windows.Forms.ToolStripStatusLabel();
@@ -62,13 +64,17 @@
             this.panel1 = new System.Windows.Forms.Panel();
             this.splitter2 = new System.Windows.Forms.Splitter();
             this.toolStrip1 = new System.Windows.Forms.ToolStrip();
-            this.txtSearch = new System.Windows.Forms.ToolStripTextBox();
             this.toolStripLabel1 = new System.Windows.Forms.ToolStripLabel();
-            this.viewToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.columnsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.txtSearch = new System.Windows.Forms.ToolStripTextBox();
             this.toolStripSeparator1 = new System.Windows.Forms.ToolStripSeparator();
             this.addTag = new System.Windows.Forms.ToolStripButton();
             this.bindingSource1 = new System.Windows.Forms.BindingSource(this.components);
+            this.exportVisibleToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.recordToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.addTagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.removeRecordToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.removeTagsToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
+            this.allowEditToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.menuStrip1.SuspendLayout();
             this.statusStrip1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridView1)).BeginInit();
@@ -82,6 +88,7 @@
             this.menuStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.projectToolStripMenuItem,
             this.databaseToolStripMenuItem,
+            this.recordToolStripMenuItem,
             this.journalCitationReportsToolStripMenuItem,
             this.viewToolStripMenuItem});
             this.menuStrip1.Location = new System.Drawing.Point(0, 0);
@@ -127,6 +134,7 @@
             this.excludeEntriesByTitleToolStripMenuItem,
             this.toolStripMenuItem1,
             this.exportDatabaseToolStripMenuItem,
+            this.exportVisibleToolStripMenuItem,
             this.exportDOIsToolStripMenuItem});
             this.databaseToolStripMenuItem.Name = "databaseToolStripMenuItem";
             this.databaseToolStripMenuItem.Size = new System.Drawing.Size(67, 20);
@@ -246,6 +254,21 @@
             this.removeQ3Q4ToolStripMenuItem.Text = "Remove Q3 Q4";
             this.removeQ3Q4ToolStripMenuItem.Click += new System.EventHandler(this.removeQ3Q4ToolStripMenuItem_Click);
             // 
+            // viewToolStripMenuItem
+            // 
+            this.viewToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.columnsToolStripMenuItem});
+            this.viewToolStripMenuItem.Name = "viewToolStripMenuItem";
+            this.viewToolStripMenuItem.Size = new System.Drawing.Size(63, 20);
+            this.viewToolStripMenuItem.Text = "Window";
+            // 
+            // columnsToolStripMenuItem
+            // 
+            this.columnsToolStripMenuItem.Name = "columnsToolStripMenuItem";
+            this.columnsToolStripMenuItem.Size = new System.Drawing.Size(122, 22);
+            this.columnsToolStripMenuItem.Text = "Columns";
+            this.columnsToolStripMenuItem.Click += new System.EventHandler(this.columnsToolStripMenuItem_Click);
+            // 
             // statusStrip1
             // 
             this.statusStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
@@ -321,6 +344,7 @@
             this.propertyGrid1.Size = new System.Drawing.Size(265, 501);
             this.propertyGrid1.TabIndex = 6;
             this.propertyGrid1.ToolbarVisible = false;
+            this.propertyGrid1.PropertyValueChanged += new System.Windows.Forms.PropertyValueChangedEventHandler(this.propertyGrid1_PropertyValueChanged);
             // 
             // panel1
             // 
@@ -355,6 +379,12 @@
             this.toolStrip1.TabIndex = 8;
             this.toolStrip1.Text = "toolStrip1";
             // 
+            // toolStripLabel1
+            // 
+            this.toolStripLabel1.Name = "toolStripLabel1";
+            this.toolStripLabel1.Size = new System.Drawing.Size(42, 22);
+            this.toolStripLabel1.Text = "Search";
+            // 
             // txtSearch
             // 
             this.txtSearch.Font = new System.Drawing.Font("Segoe UI", 9F);
@@ -362,27 +392,6 @@
             this.txtSearch.Size = new System.Drawing.Size(300, 25);
             this.txtSearch.Click += new System.EventHandler(this.txtSearch_Click);
             this.txtSearch.TextChanged += new System.EventHandler(this.txtSearch_TextChanged);
-            // 
-            // toolStripLabel1
-            // 
-            this.toolStripLabel1.Name = "toolStripLabel1";
-            this.toolStripLabel1.Size = new System.Drawing.Size(42, 22);
-            this.toolStripLabel1.Text = "Search";
-            // 
-            // viewToolStripMenuItem
-            // 
-            this.viewToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.columnsToolStripMenuItem});
-            this.viewToolStripMenuItem.Name = "viewToolStripMenuItem";
-            this.viewToolStripMenuItem.Size = new System.Drawing.Size(63, 20);
-            this.viewToolStripMenuItem.Text = "Window";
-            // 
-            // columnsToolStripMenuItem
-            // 
-            this.columnsToolStripMenuItem.Name = "columnsToolStripMenuItem";
-            this.columnsToolStripMenuItem.Size = new System.Drawing.Size(122, 22);
-            this.columnsToolStripMenuItem.Text = "Columns";
-            this.columnsToolStripMenuItem.Click += new System.EventHandler(this.columnsToolStripMenuItem_Click);
             // 
             // toolStripSeparator1
             // 
@@ -397,6 +406,53 @@
             this.addTag.Size = new System.Drawing.Size(69, 22);
             this.addTag.Text = "Add tag";
             this.addTag.Click += new System.EventHandler(this.addTag_Click);
+            // 
+            // exportVisibleToolStripMenuItem
+            // 
+            this.exportVisibleToolStripMenuItem.Name = "exportVisibleToolStripMenuItem";
+            this.exportVisibleToolStripMenuItem.Size = new System.Drawing.Size(213, 22);
+            this.exportVisibleToolStripMenuItem.Text = "Export visible";
+            this.exportVisibleToolStripMenuItem.Click += new System.EventHandler(this.exportVisibleToolStripMenuItem_Click);
+            // 
+            // recordToolStripMenuItem
+            // 
+            this.recordToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.addTagToolStripMenuItem,
+            this.removeTagsToolStripMenuItem1,
+            this.removeRecordToolStripMenuItem,
+            this.allowEditToolStripMenuItem});
+            this.recordToolStripMenuItem.Name = "recordToolStripMenuItem";
+            this.recordToolStripMenuItem.Size = new System.Drawing.Size(56, 20);
+            this.recordToolStripMenuItem.Text = "Record";
+            this.recordToolStripMenuItem.Click += new System.EventHandler(this.recordToolStripMenuItem_Click);
+            // 
+            // addTagToolStripMenuItem
+            // 
+            this.addTagToolStripMenuItem.Name = "addTagToolStripMenuItem";
+            this.addTagToolStripMenuItem.Size = new System.Drawing.Size(195, 22);
+            this.addTagToolStripMenuItem.Text = "Add Tag";
+            this.addTagToolStripMenuItem.Click += new System.EventHandler(this.addTagToolStripMenuItem_Click);
+            // 
+            // removeRecordToolStripMenuItem
+            // 
+            this.removeRecordToolStripMenuItem.Name = "removeRecordToolStripMenuItem";
+            this.removeRecordToolStripMenuItem.Size = new System.Drawing.Size(195, 22);
+            this.removeRecordToolStripMenuItem.Text = "Remove current record";
+            this.removeRecordToolStripMenuItem.Click += new System.EventHandler(this.removeRecordToolStripMenuItem_Click);
+            // 
+            // removeTagsToolStripMenuItem1
+            // 
+            this.removeTagsToolStripMenuItem1.Name = "removeTagsToolStripMenuItem1";
+            this.removeTagsToolStripMenuItem1.Size = new System.Drawing.Size(195, 22);
+            this.removeTagsToolStripMenuItem1.Text = "Remove tags";
+            this.removeTagsToolStripMenuItem1.Click += new System.EventHandler(this.removeTagsToolStripMenuItem1_Click);
+            // 
+            // allowEditToolStripMenuItem
+            // 
+            this.allowEditToolStripMenuItem.Name = "allowEditToolStripMenuItem";
+            this.allowEditToolStripMenuItem.Size = new System.Drawing.Size(195, 22);
+            this.allowEditToolStripMenuItem.Text = "Allow edit";
+            this.allowEditToolStripMenuItem.Click += new System.EventHandler(this.allowEditToolStripMenuItem_Click);
             // 
             // MainForm
             // 
@@ -471,5 +527,11 @@
         private System.Windows.Forms.ToolStripMenuItem columnsToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator1;
         private System.Windows.Forms.ToolStripButton addTag;
+        private System.Windows.Forms.ToolStripMenuItem exportVisibleToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem recordToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem addTagToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem removeRecordToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem removeTagsToolStripMenuItem1;
+        private System.Windows.Forms.ToolStripMenuItem allowEditToolStripMenuItem;
     }
 }

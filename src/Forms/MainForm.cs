@@ -33,10 +33,12 @@ namespace ScientificReviews.Forms
         }
 
         List<BibtexEntry> entries = new List<BibtexEntry>();
+        List<BibtexEntry> visibleEntries = new List<BibtexEntry>();
         BibtexExporter bibtexExporter = new BibtexExporter();
 
         private void LoadData(BibtexEntry[] entries, string search = "")
         {
+            
             if (search != "")
             {
                 List<BibtexEntry> list = new List<BibtexEntry>();
@@ -50,6 +52,9 @@ namespace ScientificReviews.Forms
                 }
                 entries = list.ToArray();
             }
+
+            visibleEntries.Clear();
+            visibleEntries.AddRange(entries);
 
             var dt = BuildTable(entries, Program.AppSettings.Data.Columns);
 
@@ -213,6 +218,11 @@ namespace ScientificReviews.Forms
 
         private void exportDatabaseToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            ExportDatabase(entries.ToArray());
+        }
+
+        private void ExportDatabase(BibtexEntry[] entries)
+        {
             try
             {
                 SaveFileDialog saveFileDialog = new SaveFileDialog()
@@ -224,7 +234,7 @@ namespace ScientificReviews.Forms
                 {
                     string fileName = saveFileDialog.FileName;
                     BibtexExporter bibtexExporter = new BibtexExporter();
-                    string content = bibtexExporter.EntriesToString(entries.ToArray());
+                    string content = bibtexExporter.EntriesToString(entries);
                     File.WriteAllText(fileName, content);
                 }
                 lblStatus.Text = "Export done.";
@@ -240,24 +250,29 @@ namespace ScientificReviews.Forms
         {
             if (e.KeyCode == Keys.Delete)
             {
-                if (bindingSource1.Current != null)
+                RemoveRecord();
+            }
+        }
+
+        private void RemoveRecord()
+        {
+            if (bindingSource1.Current != null)
+            {
+                int currentIndex = bindingSource1.Position;
+
+                DataRowView drv = bindingSource1.Current as DataRowView;
+                var row = drv.Row as DataRow;
+                var entry = row["Entry"] as BibtexEntry;
+                entries.Remove(entry);
+                LoadData(entries.ToArray());
+
+                // Nastavení indexu na následující řádek
+                if (currentIndex >= bindingSource1.Count)
                 {
-                    int currentIndex = bindingSource1.Position;
-
-                    DataRowView drv = bindingSource1.Current as DataRowView;
-                    var row = drv.Row as DataRow;
-                    var entry = row["Entry"] as BibtexEntry;
-                    entries.Remove(entry);
-                    LoadData(entries.ToArray());
-
-                    // Nastavení indexu na následující řádek
-                    if (currentIndex >= bindingSource1.Count)
-                    {
-                        // Pokud byl poslední záznam odstraněn, posuňte se na poslední řádek
-                        currentIndex = bindingSource1.Count - 1;
-                    }
-                    bindingSource1.Position = currentIndex;
+                    // Pokud byl poslední záznam odstraněn, posuňte se na poslední řádek
+                    currentIndex = bindingSource1.Count - 1;
                 }
+                bindingSource1.Position = currentIndex;
             }
         }
 
@@ -275,6 +290,7 @@ namespace ScientificReviews.Forms
         {
             if (bindingSource1.Current is DataRowView == false)
                 return;
+            bool readOnly = !allowEditToolStripMenuItem.Checked;
 
             DataRowView drv = (DataRowView)bindingSource1.Current;
             if (drv.Row != null)
@@ -283,13 +299,14 @@ namespace ScientificReviews.Forms
                 textBox1.Text = bibtexExporter.EntryToString(entry);
 
                 CustomClass customClass = new CustomClass();
-                customClass.Add(new CustomProperty("entryKey", "Key", entry.Key, "Bibitem", true, true));
-                customClass.Add(new CustomProperty("entryType", "Type", entry.Type, "Bibitem", true, true));
+                customClass.Add(new CustomProperty("entryKey", "Key", entry.Key, "Bibitem", readOnly, true));
+                customClass.Add(new CustomProperty("entryType", "Type", entry.Type, "Bibitem", readOnly, true));
                 foreach (var tag in entry.Tags)
                 {
-                    CustomProperty item = new CustomProperty(tag.Key, tag.Key, tag.Value, "Parameters", true, true);
+                    CustomProperty item = new CustomProperty(tag.Key, tag.Key, tag.Value, "Parameters", readOnly, true);
                     customClass.Add(item);
                 }
+                propertyGrid1.Tag = entry;
                 propertyGrid1.SelectedObject = customClass;
             }
         }
@@ -591,7 +608,14 @@ namespace ScientificReviews.Forms
 
         private void addTag_Click(object sender, EventArgs e)
         {
+            AddTag();
+        }
+
+        private void AddTag()
+        {
             DataRowView drv = (DataRowView)bindingSource1.Current;
+            if (drv == null)
+                return;
             if (drv.Row != null)
             {
                 var entry = (BibtexEntry)(drv.Row["Entry"]);
@@ -601,11 +625,108 @@ namespace ScientificReviews.Forms
                 if (frm.ShowDialog(this) == DialogResult.OK)
                 {
                     var list = entry.Tags.ToList();
-                    list.Add(frm.Object as  BibtexTag);
+                    list.Add(frm.Object as BibtexTag);
                     entry.Tags = list.ToArray();
                     LoadData(entries.ToArray());
                 }
             }
+        }
+
+        private void exportVisibleToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            ExportDatabase(visibleEntries.ToArray());
+        }
+
+        private void addTagToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            AddTag();
+        }
+
+        private void recordToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+
+        }
+
+        private void removeRecordToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            RemoveRecord();
+        }
+
+        private void removeTagsToolStripMenuItem1_Click(object sender, EventArgs e)
+        {
+            List<string> tags = new List<string>();
+            if (bindingSource1.Current != null)
+            {
+                int currentIndex = bindingSource1.Position;
+
+                DataRowView drv = bindingSource1.Current as DataRowView;
+                var row = drv.Row as DataRow;
+                var entry = row["Entry"] as BibtexEntry;
+                foreach (var item in entry.Tags)
+                {
+                    tags.Add(item.Key);
+                }
+
+                SelectForm frm = new SelectForm();
+                frm.SetData(tags.ToArray());
+                frm.SetSelection(tags.ToArray());
+                if (frm.ShowDialog(this) == DialogResult.OK)
+                {
+                    var tagsToLeave = frm.GetSelected().ToList();
+                    List<BibtexTag> list = new List<BibtexTag>();
+                    foreach (var tag in entry.Tags)
+                    {
+                        if (tagsToLeave.Contains(tag.Key))
+                            list.Add(tag);
+                    }
+                    entry.Tags = list.ToArray();
+                    dataGridView1_SelectionChanged(sender, e);
+                }
+            }                     
+        }
+
+        private void allowEditToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            allowEditToolStripMenuItem.Checked = !allowEditToolStripMenuItem.Checked;
+            allowEditToolStripMenuItem.Checked = propertyGrid1.Enabled;
+            dataGridView1_SelectionChanged(sender, e);
+        }
+
+        private void propertyGrid1_PropertyValueChanged(object s, PropertyValueChangedEventArgs e)
+        {
+            if (propertyGrid1.SelectedObject is CustomClass customClass == false)
+                return;
+
+            if (propertyGrid1.Tag is BibtexEntry entry == false)
+                return;            
+
+            string name = e.ChangedItem.PropertyDescriptor.Name;
+            object newValue = e.ChangedItem.Value;
+
+            // přepis základních položek
+            if (name == "entryKey")
+                entry.Key = newValue?.ToString();
+
+            else if (name == "entryType")
+                entry.Type = newValue?.ToString();
+
+            else
+            {
+                // přepis parametrů (tags)
+                foreach (var tag in entry.Tags)
+                {
+                    if (tag.Key == name)
+                    {
+                        tag.Value = newValue?.ToString();
+                    }
+                }                
+            }
+
+            // UPDATE DO DATAROW
+            var drv = (DataRowView)bindingSource1.Current;
+            drv.Row["Entry"] = entry;  // uloží zpět upravený objekt
+
+            textBox1.Text = bibtexExporter.EntryToString(entry); // refresh náhledu
         }
 
         //private void manualJCRDatabaseToolStripMenuItem_Click(object sender, EventArgs e)
