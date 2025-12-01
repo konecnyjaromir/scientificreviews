@@ -46,7 +46,13 @@
             this.excludeEntriesByTitleToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripMenuItem1 = new System.Windows.Forms.ToolStripSeparator();
             this.exportDatabaseToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.exportVisibleToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.exportDOIsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.recordToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.addTagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.removeTagsToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
+            this.removeRecordToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.allowEditToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.journalCitationReportsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.updateJournalsDatabaseToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.createExtraJCRTagsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -69,12 +75,7 @@
             this.toolStripSeparator1 = new System.Windows.Forms.ToolStripSeparator();
             this.addTag = new System.Windows.Forms.ToolStripButton();
             this.bindingSource1 = new System.Windows.Forms.BindingSource(this.components);
-            this.exportVisibleToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.recordToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.addTagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.removeRecordToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.removeTagsToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
-            this.allowEditToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.exportAsTableToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.menuStrip1.SuspendLayout();
             this.statusStrip1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridView1)).BeginInit();
@@ -135,7 +136,8 @@
             this.toolStripMenuItem1,
             this.exportDatabaseToolStripMenuItem,
             this.exportVisibleToolStripMenuItem,
-            this.exportDOIsToolStripMenuItem});
+            this.exportDOIsToolStripMenuItem,
+            this.exportAsTableToolStripMenuItem});
             this.databaseToolStripMenuItem.Name = "databaseToolStripMenuItem";
             this.databaseToolStripMenuItem.Size = new System.Drawing.Size(67, 20);
             this.databaseToolStripMenuItem.Text = "Database";
@@ -216,12 +218,59 @@
             this.exportDatabaseToolStripMenuItem.Text = "Export database";
             this.exportDatabaseToolStripMenuItem.Click += new System.EventHandler(this.exportDatabaseToolStripMenuItem_Click);
             // 
+            // exportVisibleToolStripMenuItem
+            // 
+            this.exportVisibleToolStripMenuItem.Name = "exportVisibleToolStripMenuItem";
+            this.exportVisibleToolStripMenuItem.Size = new System.Drawing.Size(213, 22);
+            this.exportVisibleToolStripMenuItem.Text = "Export visible";
+            this.exportVisibleToolStripMenuItem.Click += new System.EventHandler(this.exportVisibleToolStripMenuItem_Click);
+            // 
             // exportDOIsToolStripMenuItem
             // 
             this.exportDOIsToolStripMenuItem.Name = "exportDOIsToolStripMenuItem";
             this.exportDOIsToolStripMenuItem.Size = new System.Drawing.Size(213, 22);
             this.exportDOIsToolStripMenuItem.Text = "Export DOIs";
             this.exportDOIsToolStripMenuItem.Click += new System.EventHandler(this.exportDOIsToolStripMenuItem_Click);
+            // 
+            // recordToolStripMenuItem
+            // 
+            this.recordToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.addTagToolStripMenuItem,
+            this.removeTagsToolStripMenuItem1,
+            this.removeRecordToolStripMenuItem,
+            this.allowEditToolStripMenuItem});
+            this.recordToolStripMenuItem.Name = "recordToolStripMenuItem";
+            this.recordToolStripMenuItem.Size = new System.Drawing.Size(56, 20);
+            this.recordToolStripMenuItem.Text = "Record";
+            this.recordToolStripMenuItem.Click += new System.EventHandler(this.recordToolStripMenuItem_Click);
+            // 
+            // addTagToolStripMenuItem
+            // 
+            this.addTagToolStripMenuItem.Name = "addTagToolStripMenuItem";
+            this.addTagToolStripMenuItem.Size = new System.Drawing.Size(195, 22);
+            this.addTagToolStripMenuItem.Text = "Add Tag";
+            this.addTagToolStripMenuItem.Click += new System.EventHandler(this.addTagToolStripMenuItem_Click);
+            // 
+            // removeTagsToolStripMenuItem1
+            // 
+            this.removeTagsToolStripMenuItem1.Name = "removeTagsToolStripMenuItem1";
+            this.removeTagsToolStripMenuItem1.Size = new System.Drawing.Size(195, 22);
+            this.removeTagsToolStripMenuItem1.Text = "Remove tags";
+            this.removeTagsToolStripMenuItem1.Click += new System.EventHandler(this.removeTagsToolStripMenuItem1_Click);
+            // 
+            // removeRecordToolStripMenuItem
+            // 
+            this.removeRecordToolStripMenuItem.Name = "removeRecordToolStripMenuItem";
+            this.removeRecordToolStripMenuItem.Size = new System.Drawing.Size(195, 22);
+            this.removeRecordToolStripMenuItem.Text = "Remove current record";
+            this.removeRecordToolStripMenuItem.Click += new System.EventHandler(this.removeRecordToolStripMenuItem_Click);
+            // 
+            // allowEditToolStripMenuItem
+            // 
+            this.allowEditToolStripMenuItem.Name = "allowEditToolStripMenuItem";
+            this.allowEditToolStripMenuItem.Size = new System.Drawing.Size(195, 22);
+            this.allowEditToolStripMenuItem.Text = "Allow edit";
+            this.allowEditToolStripMenuItem.Click += new System.EventHandler(this.allowEditToolStripMenuItem_Click);
             // 
             // journalCitationReportsToolStripMenuItem
             // 
@@ -407,52 +456,12 @@
             this.addTag.Text = "Add tag";
             this.addTag.Click += new System.EventHandler(this.addTag_Click);
             // 
-            // exportVisibleToolStripMenuItem
+            // exportAsTableToolStripMenuItem
             // 
-            this.exportVisibleToolStripMenuItem.Name = "exportVisibleToolStripMenuItem";
-            this.exportVisibleToolStripMenuItem.Size = new System.Drawing.Size(213, 22);
-            this.exportVisibleToolStripMenuItem.Text = "Export visible";
-            this.exportVisibleToolStripMenuItem.Click += new System.EventHandler(this.exportVisibleToolStripMenuItem_Click);
-            // 
-            // recordToolStripMenuItem
-            // 
-            this.recordToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.addTagToolStripMenuItem,
-            this.removeTagsToolStripMenuItem1,
-            this.removeRecordToolStripMenuItem,
-            this.allowEditToolStripMenuItem});
-            this.recordToolStripMenuItem.Name = "recordToolStripMenuItem";
-            this.recordToolStripMenuItem.Size = new System.Drawing.Size(56, 20);
-            this.recordToolStripMenuItem.Text = "Record";
-            this.recordToolStripMenuItem.Click += new System.EventHandler(this.recordToolStripMenuItem_Click);
-            // 
-            // addTagToolStripMenuItem
-            // 
-            this.addTagToolStripMenuItem.Name = "addTagToolStripMenuItem";
-            this.addTagToolStripMenuItem.Size = new System.Drawing.Size(195, 22);
-            this.addTagToolStripMenuItem.Text = "Add Tag";
-            this.addTagToolStripMenuItem.Click += new System.EventHandler(this.addTagToolStripMenuItem_Click);
-            // 
-            // removeRecordToolStripMenuItem
-            // 
-            this.removeRecordToolStripMenuItem.Name = "removeRecordToolStripMenuItem";
-            this.removeRecordToolStripMenuItem.Size = new System.Drawing.Size(195, 22);
-            this.removeRecordToolStripMenuItem.Text = "Remove current record";
-            this.removeRecordToolStripMenuItem.Click += new System.EventHandler(this.removeRecordToolStripMenuItem_Click);
-            // 
-            // removeTagsToolStripMenuItem1
-            // 
-            this.removeTagsToolStripMenuItem1.Name = "removeTagsToolStripMenuItem1";
-            this.removeTagsToolStripMenuItem1.Size = new System.Drawing.Size(195, 22);
-            this.removeTagsToolStripMenuItem1.Text = "Remove tags";
-            this.removeTagsToolStripMenuItem1.Click += new System.EventHandler(this.removeTagsToolStripMenuItem1_Click);
-            // 
-            // allowEditToolStripMenuItem
-            // 
-            this.allowEditToolStripMenuItem.Name = "allowEditToolStripMenuItem";
-            this.allowEditToolStripMenuItem.Size = new System.Drawing.Size(195, 22);
-            this.allowEditToolStripMenuItem.Text = "Allow edit";
-            this.allowEditToolStripMenuItem.Click += new System.EventHandler(this.allowEditToolStripMenuItem_Click);
+            this.exportAsTableToolStripMenuItem.Name = "exportAsTableToolStripMenuItem";
+            this.exportAsTableToolStripMenuItem.Size = new System.Drawing.Size(213, 22);
+            this.exportAsTableToolStripMenuItem.Text = "Export CSV from table";
+            this.exportAsTableToolStripMenuItem.Click += new System.EventHandler(this.exportAsTableToolStripMenuItem_Click);
             // 
             // MainForm
             // 
@@ -533,5 +542,6 @@
         private System.Windows.Forms.ToolStripMenuItem removeRecordToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem removeTagsToolStripMenuItem1;
         private System.Windows.Forms.ToolStripMenuItem allowEditToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem exportAsTableToolStripMenuItem;
     }
 }

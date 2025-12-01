@@ -729,6 +729,30 @@ namespace ScientificReviews.Forms
             textBox1.Text = bibtexExporter.EntryToString(entry); // refresh náhledu
         }
 
+        private void exportAsTableToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                SaveFileDialog saveFileDialog = new SaveFileDialog()
+                {
+                    CheckPathExists = true,
+                    Filter = "Bibtex database *.csv|*.csv"
+                };
+                if (saveFileDialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    string fileName = saveFileDialog.FileName;
+                    var table = BuildTable(entries.ToArray(), Program.AppSettings.Data.Columns);
+                    CsvExporter.ExportToCsv(table, fileName);                    
+                }
+                lblStatus.Text = "Export done.";
+            }
+            catch (Exception ex)
+            {
+
+                lblStatus.Text = ex.Message;
+            }
+        }
+
         //private void manualJCRDatabaseToolStripMenuItem_Click(object sender, EventArgs e)
         //{
         //try
