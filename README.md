@@ -42,8 +42,8 @@ Scientific Reviews is a specialized literature management tool designed to strea
 ## 🛠️ Getting Started
 
 1. **Project Setup**: Launch the application and go to **Project** to create a new workspace.  
-2. **Load Data**: Use the **Database** menu to import your `.bib` files or folders.  
-3. **Filter**: Apply JCR filters to remove low-impact journals immediately.  
+2. **Load Data**: Use the **Project** menu to import your `.bib` files or folders.  
+3. **Filter**: Apply JCR filters to remove low-impact journals immediately. Or get rid of duplicity, empty DOIs records just by one-click.  
 4. **Screen**: Use the Search bar and One-Key Delete to rapidly whittle down your list.  
 5. **Export**: Select your final set and export to your desired format.  
 
