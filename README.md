@@ -2,8 +2,6 @@
 
 Scientific Reviews is a specialized literature management tool designed to streamline the workflow of researchers conducting systematic reviews, meta-analyses, or general bibliometric studies. It focuses on speed, data hygiene, and Journal Citation Reports (JCR) integration to ensure high-quality source management.
 
-> **Note:** Ensure the image file is in the same directory as this README.
-
 ---
 
 ## 🚀 Key Features
