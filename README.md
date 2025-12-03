@@ -51,7 +51,7 @@ Scientific Reviews is a specialized literature management tool designed to strea
 
 ## 🖥️ System Requirements
 
-- **OS**: Windows (x64)  
+- **OS**: Windows
 - **Input Format**: BibTeX standard  
 
 ---
