@@ -264,7 +264,8 @@ namespace ScientificReviews.Forms
                 var row = drv.Row as DataRow;
                 var entry = row["Entry"] as BibtexEntry;
                 entries.Remove(entry);
-                LoadData(entries.ToArray());
+                visibleEntries.Remove(entry);
+                LoadData(visibleEntries.ToArray());
 
                 // Nastavení indexu na následující řádek
                 if (currentIndex >= bindingSource1.Count)
@@ -275,6 +276,41 @@ namespace ScientificReviews.Forms
                 bindingSource1.Position = currentIndex;
             }
         }
+
+
+        private void RemoveSelecedRecords()
+        {
+            if (dataGridView1.SelectedRows.Count > 0)
+            {                
+                int currentIndex = bindingSource1.Position;
+                
+                foreach (DataGridViewRow dgvr in dataGridView1.SelectedRows.Cast<DataGridViewRow>().OrderByDescending(r => r.Index))
+                {
+                    if (dgvr.DataBoundItem is DataRowView drv)
+                    {
+                        var row = drv.Row;
+                        var entry = row["Entry"] as BibtexEntry;
+                        if (entry != null)
+                        {
+                            entries.Remove(entry);
+                            visibleEntries.Remove(entry);
+                        }
+
+                    }
+                }
+
+                
+                LoadData(visibleEntries.ToArray());
+
+                // Korekce indexu po mazání
+                if (currentIndex >= bindingSource1.Count)
+                    currentIndex = bindingSource1.Count - 1;
+
+                if (currentIndex >= 0)
+                    bindingSource1.Position = currentIndex;
+            }
+        }
+
 
         private void splitter1_SplitterMoved(object sender, SplitterEventArgs e)
         {
@@ -309,6 +345,8 @@ namespace ScientificReviews.Forms
                 propertyGrid1.Tag = entry;
                 propertyGrid1.SelectedObject = customClass;
             }
+            lblSelected.Text = $"({dataGridView1.SelectedRows.Count.ToString()})";
+
         }
 
         private void exportDOIsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -627,9 +665,40 @@ namespace ScientificReviews.Forms
                     var list = entry.Tags.ToList();
                     list.Add(frm.Object as BibtexTag);
                     entry.Tags = list.ToArray();
-                    LoadData(entries.ToArray());
+                    LoadData(visibleEntries.ToArray());
                 }
             }
+        }
+        private void AddTagToSelected()
+        {
+            if (dataGridView1.SelectedRows.Count == 0)
+                return;
+            
+            InputGridForm frm = new InputGridForm();
+            frm.Object = new BibtexTag();
+
+            if (frm.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            var newTag = frm.Object as BibtexTag;
+
+            foreach (DataGridViewRow dgvr in dataGridView1.SelectedRows)
+            {
+                if (dgvr.DataBoundItem is DataRowView drv && drv.Row != null)
+                {
+                    var entry = (BibtexEntry)drv.Row["Entry"];
+                    if (entry != null)
+                    {
+                        var list = entry.Tags.ToList();
+                        list.Add(newTag);
+                        entry.Tags = list.ToArray();
+                    }
+                }
+            }
+
+            // reload dataset
+            LoadData(visibleEntries.ToArray());
+
         }
 
         private void exportVisibleToolStripMenuItem_Click(object sender, EventArgs e)
@@ -749,6 +818,102 @@ namespace ScientificReviews.Forms
             catch (Exception ex)
             {
 
+                lblStatus.Text = ex.Message;
+            }
+        }
+
+        private void addTagToSelectedToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            AddTagToSelected();
+        }
+
+        private void deleteSelectedToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            RemoveSelecedRecords();
+        }
+
+        public void SearchEntryTitleOnGoogle(BibtexEntry entry)
+        {
+            if (entry == null || entry.Tags == null)
+                return;
+
+            // Najdi tag "title" (case-insensitive)
+            var titleTag = entry.Tags
+                .FirstOrDefault(t => string.Equals(t.Key, "title", StringComparison.OrdinalIgnoreCase));
+
+            if (titleTag == null || string.IsNullOrWhiteSpace(titleTag.Value))
+                return;
+
+            string query = Uri.EscapeDataString(titleTag.Value);
+            string url = $"https://www.google.com/search?q={query}";
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+        }
+
+        public void OpenPdf(BibtexEntry entry)
+        {
+            if (entry == null || entry.Tags == null)
+                return;
+
+            // Najdi tag "title" (case-insensitive)
+            var titleTag = entry.Tags
+                .FirstOrDefault(t => string.Equals(t.Key, "title", StringComparison.OrdinalIgnoreCase));
+
+            if (titleTag == null || string.IsNullOrWhiteSpace(titleTag.Value))
+                return;
+
+            string title = titleTag.Value;
+            title = title.Replace(":", "").Replace("  ", " ");
+
+            string filename = Path.Combine(Program.AppSettings.Data.PdfFolder, title + ".pdf");
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = filename,
+                UseShellExecute = true
+            });
+        }
+
+        private void btnGoogle_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (bindingSource1.Current != null)
+                {
+                    int currentIndex = bindingSource1.Position;
+
+                    DataRowView drv = bindingSource1.Current as DataRowView;
+                    var row = drv.Row as DataRow;
+                    var entry = row["Entry"] as BibtexEntry;
+                    SearchEntryTitleOnGoogle(entry);
+                }
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
+        private void btnPdf_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (bindingSource1.Current != null)
+                {
+                    int currentIndex = bindingSource1.Position;
+
+                    DataRowView drv = bindingSource1.Current as DataRowView;
+                    var row = drv.Row as DataRow;
+                    var entry = row["Entry"] as BibtexEntry;
+                    OpenPdf(entry);
+                }
+            }
+            catch (Exception ex)
+            {
                 lblStatus.Text = ex.Message;
             }
         }

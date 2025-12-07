@@ -138,6 +138,8 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="education.ico" />
+    <None Include="Resources\pdf2.png" />
+    <None Include="Resources\google.png" />
     <None Include="Resources\add.png" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

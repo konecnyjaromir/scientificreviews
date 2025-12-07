@@ -29,5 +29,7 @@ namespace ScientificReviews
         public string LastFile { get; set; }
 
         public string[] Columns { get; set; }
+
+        public string PdfFolder { get; set; }
     }
 }
