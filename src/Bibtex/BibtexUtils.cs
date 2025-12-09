@@ -54,7 +54,8 @@ namespace ScientificReviews.Bibtex
                 }
                 else
                 {
-                    Merge(entry, uniqueEntriesDic[titleTag.Value.ToLower()]);
+                    if (titleTag != null)
+                        Merge(entry, uniqueEntriesDic[titleTag.Value.ToLower()]);
                 }
             }
 

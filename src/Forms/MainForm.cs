@@ -141,7 +141,12 @@ namespace ScientificReviews.Forms
             {
                 //string key = entry.GetTagValue("author").Split(',')[0].Trim().Replace(" ", "") + entry.GetTagValue("year");
 
-                string key = BibtexUtils.GetFirstAuthorLastName(entry.GetTagValue("author")).Replace(" ", "") + entry.GetTagValue("year");
+                string authors = entry.GetTagValue("author");
+                string year = entry.GetTagValue("year");
+                if (authors == null || year == null)
+                    continue;
+
+                string key = BibtexUtils.GetFirstAuthorLastName(authors).Replace(" ", "") + year;
                 string myKey = key;
                 int i = 1;
                 while (keys.Contains(myKey))
@@ -874,6 +879,9 @@ namespace ScientificReviews.Forms
             title = title.Replace(":", "").Replace("  ", " ").Replace("?", "");
 
             string filename = Path.Combine(Program.AppSettings.Data.PdfFolder, title + ".pdf");
+
+            if (File.Exists(filename) == false)
+                throw new Exception("File not exists: " +  filename);
 
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
