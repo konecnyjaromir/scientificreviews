@@ -216,12 +216,12 @@ namespace ScientificReviews.Forms
 
         }
 
-        private void exportDatabaseToolStripMenuItem_Click(object sender, EventArgs e)
+        private async void exportDatabaseToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            ExportDatabase(entries.ToArray());
+            await ExportDatabaseAsync(entries.ToArray());
         }
 
-        private void ExportDatabase(BibtexEntry[] entries)
+        private async Task ExportDatabaseAsync(BibtexEntry[] entries)
         {
             try
             {
@@ -232,10 +232,14 @@ namespace ScientificReviews.Forms
                 };
                 if (saveFileDialog.ShowDialog(this) == DialogResult.OK)
                 {
-                    string fileName = saveFileDialog.FileName;
-                    BibtexExporter bibtexExporter = new BibtexExporter();
-                    string content = bibtexExporter.EntriesToString(entries);
-                    File.WriteAllText(fileName, content);
+                    await Task.Run(() =>
+                    {
+                        string fileName = saveFileDialog.FileName;
+                        BibtexExporter bibtexExporter = new BibtexExporter();
+                        string content = bibtexExporter.EntriesToString(entries);
+                        File.WriteAllText(fileName, content);
+                    });
+                    
                 }
                 lblStatus.Text = "Export done.";
             }
@@ -701,9 +705,9 @@ namespace ScientificReviews.Forms
 
         }
 
-        private void exportVisibleToolStripMenuItem_Click(object sender, EventArgs e)
+        private async void exportVisibleToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            ExportDatabase(visibleEntries.ToArray());
+            await ExportDatabaseAsync(visibleEntries.ToArray());
         }
 
         private void addTagToolStripMenuItem_Click(object sender, EventArgs e)
