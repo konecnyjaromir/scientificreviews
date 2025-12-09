@@ -757,7 +757,7 @@ namespace ScientificReviews.Forms
         private void allowEditToolStripMenuItem_Click(object sender, EventArgs e)
         {
             allowEditToolStripMenuItem.Checked = !allowEditToolStripMenuItem.Checked;
-            allowEditToolStripMenuItem.Checked = propertyGrid1.Enabled;
+            propertyGrid1.Enabled = allowEditToolStripMenuItem.Checked;
             dataGridView1_SelectionChanged(sender, e);
         }
 
@@ -867,7 +867,7 @@ namespace ScientificReviews.Forms
                 return;
 
             string title = titleTag.Value;
-            title = title.Replace(":", "").Replace("  ", " ");
+            title = title.Replace(":", "").Replace("  ", " ").Replace("?", "");
 
             string filename = Path.Combine(Program.AppSettings.Data.PdfFolder, title + ".pdf");
 
