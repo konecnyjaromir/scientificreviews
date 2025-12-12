@@ -19,6 +19,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace ScientificReviews.Forms
 {
@@ -27,9 +28,6 @@ namespace ScientificReviews.Forms
         public MainForm()
         {
             InitializeComponent();
-
-                
-
         }
 
         List<BibtexEntry> entries = new List<BibtexEntry>();
@@ -41,13 +39,19 @@ namespace ScientificReviews.Forms
             
             if (search != "")
             {
+                search = search.ToLower();  
+                var searches = search.Split(',');
                 List<BibtexEntry> list = new List<BibtexEntry>();
-                foreach (BibtexEntry entry in entries)
-                {
-                    string en = bibtexExporter.EntryToString(entry);
-                    if (en.Contains(search))
+                foreach (var s in searches)
+                {                    
+                    foreach (BibtexEntry entry in entries)
                     {
-                        list.Add(entry);
+                        string en = bibtexExporter.EntryToString(entry);
+                        if (en.ToLower().Contains(s))
+                        {
+                            if (list.Contains(entry) == false)
+                                list.Add(entry);
+                        }
                     }
                 }
                 entries = list.ToArray();
@@ -113,8 +117,7 @@ namespace ScientificReviews.Forms
                     {
                         Program.AppSettings.Data.LastDirectory = folderDialog.SelectedPath; 
                         await Task.Run(() =>
-                        {
-                            entries = new List<BibtexEntry>();
+                        {                            
                             string[] files = Directory.GetFiles(folderDialog.SelectedPath, "*.bib", SearchOption.AllDirectories);
                             BibtexParser parser = new BibtexParser();
                             foreach (string file in files)
@@ -237,6 +240,7 @@ namespace ScientificReviews.Forms
                 };
                 if (saveFileDialog.ShowDialog(this) == DialogResult.OK)
                 {
+                    lblStatus.Text = "Exporting...";
                     await Task.Run(() =>
                     {
                         string fileName = saveFileDialog.FileName;
@@ -244,9 +248,9 @@ namespace ScientificReviews.Forms
                         string content = bibtexExporter.EntriesToString(entries);
                         File.WriteAllText(fileName, content);
                     });
-                    
+                    lblStatus.Text = "Export done.";
                 }
-                lblStatus.Text = "Export done.";
+                
             }
             catch (Exception ex)
             {
@@ -341,7 +345,7 @@ namespace ScientificReviews.Forms
             if (drv.Row != null)
             {
                 var entry = (BibtexEntry)(drv.Row["Entry"]);
-                textBox1.Text = bibtexExporter.EntryToString(entry);
+                ShowEntry(entry, txtSearch.Text);
 
                 CustomClass customClass = new CustomClass();
                 customClass.Add(new CustomProperty("entryKey", "Key", entry.Key, "Bibitem", readOnly, true));
@@ -356,6 +360,50 @@ namespace ScientificReviews.Forms
             }
             lblSelected.Text = $"({dataGridView1.SelectedRows.Count.ToString()})";
 
+        }
+
+        private void ShowEntry(BibtexEntry entry, string search = "")
+        {
+            // 1) Vypiš text
+            string text = bibtexExporter.EntryToString(entry);
+            text = text.ToLower();
+            search = search.ToLower();
+            richTextBox1.Text = text;
+            // 2) Nic nehledáme -> hotovo
+            if (string.IsNullOrWhiteSpace(search))
+                return;
+
+            // 3) Ulož selection, ať uživateli nic "neskáče"
+            int selStart = richTextBox1.SelectionStart;
+            int selLength = richTextBox1.SelectionLength;
+
+            // 4) Odstraň případné staré zvýraznění (volitelné, ale obvykle chceš)
+            richTextBox1.SelectAll();
+            richTextBox1.SelectionBackColor = richTextBox1.BackColor;
+
+            // 5) Hledej a zvýrazňuj všechny výskyty (case-insensitive)
+            int startIndex = 0;
+            while (startIndex < richTextBox1.TextLength)
+            {
+                int idx = text.IndexOf(
+                    search,
+                    startIndex
+                );
+
+                // Správně: nepoužívat MatchCase => case-insensitive
+                idx = richTextBox1.Find(search, startIndex, RichTextBoxFinds.None);
+
+                if (idx < 0) break;
+
+                richTextBox1.Select(idx, search.Length);
+                richTextBox1.SelectionBackColor = Color.Yellow;
+
+                startIndex = idx + search.Length;
+            }
+
+            // 6) Vrať selection
+            richTextBox1.Select(selStart, selLength);
+            richTextBox1.SelectionBackColor = richTextBox1.BackColor; // aby se výběr netvářil žlutě
         }
 
         private void exportDOIsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -536,8 +584,7 @@ namespace ScientificReviews.Forms
                 {
                     string fileName = ofd.FileName;
                     await Task.Run(() =>
-                    {
-                        entries = new List<BibtexEntry>();
+                    {                        
                         BibtexParser parser = new BibtexParser();
                         entries.AddRange(parser.ParseFile(File.ReadAllText(fileName)));
                     });
@@ -804,7 +851,9 @@ namespace ScientificReviews.Forms
             var drv = (DataRowView)bindingSource1.Current;
             drv.Row["Entry"] = entry;  // uloží zpět upravený objekt
 
-            textBox1.Text = bibtexExporter.EntryToString(entry); // refresh náhledu
+            ShowEntry(entry, txtSearch.Text);
+
+            LoadData(visibleEntries.ToArray());
         }
 
         private void exportAsTableToolStripMenuItem_Click(object sender, EventArgs e)
@@ -881,7 +930,14 @@ namespace ScientificReviews.Forms
             string filename = Path.Combine(Program.AppSettings.Data.PdfFolder, title + ".pdf");
 
             if (File.Exists(filename) == false)
-                throw new Exception("File not exists: " +  filename);
+            {
+                filename = Path.Combine(Program.AppSettings.Data.PdfFolder, entry.Key + ".pdf");
+                if (File.Exists(filename) == false)
+                {
+                    throw new Exception("File not exists: " + filename);
+                }
+            }
+                
 
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
@@ -929,6 +985,72 @@ namespace ScientificReviews.Forms
                 lblStatus.Text = ex.Message;
             }
         }
+
+        private void clearToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            entries = new List<BibtexEntry>();
+            LoadData(entries.ToArray());
+        }
+
+        private void propertyGrid1_PreviewKeyDown(object sender, PreviewKeyDownEventArgs e)
+        {
+            if (e.KeyCode != Keys.Delete)
+                return;
+
+            bool readOnly = !allowEditToolStripMenuItem.Checked;
+            if (readOnly)
+                return;
+
+            if (propertyGrid1.Tag is BibtexEntry entry == false)
+                return;
+
+            var gi = propertyGrid1.SelectedGridItem;
+            if (gi == null || gi.GridItemType != GridItemType.Property)
+                return;
+
+            // Název property (u dynamických položek je často nejlepší brát PropertyDescriptor.Name)
+            string name = gi.PropertyDescriptor?.Name ?? gi.Label;
+            if (string.IsNullOrWhiteSpace(name))
+                return;
+
+            // Základní položky nemaž (uprav si podle svých názvů)
+            if (string.Equals(name, "entryKey", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(name, "entryType", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            // Odebrání tagu z BibtexEntry
+            // (přizpůsob podle typu entry.Tags: List<Tag>, Dictionary, apod.)
+            int removed = 0;
+
+            // Varianta A: entry.Tags je List<něco s Key/Value>
+            var list = entry.Tags.ToList();
+            removed = list.RemoveAll(t => string.Equals(t.Key, name, StringComparison.Ordinal));
+            entry.Tags = list.ToArray();
+
+            // Pokud nic neodebráno, skonči
+            if (removed == 0)
+                return;
+            DataRowView drv = (DataRowView)bindingSource1.Current;
+            if (drv.Row != null)
+            {
+                entry = (BibtexEntry)(drv.Row["Entry"]);
+                ShowEntry(entry, txtSearch.Text);
+
+                CustomClass customClass = new CustomClass();
+                customClass.Add(new CustomProperty("entryKey", "Key", entry.Key, "Bibitem", false, true));
+                customClass.Add(new CustomProperty("entryType", "Type", entry.Type, "Bibitem", false, true));
+                foreach (var tag in entry.Tags)
+                {
+                    CustomProperty item = new CustomProperty(tag.Key, tag.Key, tag.Value, "Parameters", false, true);
+                    customClass.Add(item);
+                }
+                propertyGrid1.Tag = entry;
+                propertyGrid1.SelectedObject = customClass;
+            }
+            lblSelected.Text = $"({dataGridView1.SelectedRows.Count.ToString()})";
+
+        }
+
 
         //private void manualJCRDatabaseToolStripMenuItem_Click(object sender, EventArgs e)
         //{
