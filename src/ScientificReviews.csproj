@@ -138,6 +138,7 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="education.ico" />
+    <None Include="Resources\remove.png" />
     <None Include="Resources\pdf2.png" />
     <None Include="Resources\google.png" />
     <None Include="Resources\add.png" />

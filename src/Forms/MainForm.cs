@@ -337,6 +337,11 @@ namespace ScientificReviews.Forms
 
         private void dataGridView1_SelectionChanged(object sender, EventArgs e)
         {
+            SelectEntry();
+        }
+
+        private void SelectEntry()
+        {
             if (bindingSource1.Current is DataRowView == false)
                 return;
             bool readOnly = !allowEditToolStripMenuItem.Checked;
@@ -359,7 +364,6 @@ namespace ScientificReviews.Forms
                 propertyGrid1.SelectedObject = customClass;
             }
             lblSelected.Text = $"({dataGridView1.SelectedRows.Count.ToString()})";
-
         }
 
         private void ShowEntry(BibtexEntry entry, string search = "")
@@ -779,6 +783,11 @@ namespace ScientificReviews.Forms
 
         private void removeTagsToolStripMenuItem1_Click(object sender, EventArgs e)
         {
+            RemoveTags();               
+        }
+
+        private void RemoveTags()
+        {
             List<string> tags = new List<string>();
             if (bindingSource1.Current != null)
             {
@@ -805,16 +814,16 @@ namespace ScientificReviews.Forms
                             list.Add(tag);
                     }
                     entry.Tags = list.ToArray();
-                    dataGridView1_SelectionChanged(sender, e);
+                    SelectEntry();
                 }
-            }                     
+            }
         }
 
         private void allowEditToolStripMenuItem_Click(object sender, EventArgs e)
         {
             allowEditToolStripMenuItem.Checked = !allowEditToolStripMenuItem.Checked;
             propertyGrid1.Enabled = allowEditToolStripMenuItem.Checked;
-            dataGridView1_SelectionChanged(sender, e);
+            SelectEntry();
         }
 
         private void propertyGrid1_PropertyValueChanged(object s, PropertyValueChangedEventArgs e)
@@ -992,14 +1001,15 @@ namespace ScientificReviews.Forms
             LoadData(entries.ToArray());
         }
 
-        private void propertyGrid1_PreviewKeyDown(object sender, PreviewKeyDownEventArgs e)
+        private void btnDeleteTag_Click(object sender, EventArgs e)
         {
-            if (e.KeyCode != Keys.Delete)
-                return;
+            RemoveTag();
+        }
 
+        private void RemoveTag()
+        {
             bool readOnly = !allowEditToolStripMenuItem.Checked;
-            if (readOnly)
-                return;
+
 
             if (propertyGrid1.Tag is BibtexEntry entry == false)
                 return;
@@ -1037,19 +1047,47 @@ namespace ScientificReviews.Forms
                 ShowEntry(entry, txtSearch.Text);
 
                 CustomClass customClass = new CustomClass();
-                customClass.Add(new CustomProperty("entryKey", "Key", entry.Key, "Bibitem", false, true));
-                customClass.Add(new CustomProperty("entryType", "Type", entry.Type, "Bibitem", false, true));
+                customClass.Add(new CustomProperty("entryKey", "Key", entry.Key, "Bibitem", readOnly, true));
+                customClass.Add(new CustomProperty("entryType", "Type", entry.Type, "Bibitem", readOnly, true));
                 foreach (var tag in entry.Tags)
                 {
-                    CustomProperty item = new CustomProperty(tag.Key, tag.Key, tag.Value, "Parameters", false, true);
+                    CustomProperty item = new CustomProperty(tag.Key, tag.Key, tag.Value, "Parameters", readOnly, true);
                     customClass.Add(item);
                 }
                 propertyGrid1.Tag = entry;
                 propertyGrid1.SelectedObject = customClass;
             }
             lblSelected.Text = $"({dataGridView1.SelectedRows.Count.ToString()})";
-
         }
+
+        private void btnRemoveTags_Click(object sender, EventArgs e)
+        {
+            RemoveTags();
+        }
+
+        private void removeTagToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            RemoveTag();
+        }
+
+        private async void exportSelectedToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (dataGridView1.SelectedRows.Count == 0)
+                return;
+         
+            List<BibtexEntry> toExport = new List<BibtexEntry>();
+
+            foreach (DataGridViewRow dgvr in dataGridView1.SelectedRows)
+            {
+                if (dgvr.DataBoundItem is DataRowView drv && drv.Row != null)
+                {
+                    var entry = (BibtexEntry)drv.Row["Entry"];
+                    toExport.Add(entry);
+                }
+            }
+            await ExportDatabaseAsync(toExport.ToArray());
+        }
+
 
 
         //private void manualJCRDatabaseToolStripMenuItem_Click(object sender, EventArgs e)
