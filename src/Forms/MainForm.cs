@@ -921,19 +921,18 @@ namespace ScientificReviews.Forms
             });
         }
 
-        public void OpenPdf(BibtexEntry entry)
+        private string GetPdfFileName(BibtexEntry entry)
         {
-            if (entry == null || entry.Tags == null)
-                return;
-
             // Najdi tag "title" (case-insensitive)
             var titleTag = entry.Tags
                 .FirstOrDefault(t => string.Equals(t.Key, "title", StringComparison.OrdinalIgnoreCase));
 
-            if (titleTag == null || string.IsNullOrWhiteSpace(titleTag.Value))
-                return;
-
-            string title = titleTag.Value;
+            string title = "";
+            if ((titleTag == null || string.IsNullOrWhiteSpace(titleTag.Value)) == false)
+            {
+                title = titleTag.Value;
+            }
+             
             title = title.Replace(":", "").Replace("  ", " ").Replace("?", "");
 
             string filename = Path.Combine(Program.AppSettings.Data.PdfFolder, title + ".pdf");
@@ -946,11 +945,17 @@ namespace ScientificReviews.Forms
                     throw new Exception("File not exists: " + filename);
                 }
             }
-                
+            return filename;
+        }
 
+        private void OpenPdf(BibtexEntry entry)
+        {
+            if (entry == null || entry.Tags == null)
+                return;
+                       
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                FileName = filename,
+                FileName = GetPdfFileName(entry),
                 UseShellExecute = true
             });
         }
@@ -1070,11 +1075,11 @@ namespace ScientificReviews.Forms
             RemoveTag();
         }
 
-        private async void exportSelectedToolStripMenuItem_Click(object sender, EventArgs e)
+        private BibtexEntry[] GetSelected()
         {
             if (dataGridView1.SelectedRows.Count == 0)
-                return;
-         
+                return new BibtexEntry[0];
+
             List<BibtexEntry> toExport = new List<BibtexEntry>();
 
             foreach (DataGridViewRow dgvr in dataGridView1.SelectedRows)
@@ -1085,10 +1090,101 @@ namespace ScientificReviews.Forms
                     toExport.Add(entry);
                 }
             }
-            await ExportDatabaseAsync(toExport.ToArray());
+            return toExport.ToArray();
         }
 
 
+        private async void exportSelectedToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+           
+            await ExportDatabaseAsync(GetSelected());
+        }
+
+        private void renameToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            foreach (var entry in entries)
+            {
+
+                if (entry == null || entry.Tags == null)
+                    continue;
+
+                // Najdi tag "title" (case-insensitive)
+                var titleTag = entry.Tags
+                    .FirstOrDefault(t => string.Equals(t.Key, "title", StringComparison.OrdinalIgnoreCase));
+
+                if (titleTag == null || string.IsNullOrWhiteSpace(titleTag.Value))
+                    continue;
+
+                string title = titleTag.Value;
+                title = title.Replace(":", "").Replace("  ", " ").Replace("?", "");
+
+                string filename = Path.Combine(Program.AppSettings.Data.PdfFolder, title + ".pdf");
+
+                if (File.Exists(filename) == false)
+                {
+                    continue;
+
+                }
+
+                string filename2 = Path.Combine(Program.AppSettings.Data.PdfFolder, entry.Key + ".pdf");
+                File.Move(filename, filename2);
+
+            }
+        }
+
+        private void checkPdfToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            foreach (var entry in entries)
+            {
+
+                if (entry == null || entry.Tags == null)
+                    continue;
+              
+
+                string filename = Path.Combine(Program.AppSettings.Data.PdfFolder, entry.Key + ".pdf");
+               if (File.Exists(filename) == false)
+                {
+
+                }
+
+            }
+        }
+
+        private void exportSelectedPDFToolStripMenuItem_Click(object sender, EventArgs e)
+        {      
+            try
+            {
+                var toExport = GetSelected();
+                if (toExport.Length == 0)
+                    return;
+                lblStatus.Text = "Exporting...";
+                using (FolderBrowserDialog folderDialog = new FolderBrowserDialog()
+                {
+                    SelectedPath = Program.AppSettings.Data.LastDirectory
+                })
+                {
+                    DialogResult result = folderDialog.ShowDialog(this);
+                    if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(folderDialog.SelectedPath))
+                    {
+                        foreach (var entry in toExport)
+                        {
+                            try
+                            {
+                                string fileName = GetPdfFileName(entry);
+                                string dest = Path.Combine(folderDialog.SelectedPath, entry.Key + ".pdf");
+                                File.Copy(fileName, dest);
+                            }
+                            catch { continue; }
+                        }
+                    }
+                }
+                lblStatus.Text = "Export PDF done.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
 
         //private void manualJCRDatabaseToolStripMenuItem_Click(object sender, EventArgs e)
         //{
