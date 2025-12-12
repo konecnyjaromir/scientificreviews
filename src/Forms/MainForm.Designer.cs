@@ -434,7 +434,7 @@
             // 
             this.propertyGrid1.Dock = System.Windows.Forms.DockStyle.Top;
             this.propertyGrid1.HelpVisible = false;
-            this.propertyGrid1.Location = new System.Drawing.Point(0, 35);
+            this.propertyGrid1.Location = new System.Drawing.Point(0, 25);
             this.propertyGrid1.Name = "propertyGrid1";
             this.propertyGrid1.Size = new System.Drawing.Size(357, 501);
             this.propertyGrid1.TabIndex = 6;
@@ -443,9 +443,9 @@
             // 
             // panel1
             // 
-            this.panel1.Controls.Add(this.propertyGrid1);
             this.panel1.Controls.Add(this.richTextBox1);
             this.panel1.Controls.Add(this.splitter2);
+            this.panel1.Controls.Add(this.propertyGrid1);
             this.panel1.Controls.Add(this.toolStrip2);
             this.panel1.Dock = System.Windows.Forms.DockStyle.Fill;
             this.panel1.Location = new System.Drawing.Point(807, 49);
@@ -457,16 +457,16 @@
             // 
             this.richTextBox1.BorderStyle = System.Windows.Forms.BorderStyle.FixedSingle;
             this.richTextBox1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.richTextBox1.Location = new System.Drawing.Point(0, 35);
+            this.richTextBox1.Location = new System.Drawing.Point(0, 536);
             this.richTextBox1.Name = "richTextBox1";
-            this.richTextBox1.Size = new System.Drawing.Size(357, 825);
+            this.richTextBox1.Size = new System.Drawing.Size(357, 324);
             this.richTextBox1.TabIndex = 7;
             this.richTextBox1.Text = "";
             // 
             // splitter2
             // 
             this.splitter2.Dock = System.Windows.Forms.DockStyle.Top;
-            this.splitter2.Location = new System.Drawing.Point(0, 25);
+            this.splitter2.Location = new System.Drawing.Point(0, 526);
             this.splitter2.Name = "splitter2";
             this.splitter2.Size = new System.Drawing.Size(357, 10);
             this.splitter2.TabIndex = 6;
