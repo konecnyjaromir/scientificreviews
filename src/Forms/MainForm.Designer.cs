@@ -32,8 +32,8 @@
             System.ComponentModel.ComponentResourceManager resources = new System.ComponentModel.ComponentResourceManager(typeof(MainForm));
             this.menuStrip1 = new System.Windows.Forms.MenuStrip();
             this.projectToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.loadBibTexFolderToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.loadBibTexFileToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.loadBibTexFolderToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.clearToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripMenuItem2 = new System.Windows.Forms.ToolStripSeparator();
             this.exportDatabaseToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -66,6 +66,11 @@
             this.removeQ3Q4ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.viewToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.columnsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.pdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.renameToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.checkPdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.toolStripMenuItem3 = new System.Windows.Forms.ToolStripSeparator();
+            this.exportSelectedPDFToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.statusStrip1 = new System.Windows.Forms.StatusStrip();
             this.lblStatus = new System.Windows.Forms.ToolStripStatusLabel();
             this.toolStripStatusLabel1 = new System.Windows.Forms.ToolStripStatusLabel();
@@ -89,11 +94,8 @@
             this.btnGoogle = new System.Windows.Forms.ToolStripButton();
             this.btnPdf = new System.Windows.Forms.ToolStripButton();
             this.bindingSource1 = new System.Windows.Forms.BindingSource(this.components);
-            this.pdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.renameToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.checkPdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.toolStripMenuItem3 = new System.Windows.Forms.ToolStripSeparator();
-            this.exportSelectedPDFToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.settingsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.toolStripMenuItem4 = new System.Windows.Forms.ToolStripSeparator();
             this.menuStrip1.SuspendLayout();
             this.statusStrip1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridView1)).BeginInit();
@@ -125,6 +127,8 @@
             this.loadBibTexFolderToolStripMenuItem,
             this.clearToolStripMenuItem,
             this.toolStripMenuItem2,
+            this.settingsToolStripMenuItem,
+            this.toolStripMenuItem4,
             this.exportDatabaseToolStripMenuItem,
             this.exportVisibleToolStripMenuItem,
             this.exportSelectedToolStripMenuItem,
@@ -134,19 +138,19 @@
             this.projectToolStripMenuItem.Size = new System.Drawing.Size(56, 20);
             this.projectToolStripMenuItem.Text = "Project";
             // 
-            // loadBibTexFolderToolStripMenuItem
-            // 
-            this.loadBibTexFolderToolStripMenuItem.Name = "loadBibTexFolderToolStripMenuItem";
-            this.loadBibTexFolderToolStripMenuItem.Size = new System.Drawing.Size(207, 22);
-            this.loadBibTexFolderToolStripMenuItem.Text = "Add or load BibTex folder";
-            this.loadBibTexFolderToolStripMenuItem.Click += new System.EventHandler(this.loadBibTexFolderToolStripMenuItem_Click);
-            // 
             // loadBibTexFileToolStripMenuItem
             // 
             this.loadBibTexFileToolStripMenuItem.Name = "loadBibTexFileToolStripMenuItem";
             this.loadBibTexFileToolStripMenuItem.Size = new System.Drawing.Size(207, 22);
             this.loadBibTexFileToolStripMenuItem.Text = "Add or load BibTex file";
             this.loadBibTexFileToolStripMenuItem.Click += new System.EventHandler(this.loadBibTexFileToolStripMenuItem_Click);
+            // 
+            // loadBibTexFolderToolStripMenuItem
+            // 
+            this.loadBibTexFolderToolStripMenuItem.Name = "loadBibTexFolderToolStripMenuItem";
+            this.loadBibTexFolderToolStripMenuItem.Size = new System.Drawing.Size(207, 22);
+            this.loadBibTexFolderToolStripMenuItem.Text = "Add or load BibTex folder";
+            this.loadBibTexFolderToolStripMenuItem.Click += new System.EventHandler(this.loadBibTexFolderToolStripMenuItem_Click);
             // 
             // clearToolStripMenuItem
             // 
@@ -391,6 +395,44 @@
             this.columnsToolStripMenuItem.Text = "Columns";
             this.columnsToolStripMenuItem.Click += new System.EventHandler(this.columnsToolStripMenuItem_Click);
             // 
+            // pdfToolStripMenuItem
+            // 
+            this.pdfToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.renameToolStripMenuItem,
+            this.checkPdfToolStripMenuItem,
+            this.toolStripMenuItem3,
+            this.exportSelectedPDFToolStripMenuItem});
+            this.pdfToolStripMenuItem.Name = "pdfToolStripMenuItem";
+            this.pdfToolStripMenuItem.Size = new System.Drawing.Size(40, 20);
+            this.pdfToolStripMenuItem.Text = "PDF";
+            // 
+            // renameToolStripMenuItem
+            // 
+            this.renameToolStripMenuItem.Name = "renameToolStripMenuItem";
+            this.renameToolStripMenuItem.Size = new System.Drawing.Size(204, 22);
+            this.renameToolStripMenuItem.Text = "Rename from title to key";
+            this.renameToolStripMenuItem.Click += new System.EventHandler(this.renameToolStripMenuItem_Click);
+            // 
+            // checkPdfToolStripMenuItem
+            // 
+            this.checkPdfToolStripMenuItem.Name = "checkPdfToolStripMenuItem";
+            this.checkPdfToolStripMenuItem.Size = new System.Drawing.Size(204, 22);
+            this.checkPdfToolStripMenuItem.Text = "Check pdf";
+            this.checkPdfToolStripMenuItem.Visible = false;
+            this.checkPdfToolStripMenuItem.Click += new System.EventHandler(this.checkPdfToolStripMenuItem_Click);
+            // 
+            // toolStripMenuItem3
+            // 
+            this.toolStripMenuItem3.Name = "toolStripMenuItem3";
+            this.toolStripMenuItem3.Size = new System.Drawing.Size(201, 6);
+            // 
+            // exportSelectedPDFToolStripMenuItem
+            // 
+            this.exportSelectedPDFToolStripMenuItem.Name = "exportSelectedPDFToolStripMenuItem";
+            this.exportSelectedPDFToolStripMenuItem.Size = new System.Drawing.Size(204, 22);
+            this.exportSelectedPDFToolStripMenuItem.Text = "Export selected PDF";
+            this.exportSelectedPDFToolStripMenuItem.Click += new System.EventHandler(this.exportSelectedPDFToolStripMenuItem_Click);
+            // 
             // statusStrip1
             // 
             this.statusStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
@@ -594,43 +636,17 @@
             this.btnPdf.Text = "Open PDF";
             this.btnPdf.Click += new System.EventHandler(this.btnPdf_Click);
             // 
-            // pdfToolStripMenuItem
+            // settingsToolStripMenuItem
             // 
-            this.pdfToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.renameToolStripMenuItem,
-            this.checkPdfToolStripMenuItem,
-            this.toolStripMenuItem3,
-            this.exportSelectedPDFToolStripMenuItem});
-            this.pdfToolStripMenuItem.Name = "pdfToolStripMenuItem";
-            this.pdfToolStripMenuItem.Size = new System.Drawing.Size(40, 20);
-            this.pdfToolStripMenuItem.Text = "PDF";
+            this.settingsToolStripMenuItem.Name = "settingsToolStripMenuItem";
+            this.settingsToolStripMenuItem.Size = new System.Drawing.Size(207, 22);
+            this.settingsToolStripMenuItem.Text = "Settings";
+            this.settingsToolStripMenuItem.Click += new System.EventHandler(this.settingsToolStripMenuItem_Click);
             // 
-            // renameToolStripMenuItem
+            // toolStripMenuItem4
             // 
-            this.renameToolStripMenuItem.Name = "renameToolStripMenuItem";
-            this.renameToolStripMenuItem.Size = new System.Drawing.Size(204, 22);
-            this.renameToolStripMenuItem.Text = "Rename from title to key";
-            this.renameToolStripMenuItem.Click += new System.EventHandler(this.renameToolStripMenuItem_Click);
-            // 
-            // checkPdfToolStripMenuItem
-            // 
-            this.checkPdfToolStripMenuItem.Name = "checkPdfToolStripMenuItem";
-            this.checkPdfToolStripMenuItem.Size = new System.Drawing.Size(204, 22);
-            this.checkPdfToolStripMenuItem.Text = "Check pdf";
-            this.checkPdfToolStripMenuItem.Visible = false;
-            this.checkPdfToolStripMenuItem.Click += new System.EventHandler(this.checkPdfToolStripMenuItem_Click);
-            // 
-            // toolStripMenuItem3
-            // 
-            this.toolStripMenuItem3.Name = "toolStripMenuItem3";
-            this.toolStripMenuItem3.Size = new System.Drawing.Size(201, 6);
-            // 
-            // exportSelectedPDFToolStripMenuItem
-            // 
-            this.exportSelectedPDFToolStripMenuItem.Name = "exportSelectedPDFToolStripMenuItem";
-            this.exportSelectedPDFToolStripMenuItem.Size = new System.Drawing.Size(204, 22);
-            this.exportSelectedPDFToolStripMenuItem.Text = "Export selected PDF";
-            this.exportSelectedPDFToolStripMenuItem.Click += new System.EventHandler(this.exportSelectedPDFToolStripMenuItem_Click);
+            this.toolStripMenuItem4.Name = "toolStripMenuItem4";
+            this.toolStripMenuItem4.Size = new System.Drawing.Size(204, 6);
             // 
             // MainForm
             // 
@@ -732,5 +748,7 @@
         private System.Windows.Forms.ToolStripMenuItem checkPdfToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripMenuItem3;
         private System.Windows.Forms.ToolStripMenuItem exportSelectedPDFToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem settingsToolStripMenuItem;
+        private System.Windows.Forms.ToolStripSeparator toolStripMenuItem4;
     }
 }

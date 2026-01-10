@@ -1186,6 +1186,14 @@ namespace ScientificReviews.Forms
             }
         }
 
+        private void settingsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (new SettingsForm().ShowDialog(this) == DialogResult.OK)
+            {
+                Program.AppSettings.LoadSettings();
+            }
+        }
+
         //private void manualJCRDatabaseToolStripMenuItem_Click(object sender, EventArgs e)
         //{
         //try
