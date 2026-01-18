@@ -1,0 +1,121 @@
+name: Auto Release (.NET 4.8)
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Release version (leave empty for auto +0.0.1)'
+        required: false
+        type: string
+      body:
+        description: 'Quick summary (will be added on top of release_notes.md)'
+        required: false
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      # 1. Checkout code
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # 2. Determine Version
+      - name: Determine Version
+        id: get_version
+        shell: powershell
+        run: |
+          $inputVersion = "${{ inputs.version }}"
+          
+          if ([string]::IsNullOrWhiteSpace($inputVersion)) {
+            $lastTag = git describe --tags --abbrev=0 2>$null
+            if (-not $lastTag) { 
+              $newVersion = "v1.0.0" 
+            } else {
+              if ($lastTag -match "v?(\d+)\.(\d+)\.(\d+)") {
+                $major = $matches[1]
+                $minor = $matches[2]
+                $patch = [int]$matches[3]
+                $newPatch = $patch + 1
+                $newVersion = "v$major.$minor.$newPatch"
+              } else {
+                $newVersion = "v1.0.0"
+              }
+            }
+          } else {
+            $newVersion = $inputVersion
+          }
+          
+          echo "version=$newVersion" >> $env:GITHUB_OUTPUT
+          Write-Host "Target Version: $newVersion"
+
+      # 3. Prepare Release Notes (Combine Input + File)
+      - name: Prepare Release Notes
+        id: release_notes
+        shell: powershell
+        run: |
+          # Path to your file relative to repo root (UPDATED)
+          $notesFile = "RELEASE_NOTES.md" 
+          $tempNotes = "final_release_notes.tmp"
+          
+          # 1. Add manual input from the trigger form (if any)
+          $manualBody = "${{ inputs.body }}"
+          if (-not [string]::IsNullOrWhiteSpace($manualBody)) {
+            Add-Content -Path $tempNotes -Value "## Summary`n"
+            Add-Content -Path $tempNotes -Value "$manualBody`n"
+            Add-Content -Path $tempNotes -Value "---`n"
+          }
+
+          # 2. Add content from the file (if it exists)
+          if (Test-Path $notesFile) {
+            $fileContent = Get-Content -Path $notesFile -Raw
+            Add-Content -Path $tempNotes -Value "$fileContent"
+            Write-Host "Loaded notes from $notesFile"
+          } else {
+            Write-Warning "File $notesFile not found in root. Release will only have auto-generated logs."
+          }
+
+          # If neither existed, create a placeholder so the action doesn't fail
+          if (-not (Test-Path $tempNotes)) {
+             Set-Content -Path $tempNotes -Value "Automated release."
+          }
+
+          # Verify content
+          Get-Content $tempNotes
+
+      # 4. Setup MSBuild
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      # 5. Setup NuGet
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      # 6. Restore NuGet Packages
+      - name: Restore NuGet Packages
+        run: nuget restore src/ScientificReviews.sln
+
+      # 7. Build Release using MSBuild
+      - name: Build App
+        run: msbuild src/ScientificReviews.csproj /p:Configuration=Release /p:Platform="Any CPU" /p:OutputPath=./publish
+
+      # 8. Zip the output
+      - name: Zip Build
+        run: Compress-Archive -Path ./src/publish/* -DestinationPath ScientificReviews.zip
+
+      # 9. Create Release
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_version.outputs.version }}
+          name: Release ${{ steps.get_version.outputs.version }}
+          body_path: final_release_notes.tmp
+          generate_release_notes: true
+          files: |
+            ScientificReviews.zip
