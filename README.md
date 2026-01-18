@@ -1,10 +1,10 @@
 # Scientific Reviews
+![GitHub Release](https://img.shields.io/github/v/release/konecnyjaromir/scientificreviews?link=https%3A%2F%2Fgithub.com%2Fkonecnyjaromir%2Fscientificreviews%2Freleases%2Ftag%2Fv1.0.1) ![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/konecnyjaromir/scientificreviews/latest/total) ![Static Badge](https://img.shields.io/badge/_.NET-Windows-blue) 
+
+---
 
 Scientific Reviews is a specialized literature management tool designed to streamline the workflow of researchers conducting systematic reviews, meta-analyses, or general bibliometric studies. It focuses on speed, data hygiene, and Journal Citation Reports (JCR) integration to ensure high-quality source management.
 
-> **Current version:** 1.0.1 – first stable release (promoted from 1.0.0-alpha)
-
----
 
 ## 🚀 Key Features
 
