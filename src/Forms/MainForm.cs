@@ -79,7 +79,7 @@ namespace ScientificReviews.Forms
             var table = new DataTable();
 
             table.Columns.Add("Key", typeof(string));
-            table.Columns.Add("Type", typeof(string));            
+            table.Columns.Add("Entry Type", typeof(string));            
 
             // vytvoření sloupců
             foreach (var col in userColumns)
@@ -96,7 +96,7 @@ namespace ScientificReviews.Forms
 
                 row["Entry"] = entry;
                 row["Key"] = entry.Key;
-                row["Type"] = entry.Type;
+                row["Entry Type"] = entry.Type;
                 table.Rows.Add(row);
             }
 
@@ -921,6 +921,28 @@ namespace ScientificReviews.Forms
             });
         }
 
+        public void SearchByDoi(BibtexEntry entry)
+        {
+            if (entry == null || entry.Tags == null)
+                return;
+
+            // Najdi tag "title" (case-insensitive)
+            var dioTag = entry.Tags
+                .FirstOrDefault(t => string.Equals(t.Key, "doi", StringComparison.OrdinalIgnoreCase));
+
+            if (dioTag == null || string.IsNullOrWhiteSpace(dioTag.Value))
+                return;
+
+            string query = Uri.EscapeDataString(dioTag.Value);
+            string url = $"https://doi.org/{query}";
+
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = url,
+                UseShellExecute = true
+            });
+        }
+
         private string GetPdfFileName(BibtexEntry entry)
         {
             // Najdi tag "title" (case-insensitive)
@@ -1139,15 +1161,34 @@ namespace ScientificReviews.Forms
 
                 if (entry == null || entry.Tags == null)
                     continue;
-              
+
+                var haspdfTag = entry.Tags
+               .FirstOrDefault(t => string.Equals(t.Key, "has_pdf", StringComparison.OrdinalIgnoreCase));
+
+                if (haspdfTag == null)
+                {
+                    haspdfTag = new BibtexTag()
+                    {
+                        Key = "has_pdf"
+                    };
+                    var list = entry.Tags.ToList();
+                    list.Add(haspdfTag);
+                    entry.Tags = list.ToArray();
+                }
+
 
                 string filename = Path.Combine(Program.AppSettings.Data.PdfFolder, entry.Key + ".pdf");
-               if (File.Exists(filename) == false)
+                if (File.Exists(filename) == false)
                 {
-
+                    haspdfTag.Value = "no";
+                }
+                else
+                {
+                    haspdfTag.Value = "yes";
                 }
 
             }
+            LoadData(entries.ToArray());
         }
 
         private void exportSelectedPDFToolStripMenuItem_Click(object sender, EventArgs e)
@@ -1191,6 +1232,26 @@ namespace ScientificReviews.Forms
             if (new SettingsForm().ShowDialog(this) == DialogResult.OK)
             {
                 Program.AppSettings.LoadSettings();
+            }
+        }
+
+        private void btnDoi_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (bindingSource1.Current != null)
+                {
+                    int currentIndex = bindingSource1.Position;
+
+                    DataRowView drv = bindingSource1.Current as DataRowView;
+                    var row = drv.Row as DataRow;
+                    var entry = row["Entry"] as BibtexEntry;
+                    SearchByDoi(entry);
+                }
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
             }
         }
 

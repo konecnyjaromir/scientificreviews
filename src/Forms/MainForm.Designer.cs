@@ -36,6 +36,8 @@
             this.loadBibTexFolderToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.clearToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripMenuItem2 = new System.Windows.Forms.ToolStripSeparator();
+            this.settingsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.toolStripMenuItem4 = new System.Windows.Forms.ToolStripSeparator();
             this.exportDatabaseToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.exportVisibleToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.exportSelectedToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -83,19 +85,18 @@
             this.richTextBox1 = new System.Windows.Forms.RichTextBox();
             this.splitter2 = new System.Windows.Forms.Splitter();
             this.toolStrip2 = new System.Windows.Forms.ToolStrip();
-            this.btnAddTag = new System.Windows.Forms.ToolStripButton();
-            this.btnRemoveTag = new System.Windows.Forms.ToolStripButton();
-            this.btnRemoveTags = new System.Windows.Forms.ToolStripButton();
             this.toolStrip1 = new System.Windows.Forms.ToolStrip();
             this.toolStripLabel1 = new System.Windows.Forms.ToolStripLabel();
             this.txtSearch = new System.Windows.Forms.ToolStripTextBox();
             this.toolStripLabel2 = new System.Windows.Forms.ToolStripLabel();
             this.toolStripSeparator1 = new System.Windows.Forms.ToolStripSeparator();
+            this.btnAddTag = new System.Windows.Forms.ToolStripButton();
+            this.btnRemoveTag = new System.Windows.Forms.ToolStripButton();
+            this.btnRemoveTags = new System.Windows.Forms.ToolStripButton();
             this.btnGoogle = new System.Windows.Forms.ToolStripButton();
+            this.btnDoi = new System.Windows.Forms.ToolStripButton();
             this.btnPdf = new System.Windows.Forms.ToolStripButton();
             this.bindingSource1 = new System.Windows.Forms.BindingSource(this.components);
-            this.settingsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.toolStripMenuItem4 = new System.Windows.Forms.ToolStripSeparator();
             this.menuStrip1.SuspendLayout();
             this.statusStrip1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridView1)).BeginInit();
@@ -111,9 +112,9 @@
             this.projectToolStripMenuItem,
             this.databaseToolStripMenuItem,
             this.recordToolStripMenuItem,
-            this.journalCitationReportsToolStripMenuItem,
             this.viewToolStripMenuItem,
-            this.pdfToolStripMenuItem});
+            this.pdfToolStripMenuItem,
+            this.journalCitationReportsToolStripMenuItem});
             this.menuStrip1.Location = new System.Drawing.Point(0, 0);
             this.menuStrip1.Name = "menuStrip1";
             this.menuStrip1.Size = new System.Drawing.Size(1164, 24);
@@ -163,6 +164,18 @@
             // 
             this.toolStripMenuItem2.Name = "toolStripMenuItem2";
             this.toolStripMenuItem2.Size = new System.Drawing.Size(204, 6);
+            // 
+            // settingsToolStripMenuItem
+            // 
+            this.settingsToolStripMenuItem.Name = "settingsToolStripMenuItem";
+            this.settingsToolStripMenuItem.Size = new System.Drawing.Size(207, 22);
+            this.settingsToolStripMenuItem.Text = "Settings";
+            this.settingsToolStripMenuItem.Click += new System.EventHandler(this.settingsToolStripMenuItem_Click);
+            // 
+            // toolStripMenuItem4
+            // 
+            this.toolStripMenuItem4.Name = "toolStripMenuItem4";
+            this.toolStripMenuItem4.Size = new System.Drawing.Size(204, 6);
             // 
             // exportDatabaseToolStripMenuItem
             // 
@@ -356,8 +369,8 @@
             this.createExtraJCRTagsToolStripMenuItem,
             this.removeQ3Q4ToolStripMenuItem});
             this.journalCitationReportsToolStripMenuItem.Name = "journalCitationReportsToolStripMenuItem";
-            this.journalCitationReportsToolStripMenuItem.Size = new System.Drawing.Size(145, 20);
-            this.journalCitationReportsToolStripMenuItem.Text = "Journal Citation Reports";
+            this.journalCitationReportsToolStripMenuItem.Size = new System.Drawing.Size(224, 20);
+            this.journalCitationReportsToolStripMenuItem.Text = "Journal Citation Reports (Experimental)";
             // 
             // updateJournalsDatabaseToolStripMenuItem
             // 
@@ -391,7 +404,7 @@
             // columnsToolStripMenuItem
             // 
             this.columnsToolStripMenuItem.Name = "columnsToolStripMenuItem";
-            this.columnsToolStripMenuItem.Size = new System.Drawing.Size(122, 22);
+            this.columnsToolStripMenuItem.Size = new System.Drawing.Size(180, 22);
             this.columnsToolStripMenuItem.Text = "Columns";
             this.columnsToolStripMenuItem.Click += new System.EventHandler(this.columnsToolStripMenuItem_Click);
             // 
@@ -409,28 +422,27 @@
             // renameToolStripMenuItem
             // 
             this.renameToolStripMenuItem.Name = "renameToolStripMenuItem";
-            this.renameToolStripMenuItem.Size = new System.Drawing.Size(204, 22);
+            this.renameToolStripMenuItem.Size = new System.Drawing.Size(233, 22);
             this.renameToolStripMenuItem.Text = "Rename from title to key";
             this.renameToolStripMenuItem.Click += new System.EventHandler(this.renameToolStripMenuItem_Click);
             // 
             // checkPdfToolStripMenuItem
             // 
             this.checkPdfToolStripMenuItem.Name = "checkPdfToolStripMenuItem";
-            this.checkPdfToolStripMenuItem.Size = new System.Drawing.Size(204, 22);
-            this.checkPdfToolStripMenuItem.Text = "Check pdf";
-            this.checkPdfToolStripMenuItem.Visible = false;
+            this.checkPdfToolStripMenuItem.Size = new System.Drawing.Size(233, 22);
+            this.checkPdfToolStripMenuItem.Text = "Update \"has_pdf\" tags";
             this.checkPdfToolStripMenuItem.Click += new System.EventHandler(this.checkPdfToolStripMenuItem_Click);
             // 
             // toolStripMenuItem3
             // 
             this.toolStripMenuItem3.Name = "toolStripMenuItem3";
-            this.toolStripMenuItem3.Size = new System.Drawing.Size(201, 6);
+            this.toolStripMenuItem3.Size = new System.Drawing.Size(230, 6);
             // 
             // exportSelectedPDFToolStripMenuItem
             // 
             this.exportSelectedPDFToolStripMenuItem.Name = "exportSelectedPDFToolStripMenuItem";
-            this.exportSelectedPDFToolStripMenuItem.Size = new System.Drawing.Size(204, 22);
-            this.exportSelectedPDFToolStripMenuItem.Text = "Export selected PDF";
+            this.exportSelectedPDFToolStripMenuItem.Size = new System.Drawing.Size(233, 22);
+            this.exportSelectedPDFToolStripMenuItem.Text = "Export PDF of selected records";
             this.exportSelectedPDFToolStripMenuItem.Click += new System.EventHandler(this.exportSelectedPDFToolStripMenuItem_Click);
             // 
             // statusStrip1
@@ -551,33 +563,6 @@
             this.toolStrip2.TabIndex = 8;
             this.toolStrip2.Text = "toolStrip2";
             // 
-            // btnAddTag
-            // 
-            this.btnAddTag.Image = global::ScientificReviews.Properties.Resources.add;
-            this.btnAddTag.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.btnAddTag.Name = "btnAddTag";
-            this.btnAddTag.Size = new System.Drawing.Size(69, 22);
-            this.btnAddTag.Text = "Add tag";
-            this.btnAddTag.Click += new System.EventHandler(this.addTag_Click);
-            // 
-            // btnRemoveTag
-            // 
-            this.btnRemoveTag.Image = global::ScientificReviews.Properties.Resources.remove;
-            this.btnRemoveTag.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.btnRemoveTag.Name = "btnRemoveTag";
-            this.btnRemoveTag.Size = new System.Drawing.Size(90, 22);
-            this.btnRemoveTag.Text = "Remove tag";
-            this.btnRemoveTag.Click += new System.EventHandler(this.btnDeleteTag_Click);
-            // 
-            // btnRemoveTags
-            // 
-            this.btnRemoveTags.Image = global::ScientificReviews.Properties.Resources.remove;
-            this.btnRemoveTags.ImageTransparentColor = System.Drawing.Color.Magenta;
-            this.btnRemoveTags.Name = "btnRemoveTags";
-            this.btnRemoveTags.Size = new System.Drawing.Size(95, 22);
-            this.btnRemoveTags.Text = "Remove tags";
-            this.btnRemoveTags.Click += new System.EventHandler(this.btnRemoveTags_Click);
-            // 
             // toolStrip1
             // 
             this.toolStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
@@ -586,6 +571,7 @@
             this.toolStripLabel2,
             this.toolStripSeparator1,
             this.btnGoogle,
+            this.btnDoi,
             this.btnPdf});
             this.toolStrip1.Location = new System.Drawing.Point(0, 24);
             this.toolStrip1.Name = "toolStrip1";
@@ -618,6 +604,33 @@
             this.toolStripSeparator1.Name = "toolStripSeparator1";
             this.toolStripSeparator1.Size = new System.Drawing.Size(6, 25);
             // 
+            // btnAddTag
+            // 
+            this.btnAddTag.Image = global::ScientificReviews.Properties.Resources.add;
+            this.btnAddTag.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.btnAddTag.Name = "btnAddTag";
+            this.btnAddTag.Size = new System.Drawing.Size(69, 22);
+            this.btnAddTag.Text = "Add tag";
+            this.btnAddTag.Click += new System.EventHandler(this.addTag_Click);
+            // 
+            // btnRemoveTag
+            // 
+            this.btnRemoveTag.Image = global::ScientificReviews.Properties.Resources.remove;
+            this.btnRemoveTag.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.btnRemoveTag.Name = "btnRemoveTag";
+            this.btnRemoveTag.Size = new System.Drawing.Size(90, 22);
+            this.btnRemoveTag.Text = "Remove tag";
+            this.btnRemoveTag.Click += new System.EventHandler(this.btnDeleteTag_Click);
+            // 
+            // btnRemoveTags
+            // 
+            this.btnRemoveTags.Image = global::ScientificReviews.Properties.Resources.remove;
+            this.btnRemoveTags.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.btnRemoveTags.Name = "btnRemoveTags";
+            this.btnRemoveTags.Size = new System.Drawing.Size(95, 22);
+            this.btnRemoveTags.Text = "Remove tags";
+            this.btnRemoveTags.Click += new System.EventHandler(this.btnRemoveTags_Click);
+            // 
             // btnGoogle
             // 
             this.btnGoogle.Image = global::ScientificReviews.Properties.Resources.google;
@@ -627,6 +640,15 @@
             this.btnGoogle.Text = "Google";
             this.btnGoogle.Click += new System.EventHandler(this.btnGoogle_Click);
             // 
+            // btnDoi
+            // 
+            this.btnDoi.Image = global::ScientificReviews.Properties.Resources.doi_small;
+            this.btnDoi.ImageTransparentColor = System.Drawing.Color.Magenta;
+            this.btnDoi.Name = "btnDoi";
+            this.btnDoi.Size = new System.Drawing.Size(111, 22);
+            this.btnDoi.Text = "Open using DOI";
+            this.btnDoi.Click += new System.EventHandler(this.btnDoi_Click);
+            // 
             // btnPdf
             // 
             this.btnPdf.Image = global::ScientificReviews.Properties.Resources.pdf2;
@@ -635,18 +657,6 @@
             this.btnPdf.Size = new System.Drawing.Size(80, 22);
             this.btnPdf.Text = "Open PDF";
             this.btnPdf.Click += new System.EventHandler(this.btnPdf_Click);
-            // 
-            // settingsToolStripMenuItem
-            // 
-            this.settingsToolStripMenuItem.Name = "settingsToolStripMenuItem";
-            this.settingsToolStripMenuItem.Size = new System.Drawing.Size(207, 22);
-            this.settingsToolStripMenuItem.Text = "Settings";
-            this.settingsToolStripMenuItem.Click += new System.EventHandler(this.settingsToolStripMenuItem_Click);
-            // 
-            // toolStripMenuItem4
-            // 
-            this.toolStripMenuItem4.Name = "toolStripMenuItem4";
-            this.toolStripMenuItem4.Size = new System.Drawing.Size(204, 6);
             // 
             // MainForm
             // 
@@ -750,5 +760,6 @@
         private System.Windows.Forms.ToolStripMenuItem exportSelectedPDFToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem settingsToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripMenuItem4;
+        private System.Windows.Forms.ToolStripButton btnDoi;
     }
 }
