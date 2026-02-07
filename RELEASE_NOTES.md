@@ -1,4 +1,4 @@
-# Scientific Reviews v1.0.1
+# Scientific Reviews v1.0.3
 
 🎉 **First Stable Release**
 
