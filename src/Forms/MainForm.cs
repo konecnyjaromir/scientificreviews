@@ -722,12 +722,19 @@ namespace ScientificReviews.Forms
                 frm.Object = new BibtexTag();
                 if (frm.ShowDialog(this) == DialogResult.OK)
                 {
+                    var newTag = frm.Object as BibtexTag;
+                    if (string.IsNullOrEmpty(newTag.Key))
+                    {
+                        lblStatus.Text = "Key should not be empty!";
+                        return;
+                    }
                     var list = entry.Tags.ToList();
-                    list.Add(frm.Object as BibtexTag);
+                    list.Add(newTag);
                     entry.Tags = list.ToArray();
+                    lblStatus.Text = string.Empty;
                     LoadData(visibleEntries.ToArray());
                 }
-            }
+            }            
         }
         private void AddTagToSelected()
         {
@@ -742,6 +749,12 @@ namespace ScientificReviews.Forms
 
             var newTag = frm.Object as BibtexTag;
 
+            if (string.IsNullOrEmpty(newTag.Key))
+            {
+                lblStatus.Text = "Key should not be empty!";
+                return;
+            }
+            
             foreach (DataGridViewRow dgvr in dataGridView1.SelectedRows)
             {
                 if (dgvr.DataBoundItem is DataRowView drv && drv.Row != null)
@@ -750,14 +763,15 @@ namespace ScientificReviews.Forms
                     if (entry != null)
                     {
                         var list = entry.Tags.ToList();
-                        list.Add(newTag);
+                        list.Add(newTag.DeepClone());
                         entry.Tags = list.ToArray();
                     }
                 }
             }
-
+            lblStatus.Text = string.Empty;
             // reload dataset
             LoadData(visibleEntries.ToArray());
+
 
         }
 
