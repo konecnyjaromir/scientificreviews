@@ -12,6 +12,7 @@ namespace ScientificReviews
     public class AppSettingsData
     {
         private const string GENERAL_CAT = "0: General";
+        private const string BACKUP_CAT = "1: Backup";
 
         [Browsable(true)]
         [Category(GENERAL_CAT)]
@@ -25,6 +26,30 @@ namespace ScientificReviews
         [Description("Set the path, where you have PDFs with [Title].pdf or [Key].pdf")]
         [Editor(typeof(PathEditor), typeof(UITypeEditor))]
         public string PdfFolder { get; set; }
+
+
+        [Browsable(true)]
+        [Category(BACKUP_CAT)]
+        [DisplayName("Allow backup")]
+        [Description("If you want to create backups")]
+        [Editor(typeof(PathEditor), typeof(UITypeEditor))]
+        public bool AllowBackup { get; set; } = true;
+        
+        
+        [Browsable(true)]
+        [Category(BACKUP_CAT)]
+        [DisplayName("Number of backups")]
+        [Description("Number of backups to keep")]
+        public int NumberOfBackups { get; set; } = 10;
+
+        [Browsable(true)]
+        [Category(BACKUP_CAT)]
+        [DisplayName("Backup folder")]
+        [Description("Set the path, where you will have backup bibtexes")]
+        [Editor(typeof(PathEditor), typeof(UITypeEditor))]
+        public string BackupFolder { get; set; }
+
+
 
         [Browsable(false)]
         public string[] Columns { get; set; }

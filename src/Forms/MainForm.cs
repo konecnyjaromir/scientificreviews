@@ -11,6 +11,7 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
+using System.IO.Ports;
 using System.Linq;
 using System.Net.Http;
 using System.Security.Cryptography;
@@ -33,6 +34,9 @@ namespace ScientificReviews.Forms
         List<BibtexEntry> entries = new List<BibtexEntry>();
         List<BibtexEntry> visibleEntries = new List<BibtexEntry>();
         BibtexExporter bibtexExporter = new BibtexExporter();
+
+        private CancellationTokenSource _changedCts;
+        private readonly SemaphoreSlim _autosaveLock = new SemaphoreSlim(1, 1);
 
         private void LoadData(BibtexEntry[] entries, string search = "")
         {
@@ -60,8 +64,9 @@ namespace ScientificReviews.Forms
             visibleEntries.Clear();
             visibleEntries.AddRange(entries);
 
+            bindingSource1.DataSource = null;
+            dataGridView1.DataSource = null;
             var dt = BuildTable(entries, Program.AppSettings.Data.Columns);
-
             bindingSource1.DataSource = dt;
             dataGridView1.DataSource = bindingSource1;
 
@@ -69,8 +74,6 @@ namespace ScientificReviews.Forms
             dataGridView1.Columns["Entry"].Visible = false;
 
             lblInfo.Text = $"{entries.Length} entries";
-
-
 
         }
 
@@ -126,6 +129,7 @@ namespace ScientificReviews.Forms
                             }                            
                         });
                         LoadData(entries.ToArray());
+                        Changed();
                     }
                 }
             }
@@ -161,7 +165,64 @@ namespace ScientificReviews.Forms
                 keys.Add(myKey);                
             }
             LoadData(entries.ToArray());
+          
 
+        }
+
+        private async void Changed()
+        {
+            var s = Program.AppSettings.Data;
+
+            if (!s.AllowBackup)
+                return;
+
+            // NOTE: NumberOfBackups must be INT in settings
+            int keepBackups = s.NumberOfBackups;
+            if (keepBackups <= 0)
+                return;
+
+            if (string.IsNullOrWhiteSpace(s.BackupFolder))
+            {
+                lblStatus.Text = "Backup folder is not set.";
+                return;
+            }
+
+            // Debounce: delay autosave a bit (prevents hundreds of backups while typing)
+            _changedCts?.Cancel();
+            var cts = new CancellationTokenSource();
+            _changedCts = cts;
+
+            try
+            {
+                await Task.Delay(700, cts.Token);
+            }
+            catch (TaskCanceledException)
+            {
+                return;
+            }
+
+            await _autosaveLock.WaitAsync();
+            try
+            {
+                // Export current in-memory database to string
+                string content = new BibtexExporter().EntriesToString(entries.ToArray());
+
+                // Write snapshot + rotate backups on background thread
+                await Task.Run(() =>
+                {
+                    BibtexAutosaveManager.SaveSnapshot(s.BackupFolder, keepBackups, content);
+                });
+
+                lblStatus.Text = "Autosave backup created";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = "Autosave failed: " + ex.Message;
+            }
+            finally
+            {
+                _autosaveLock.Release();
+            }
         }
 
         private void removeTagsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -194,6 +255,7 @@ namespace ScientificReviews.Forms
                     }
                     entry.Tags = list.ToArray();
                 }
+                Changed();
             }
         }
 
@@ -219,8 +281,10 @@ namespace ScientificReviews.Forms
                         list.Add(entry);
                 }
                 entries = list;
+                LoadData(entries.ToArray());
+                Changed();
             }
-            LoadData(entries.ToArray());
+            
 
         }
 
@@ -263,33 +327,9 @@ namespace ScientificReviews.Forms
         {
             if (e.KeyCode == Keys.Delete)
             {
-                RemoveRecord();
+                RemoveSelecedRecords();
             }
         }
-
-        private void RemoveRecord()
-        {
-            if (bindingSource1.Current != null)
-            {
-                int currentIndex = bindingSource1.Position;
-
-                DataRowView drv = bindingSource1.Current as DataRowView;
-                var row = drv.Row as DataRow;
-                var entry = row["Entry"] as BibtexEntry;
-                entries.Remove(entry);
-                visibleEntries.Remove(entry);
-                LoadData(visibleEntries.ToArray());
-
-                // Nastavení indexu na následující řádek
-                if (currentIndex >= bindingSource1.Count)
-                {
-                    // Pokud byl poslední záznam odstraněn, posuňte se na poslední řádek
-                    currentIndex = bindingSource1.Count - 1;
-                }
-                bindingSource1.Position = currentIndex;
-            }
-        }
-
 
         private void RemoveSelecedRecords()
         {
@@ -314,7 +354,7 @@ namespace ScientificReviews.Forms
 
                 
                 LoadData(visibleEntries.ToArray());
-
+                Changed();
                 // Korekce indexu po mazání
                 if (currentIndex >= bindingSource1.Count)
                     currentIndex = bindingSource1.Count - 1;
@@ -458,18 +498,21 @@ namespace ScientificReviews.Forms
             }
             entries = list;
             LoadData(entries.ToArray());
+            Changed();
         }
 
         private void removeDuplicitiesByDOIToolStripMenuItem_Click(object sender, EventArgs e)
         {
             entries = BibtexUtils.RemoveDuplicateEntriesByTag(entries, "doi");
             LoadData(entries.ToArray());
+            Changed();
         }
        
 
         private void updatePageTagFormatToolStripMenuItem_Click(object sender, EventArgs e)
         {
             BibtexUtils.UpdatePages(entries);
+            Changed();
         }
 
         private async void updateJournalsDatabaseToolStripMenuItem_Click(object sender, EventArgs e)
@@ -572,6 +615,7 @@ namespace ScientificReviews.Forms
                     }
                 }
             }
+            Changed();
         }
 
         private async void loadBibTexFileToolStripMenuItem_Click(object sender, EventArgs e)
@@ -593,6 +637,7 @@ namespace ScientificReviews.Forms
                         entries.AddRange(parser.ParseFile(File.ReadAllText(fileName)));
                     });
                     LoadData(entries.ToArray());
+                    Changed();
                 }
                 lblStatus.Text = "Loaded.";
             }
@@ -618,6 +663,7 @@ namespace ScientificReviews.Forms
             }
             entries = list;
             LoadData(entries.ToArray());
+            Changed();
         }
 
         private void databaseToolStripMenuItem_Click(object sender, EventArgs e)
@@ -649,6 +695,7 @@ namespace ScientificReviews.Forms
                 }
                 entries = BibtexUtils.ExcludeEntries(entries, toExlcude);
                 LoadData(entries.ToArray());
+                Changed();
             }
             catch (Exception ex)
             {
@@ -676,21 +723,19 @@ namespace ScientificReviews.Forms
                     entries = filtered;
                 }                
                 LoadData(entries.ToArray());
+                Changed();
             }
         }
 
         private void columnsToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            var frm = new InputBoxForm();
-            frm.Text = "Enter a column names splited by dash:";
-            string text = string.Join(",", Program.AppSettings.Data.Columns);
-            frm.SetText(text);
-            frm.ShowDialog(this);
-            if (frm.DialogResult == DialogResult.OK)
-            {
-                Program.AppSettings.Data.Columns = frm.GetText().Split(',');                
-                LoadData(entries.ToArray());
+            var frm = new EditColumnsForm();
+            frm.SetColumns(Program.AppSettings.Data.Columns);
 
+            if (frm.ShowDialog(this) == DialogResult.OK)
+            {
+                Program.AppSettings.Data.Columns = frm.GetColumns();
+                LoadData(entries.ToArray());
             }
         }
 
@@ -790,10 +835,6 @@ namespace ScientificReviews.Forms
 
         }
 
-        private void removeRecordToolStripMenuItem_Click(object sender, EventArgs e)
-        {
-            RemoveRecord();
-        }
 
         private void removeTagsToolStripMenuItem1_Click(object sender, EventArgs e)
         {
@@ -830,6 +871,7 @@ namespace ScientificReviews.Forms
                     entry.Tags = list.ToArray();
                     SelectEntry();
                 }
+                Changed();
             }
         }
 
@@ -877,6 +919,7 @@ namespace ScientificReviews.Forms
             ShowEntry(entry, txtSearch.Text);
 
             LoadData(visibleEntries.ToArray());
+            Changed();
         }
 
         private void exportAsTableToolStripMenuItem_Click(object sender, EventArgs e)
@@ -1000,34 +1043,40 @@ namespace ScientificReviews.Forms
         {
             try
             {
-                if (bindingSource1.Current != null)
+                foreach (DataGridViewRow dgvr in dataGridView1.SelectedRows)
                 {
-                    int currentIndex = bindingSource1.Position;
-
-                    DataRowView drv = bindingSource1.Current as DataRowView;
-                    var row = drv.Row as DataRow;
-                    var entry = row["Entry"] as BibtexEntry;
-                    SearchEntryTitleOnGoogle(entry);
+                    if (dgvr.DataBoundItem is DataRowView drv && drv.Row != null)
+                    {
+                        var entry = (BibtexEntry)drv.Row["Entry"];
+                        if (entry != null)
+                        {
+                            SearchEntryTitleOnGoogle(entry);
+                        }
+                    }
                 }
             }
             catch (Exception ex)
             {
                 lblStatus.Text = ex.Message;
             }
+
+        
         }
 
         private void btnPdf_Click(object sender, EventArgs e)
         {
             try
             {
-                if (bindingSource1.Current != null)
+                foreach (DataGridViewRow dgvr in dataGridView1.SelectedRows)
                 {
-                    int currentIndex = bindingSource1.Position;
-
-                    DataRowView drv = bindingSource1.Current as DataRowView;
-                    var row = drv.Row as DataRow;
-                    var entry = row["Entry"] as BibtexEntry;
-                    OpenPdf(entry);
+                    if (dgvr.DataBoundItem is DataRowView drv && drv.Row != null)
+                    {
+                        var entry = (BibtexEntry)drv.Row["Entry"];
+                        if (entry != null)
+                        {
+                            OpenPdf(entry);
+                        }
+                    }
                 }
             }
             catch (Exception ex)
@@ -1040,6 +1089,7 @@ namespace ScientificReviews.Forms
         {
             entries = new List<BibtexEntry>();
             LoadData(entries.ToArray());
+            Changed();
         }
 
         private void btnDeleteTag_Click(object sender, EventArgs e)
@@ -1099,6 +1149,7 @@ namespace ScientificReviews.Forms
                 propertyGrid1.SelectedObject = customClass;
             }
             lblSelected.Text = $"({dataGridView1.SelectedRows.Count.ToString()})";
+            Changed();
         }
 
         private void btnRemoveTags_Click(object sender, EventArgs e)
@@ -1245,7 +1296,7 @@ namespace ScientificReviews.Forms
         {
             if (new SettingsForm().ShowDialog(this) == DialogResult.OK)
             {
-                Program.AppSettings.LoadSettings();
+                Program.AppSettings.LoadSettings();                
             }
         }
 
@@ -1253,19 +1304,213 @@ namespace ScientificReviews.Forms
         {
             try
             {
-                if (bindingSource1.Current != null)
+                foreach (DataGridViewRow dgvr in dataGridView1.SelectedRows)
                 {
-                    int currentIndex = bindingSource1.Position;
-
-                    DataRowView drv = bindingSource1.Current as DataRowView;
-                    var row = drv.Row as DataRow;
-                    var entry = row["Entry"] as BibtexEntry;
-                    SearchByDoi(entry);
-                }
+                    if (dgvr.DataBoundItem is DataRowView drv && drv.Row != null)
+                    {
+                        var entry = (BibtexEntry)drv.Row["Entry"];
+                        if (entry != null)
+                        {
+                            SearchByDoi(entry);
+                        }
+                    }
+                }   
             }
             catch (Exception ex)
             {
                 lblStatus.Text = ex.Message;
+            }
+        }
+
+        private void selectedDOIsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            CopySelected("doi");
+        }
+
+       
+
+        private void selectedKeysToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            CopySelected("key");
+        }
+
+        private void selectedTitlesToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            CopySelected("title");
+        }
+
+        private void CopySelected(string tagName)
+        {
+            var parts = new List<string>();
+
+            foreach (DataGridViewRow dgvr in dataGridView1.SelectedRows)
+            {
+                if (dgvr.DataBoundItem is DataRowView drv && drv.Row != null)
+                {
+                    var entry = (BibtexEntry)drv.Row["Entry"];
+                    if (entry == null) continue;
+
+                    // special case: "key" means BibTeX entry key
+                    if (string.Equals(tagName, "key", StringComparison.OrdinalIgnoreCase))
+                    {
+                        var k = (entry.Key ?? string.Empty).Trim();
+                        if (k.Length > 0)
+                            parts.Add(k);
+
+                        continue;
+                    }
+
+                    if (entry.Tags != null)
+                    {
+                        foreach (var tag in entry.Tags)
+                        {
+                            if (string.Equals(tag.Key, tagName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                var value = (tag.Value ?? string.Empty).Trim();
+                                if (value.Length > 0)
+                                    parts.Add(value);
+                                break; // one tag per name is enough
+                            }
+                        }
+                    }
+                }
+            }
+
+            Clipboard.SetText(string.Join(",", parts));
+            lblStatus.Text = "Copied to clipboard";
+        }
+
+        private void btnAddorEditTag_Click(object sender, EventArgs e)
+        {
+            AddOrEditTagToSelected();
+        }
+
+        private void AddOrEditTagToSelected()
+        {
+            if (dataGridView1.SelectedRows.Count == 0)
+                return;
+
+            // Tag key/value are taken from the form controls
+            string key = (txtKey.Text ?? string.Empty).Trim();
+            string value = (txtValue.Text ?? string.Empty).Trim();
+
+            // --- Validate tag key ---
+            if (string.IsNullOrWhiteSpace(key))
+            {
+                lblStatus.Text = "Key should not be empty!";
+                return;
+            }
+
+            // If you treat "key" as a special virtual field (BibTeX entry key), disallow it as a tag key
+            if (string.Equals(key, "key", StringComparison.OrdinalIgnoreCase))
+            {
+                lblStatus.Text = "\"key\" is reserved (BibTeX entry key). Choose another tag name.";
+                return;
+            }
+
+            // Allowed: starts with letter; then letters/digits/_-:
+            // (safe for BibTeX-like fields and CSV export)
+            var tagKeyRegex = new Regex(@"^[A-Za-z][A-Za-z0-9_\-:]*$", RegexOptions.Compiled);
+            if (!tagKeyRegex.IsMatch(key))
+            {
+                lblStatus.Text = "Invalid tag key. Use letters/digits and _ - : (must start with a letter).";
+                return;
+            }
+            // ------------------------
+
+            foreach (DataGridViewRow dgvr in dataGridView1.SelectedRows)
+            {
+                if (dgvr.DataBoundItem is DataRowView drv && drv.Row != null)
+                {
+                    var entry = (BibtexEntry)drv.Row["Entry"];
+                    if (entry != null)
+                    {
+                        var list = (entry.Tags ?? Array.Empty<BibtexTag>()).ToList();
+
+                        // Add or edit
+                        int idx = list.FindIndex(t => t != null &&
+                                                     string.Equals(t.Key, key, StringComparison.OrdinalIgnoreCase));
+                        if (idx >= 0)
+                        {
+                            list[idx].Value = value; // edit existing
+                        }
+                        else
+                        {
+                            list.Add(new BibtexTag { Key = key, Value = value }); // add new
+                        }
+
+                        entry.Tags = list.ToArray();
+                    }
+                }
+            }
+
+            lblStatus.Text = string.Empty;
+
+            // reload dataset
+            LoadData(visibleEntries.ToArray());
+            Changed();
+        }
+
+        private void MainForm_Shown(object sender, EventArgs e)
+        {
+            try
+            {
+                // pokud už něco máš načtené (např. z předchozí logiky), tak nepřepisuj
+                if (entries != null && entries.Count > 0)
+                    return;
+
+                var s = Program.AppSettings.Data;
+
+                if (!s.AllowBackup)
+                    return;
+
+                if (string.IsNullOrWhiteSpace(s.BackupFolder))
+                {
+                    lblStatus.Text = "Backup folder is not set.";
+                    return;
+                }
+
+                // najdi poslední autosave
+                string latestPath = BibtexAutosaveManager.GetLatestBackupPath(s.BackupFolder);
+
+                if (string.IsNullOrWhiteSpace(latestPath) || !File.Exists(latestPath))
+                {
+                    lblStatus.Text = "No autosave found.";
+                    return;
+                }
+
+                // načti obsah
+                string content = File.ReadAllText(latestPath);
+                if (string.IsNullOrWhiteSpace(content))
+                {
+                    lblStatus.Text = "Autosave is empty.";
+                    return;
+                }
+
+                // PARSE bibtex -> entries
+                // Uprav podle toho, jak se u tebe jmenuje importer/loader.
+                // Cíl: vrátit BibtexEntry[] z obsahu souboru.
+                var importer = new BibtexParser();
+                var loadedEntries = importer.ParseFile(content);   // <- uprav název metody podle sebe
+
+                if (loadedEntries == null || loadedEntries.Length == 0)
+                {
+                    lblStatus.Text = "Autosave contains no entries.";
+                    return;
+                }
+
+                // nastav databázi
+                entries = loadedEntries.ToList();
+                visibleEntries = entries; // pokud máš filtrování, zatím to bereme jako "vše viditelné"
+
+                // refresh UI
+                LoadData(visibleEntries.ToArray());
+
+                lblStatus.Text = "Loaded latest autosave backup.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = "Failed to load autosave: " + ex.Message;
             }
         }
 

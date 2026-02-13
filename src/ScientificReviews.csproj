@@ -58,6 +58,13 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Helpers\BibtexAutosaveManager.cs" />
+    <Compile Include="Forms\EditColumnsForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\EditColumnsForm.Designer.cs">
+      <DependentUpon>EditColumnsForm.cs</DependentUpon>
+    </Compile>
     <Compile Include="Forms\InputBoxForm.cs">
       <SubType>Form</SubType>
     </Compile>
