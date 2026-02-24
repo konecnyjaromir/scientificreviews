@@ -154,6 +154,7 @@ namespace ScientificReviews.Forms
                     continue;
 
                 string key = BibtexUtils.GetFirstAuthorLastName(authors).Replace(" ", "") + year;
+                key = key.ToLower();
                 string myKey = key;
                 int i = 1;
                 while (keys.Contains(myKey))

@@ -37,25 +37,35 @@ namespace ScientificReviews.Bibtex
             }
 
             throw new FormatException("Unable to parse the author string. Unsupported format.");
-        }
+        }       
+
         public static List<BibtexEntry> RemoveDuplicateEntriesByTag(List<BibtexEntry> entries, string tagName)
         {
             var uniqueEntries = new List<BibtexEntry>();
-            var seenTitles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            var uniqueEntriesDic = new Dictionary<string,BibtexEntry>();
+
+            var uniqueEntriesDic = new Dictionary<string, BibtexEntry>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var entry in entries)
             {
-                var titleTag = entry.Tags.FirstOrDefault(tag => tag.Key.Equals(tagName, StringComparison.OrdinalIgnoreCase));
-                if (titleTag != null && !seenTitles.Contains(titleTag.Value))
+                var tag = entry.Tags.FirstOrDefault(t =>
+                    t.Key.Equals(tagName, StringComparison.OrdinalIgnoreCase));
+
+                if (tag == null || string.IsNullOrWhiteSpace(tag.Value))
                 {
-                    seenTitles.Add(titleTag.Value);
                     uniqueEntries.Add(entry);
-                    uniqueEntriesDic.Add(titleTag.Value.ToLower(), entry);
+                    continue;
+                }
+
+                var key = tag.Value.Trim();
+
+                if (!uniqueEntriesDic.TryGetValue(key, out var existing))
+                {
+                    uniqueEntriesDic[key] = entry;
+                    uniqueEntries.Add(entry);
                 }
                 else
                 {
-                    if (titleTag != null)
-                        Merge(entry, uniqueEntriesDic[titleTag.Value.ToLower()]);
+                    Merge(entry, existing);
                 }
             }
 
