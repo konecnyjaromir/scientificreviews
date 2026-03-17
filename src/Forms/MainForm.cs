@@ -82,7 +82,22 @@ namespace ScientificReviews.Forms
             var table = new DataTable();
 
             table.Columns.Add("Key", typeof(string));
-            table.Columns.Add("Entry Type", typeof(string));            
+            table.Columns.Add("Entry Type", typeof(string));
+
+            // vytvoření sloupců
+            if (userColumns == null || userColumns.Length == 0)
+            {
+                // pokud nejsou nastavené žádné sloupce, vytvoř všechny unikátní tagy jako sloupce
+                HashSet<string> uniqueTags = new HashSet<string>();
+                foreach (var entry in entries)
+                {
+                    foreach (var tag in entry.Tags)
+                    {
+                        uniqueTags.Add(tag.Key);
+                    }
+                }
+                userColumns = uniqueTags.ToArray();
+            }
 
             // vytvoření sloupců
             foreach (var col in userColumns)
@@ -519,8 +534,9 @@ namespace ScientificReviews.Forms
         private async void updateJournalsDatabaseToolStripMenuItem_Click(object sender, EventArgs e)
         {
             try
-            {                
-                int year = 2023; // TODO Set year
+            {
+                //Get actual year - 1
+                int year = DateTime.Now.Year - 1;
 
                 lblStatus.Text = "Updating database...";
                 // Find journals, that missing information about quartiles
@@ -542,18 +558,41 @@ namespace ScientificReviews.Forms
                     }
                 }
                 missingJournals.Sort();
-                
+
+                var notFoundJournals = new List<string>();
+
                 foreach (string missingJournal in missingJournals)
                 {
                     lblStatus.Text = $"Updating database... ({missingJournal})";
+
                     // Get journals by name
-                    var resp = await jcrApiClient.GetJournalsAsync(missingJournal.Replace("&", "").Replace("-", " "));
-                    foreach (var hit in resp.Hits)
+                    try
                     {
-                        try
+                        var resp = await jcrApiClient.GetJournalsAsync(missingJournal.Replace("&", "").Replace("-", " "));
+                        foreach (var hit in resp.Hits)
                         {
-                            // Get journal reports
-                            var report = await jcrApiClient.GetJournalReportsAsync(hit.Id, year);
+                            JournalReportsDto report = null;
+                            //Try fetch journal report for actual year, if not exists, try to fetch for previous year, and so on, until 2020. I want to do this, because some journals have not yet published report for actual year, but they have published for previous years, and I want to have at least some data about quartiles, even if it is not for actual year.
+                            for (int i = year; i > 2020; i--)
+                            {
+                                try
+                                {
+                                    // Get journal reports for particular journal and year
+                                    report = await jcrApiClient.GetJournalReportsAsync(hit.Id, i);
+                                    break;
+                                }
+                                catch (Exception)
+                                {
+                                    continue;
+                                }
+
+                            }
+
+                            if (report == null) {                                     
+                                notFoundJournals.Add(missingJournal);
+                                lblStatus.Text = $"Journal {missingJournal} was not found for any year, skipping...";
+                                continue;
+                            }
 
                             var dicTmp = journalReports.ToDictionary(rep => rep.Journal.Name.ToLower());
                             if (dicTmp.ContainsKey(report.Journal.Name.ToLower()) == false)
@@ -562,31 +601,35 @@ namespace ScientificReviews.Forms
                             }
                             else
                             {
-
+                                //do nothing, because we do not want to overwrite existing data in database. We want only to add missing journals, but not update existing ones.
                             }
 
                             Program.JournalsDatabase.Save();
-                        }
-                        catch(Exception ex)
-                        {
-                            lblStatus.Text = ex.Message;
-                        }
 
-                    } 
-
-                }                
-                lblStatus.Text = "Journal database updated.";
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        lblStatus.Text = $"Journal {missingJournal} failed to fetch, reason: {ex.Message}";
+                        notFoundJournals.Add(missingJournal);
+                        continue;
+                    }
+                }
+                if (notFoundJournals.Count > 0)
+                {
+                    lblStatus.Text = $"Some journals wasnt found, I found:{missingJournals.Count - notFoundJournals.Count}/{missingJournals.Count}... More informations in logs.";
+                }
+                else lblStatus.Text = "Journal database updated.";
             }
             catch (Exception ex)
             {
                 lblStatus.Text = ex.Message;
             }
-
         }
-     
+
 
         private void createExtraJCRTagsToolStripMenuItem_Click(object sender, EventArgs e)
-        {            
+        {
             var journalReports = Program.JournalsDatabase.Data.JournalReports;
             Dictionary<string, JournalReportsDto> dic = journalReports.ToDictionary(rep => rep.Journal.Name.ToLower());
             foreach (var entry in entries)
@@ -602,21 +645,27 @@ namespace ScientificReviews.Forms
 
                         // Calc average percentile JIF
                         double percentile = 0;
-                        foreach (var jif in report.Ranks.Jif) {
+                        foreach (var jif in report.Ranks.Jif)
+                        {
                             percentile += jif.JifPercentile;
                         }
                         percentile = percentile / report.Ranks.Jif.Count;
+                        // Set quartile from percentile
+                        string quartile = percentile >= 75 ? "Q1" : percentile >= 50 ? "Q2" : percentile >= 25 ? "Q3" : "Q4";
 
                         entry.RemoveIfExists("jif");
                         entry.RemoveIfExists("jif_" + report.Year.ToString());
+                        entry.RemoveIfExists("jif_Q");
 
-                        list.Add(new BibtexTag("jif", percentile.ToString(CultureInfo.InvariantCulture)));
-                        list.Add(new BibtexTag("jif_" + report.Year.ToString(), percentile.ToString(CultureInfo.InvariantCulture)));                        
+                        list.Add(new BibtexTag("jif", Math.Round(percentile, 1).ToString(CultureInfo.InvariantCulture)));
+                        list.Add(new BibtexTag("jif_" + report.Year.ToString(), Math.Round(percentile, 1).ToString(CultureInfo.InvariantCulture)));
+                        list.Add(new BibtexTag("jif_Q", quartile));
                         entry.Tags = list.ToArray();
                     }
                 }
             }
-            Changed();
+            // Refresh table 
+            LoadData(entries.ToArray());
         }
 
         private async void loadBibTexFileToolStripMenuItem_Click(object sender, EventArgs e)
