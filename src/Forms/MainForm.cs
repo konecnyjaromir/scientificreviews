@@ -1178,14 +1178,7 @@ namespace ScientificReviews.Forms
             if (titleTag == null || string.IsNullOrWhiteSpace(titleTag.Value))
                 return;
 
-            string query = Uri.EscapeDataString(titleTag.Value);
-            string url = $"https://www.google.com/search?q={query}";
-
-            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
-            {
-                FileName = url,
-                UseShellExecute = true
-            });
+            OpenUrl(BuildGoogleSearchUrl(titleTag.Value));
         }
 
         public void SearchByDoi(BibtexEntry entry)
@@ -1200,9 +1193,63 @@ namespace ScientificReviews.Forms
             if (dioTag == null || string.IsNullOrWhiteSpace(dioTag.Value))
                 return;
 
-            string query = Uri.EscapeDataString(dioTag.Value);
-            string url = $"https://doi.org/{query}";
+            string doiValue = dioTag.Value.Trim();
+            string normalizedDoi = NormalizeDoi(doiValue);
+            string normalizedArxivId = NormalizeArxivId(doiValue);
 
+            if (IsClassicDoi(normalizedDoi))
+            {
+                OpenUrl($"https://doi.org/{Uri.EscapeDataString(normalizedDoi)}");
+                return;
+            }
+
+            if (IsArxivIdentifier(normalizedArxivId))
+            {
+                OpenUrl($"https://arxiv.org/pdf/{Uri.EscapeDataString(normalizedArxivId)}");
+                return;
+            }
+
+            MessageBox.Show(
+                "Unsupported DOI format. The DOI will be opened using Google search.",
+                Program.APP_NAME,
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Warning);
+
+            lblStatus.Text = "Unsupported DOI format. Opened in Google search.";
+            OpenUrl(BuildGoogleSearchUrl(doiValue));
+        }
+
+        private bool IsClassicDoi(string doi)
+        {
+            return string.IsNullOrWhiteSpace(doi) == false &&
+                Regex.IsMatch(doi, @"^10\.\d{4,9}/\S+$", RegexOptions.IgnoreCase);
+        }
+
+        private bool IsArxivIdentifier(string doi)
+        {
+            return string.IsNullOrWhiteSpace(doi) == false &&
+                Regex.IsMatch(doi, @"^\d{4}\.\d{4,5}(v\d+)?$", RegexOptions.IgnoreCase);
+        }
+
+        private string NormalizeArxivId(string doi)
+        {
+            if (string.IsNullOrWhiteSpace(doi))
+                return null;
+
+            string normalized = doi.Trim();
+            normalized = Regex.Replace(normalized, @"^arxiv:\s*", string.Empty, RegexOptions.IgnoreCase);
+            normalized = normalized.Trim();
+
+            return normalized.ToLowerInvariant();
+        }
+
+        private string BuildGoogleSearchUrl(string query)
+        {
+            return $"https://www.google.com/search?q={Uri.EscapeDataString(query ?? string.Empty)}";
+        }
+
+        private void OpenUrl(string url)
+        {
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
                 FileName = url,
