@@ -341,9 +341,35 @@ namespace ScientificReviews.Forms
 
         private void dataGridView1_KeyDown(object sender, KeyEventArgs e)
         {
+            if (e.Control && e.KeyCode == Keys.C)
+            {
+                CopySelectedRecordsToClipboard();
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                return;
+            }
+
+            if (e.Control && e.KeyCode == Keys.X)
+            {
+                CutSelectedRecordsToClipboard();
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                return;
+            }
+
+            if (e.Control && e.KeyCode == Keys.V)
+            {
+                PasteRecordsFromClipboard();
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                return;
+            }
+
             if (e.KeyCode == Keys.Delete)
             {
                 RemoveSelecedRecords();
+                e.Handled = true;
+                e.SuppressKeyPress = true;
             }
         }
 
@@ -377,6 +403,123 @@ namespace ScientificReviews.Forms
 
                 if (currentIndex >= 0)
                     bindingSource1.Position = currentIndex;
+            }
+        }
+
+        private bool CopySelectedRecordsToClipboard()
+        {
+            try
+            {
+                var selectedEntries = GetSelectedOrdered();
+                if (selectedEntries.Length == 0)
+                {
+                    lblStatus.Text = "No records selected.";
+                    return false;
+                }
+
+                string content = bibtexExporter.EntriesToString(selectedEntries);
+                Clipboard.SetText(content);
+                lblStatus.Text = $"Copied {selectedEntries.Length} record(s) to clipboard.";
+                return true;
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+                return false;
+            }
+        }
+
+        private void CutSelectedRecordsToClipboard()
+        {
+            var selectedCount = GetSelectedOrdered().Length;
+            if (selectedCount == 0)
+            {
+                lblStatus.Text = "No records selected.";
+                return;
+            }
+
+            try
+            {
+                if (!CopySelectedRecordsToClipboard())
+                    return;
+
+                RemoveSelecedRecords();
+                lblStatus.Text = $"Cut {selectedCount} record(s) to clipboard.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
+        private void PasteRecordsFromClipboard()
+        {
+            try
+            {
+                if (!Clipboard.ContainsText())
+                {
+                    lblStatus.Text = "Clipboard does not contain BibTeX records.";
+                    return;
+                }
+
+                string clipboardText = Clipboard.GetText();
+                if (string.IsNullOrWhiteSpace(clipboardText))
+                {
+                    lblStatus.Text = "Clipboard does not contain BibTeX records.";
+                    return;
+                }
+
+                BibtexParser parser = new BibtexParser();
+                var pastedEntries = parser.ParseFile(clipboardText);
+                if (pastedEntries == null || pastedEntries.Length == 0)
+                {
+                    lblStatus.Text = "Clipboard does not contain valid BibTeX records.";
+                    return;
+                }
+
+                entries.AddRange(pastedEntries);
+                LoadData(entries.ToArray(), txtSearch.Text);
+                SelectEntriesInGrid(pastedEntries);
+                Changed();
+                lblStatus.Text = $"Pasted {pastedEntries.Length} record(s).";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
+        private void SelectEntriesInGrid(IEnumerable<BibtexEntry> selectedEntries)
+        {
+            var selectedSet = new HashSet<BibtexEntry>(selectedEntries ?? Enumerable.Empty<BibtexEntry>());
+            if (selectedSet.Count == 0)
+                return;
+
+            var matchingRows = new List<DataGridViewRow>();
+            foreach (DataGridViewRow row in dataGridView1.Rows)
+            {
+                if (row.DataBoundItem is DataRowView drv && drv.Row != null)
+                {
+                    var entry = drv.Row["Entry"] as BibtexEntry;
+                    if (entry != null && selectedSet.Contains(entry))
+                    {
+                        matchingRows.Add(row);
+                    }
+                }
+            }
+
+            if (matchingRows.Count == 0)
+                return;
+
+            dataGridView1.ClearSelection();
+            foreach (var row in matchingRows)
+            {
+                row.Selected = true;
+            }
+
+            if (matchingRows[0].Cells.Count > 0)
+            {
+                dataGridView1.CurrentCell = matchingRows[0].Cells[0];
             }
         }
 
@@ -690,6 +833,23 @@ namespace ScientificReviews.Forms
                     Changed();
                 }
                 lblStatus.Text = "Loaded.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
+        private void newToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = Application.ExecutablePath,
+                    WorkingDirectory = Path.GetDirectoryName(Application.ExecutablePath),
+                    UseShellExecute = true
+                });
             }
             catch (Exception ex)
             {
@@ -1052,29 +1212,157 @@ namespace ScientificReviews.Forms
 
         private string GetPdfFileName(BibtexEntry entry)
         {
-            // Najdi tag "title" (case-insensitive)
-            var titleTag = entry.Tags
-                .FirstOrDefault(t => string.Equals(t.Key, "title", StringComparison.OrdinalIgnoreCase));
-
-            string title = "";
-            if ((titleTag == null || string.IsNullOrWhiteSpace(titleTag.Value)) == false)
+            string filename = FindPdfFile(entry);
+            if (string.IsNullOrWhiteSpace(filename))
             {
-                title = titleTag.Value;
+                throw new Exception("File not exists for entry: " + (entry?.Key ?? "<null>"));
             }
-             
-            title = title.Replace(":", "").Replace("  ", " ").Replace("?", "");
 
-            string filename = Path.Combine(Program.AppSettings.Data.PdfFolder, title + ".pdf");
+            return filename;
+        }
 
-            if (File.Exists(filename) == false)
+        private string FindPdfFile(BibtexEntry entry, string[] pdfFiles = null)
+        {
+            if (entry == null)
+                return null;
+
+            pdfFiles = pdfFiles ?? GetPdfFiles();
+            if (pdfFiles.Length == 0)
+                return null;
+
+            string key = (entry.Key ?? string.Empty).Trim();
+            if (!string.IsNullOrWhiteSpace(key))
             {
-                filename = Path.Combine(Program.AppSettings.Data.PdfFolder, entry.Key + ".pdf");
-                if (File.Exists(filename) == false)
+                var keyMatch = pdfFiles.FirstOrDefault(file =>
+                    Path.GetFileNameWithoutExtension(file)
+                        .IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0);
+
+                if (!string.IsNullOrWhiteSpace(keyMatch))
+                    return keyMatch;
+            }
+
+            string titleLower = ((entry.GetTagValue("title") ?? string.Empty).Trim()).ToLowerInvariant();
+            if (!string.IsNullOrWhiteSpace(titleLower))
+            {
+                var titleMatch = pdfFiles.FirstOrDefault(file =>
+                    string.Equals(Path.GetFileNameWithoutExtension(file), titleLower, StringComparison.Ordinal));
+
+                if (!string.IsNullOrWhiteSpace(titleMatch))
+                    return titleMatch;
+            }
+
+            string entryDoi = NormalizeDoi(entry.GetTagValue("doi"));
+            if (!string.IsNullOrWhiteSpace(entryDoi))
+            {
+                foreach (var file in pdfFiles)
                 {
-                    throw new Exception("File not exists: " + filename);
+                    if (PdfContainsMatchingDoiMetadata(file, entryDoi))
+                        return file;
                 }
             }
-            return filename;
+
+            return null;
+        }
+
+        private string[] GetPdfFiles()
+        {
+            string pdfFolder = Program.AppSettings.Data.PdfFolder;
+            if (string.IsNullOrWhiteSpace(pdfFolder) || Directory.Exists(pdfFolder) == false)
+                return new string[0];
+
+            var searchOption = Program.AppSettings.Data.RecursivePdfSearch
+                ? SearchOption.AllDirectories
+                : SearchOption.TopDirectoryOnly;
+
+            return Directory
+                .GetFiles(pdfFolder, "*.pdf", searchOption)
+                .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private bool PdfContainsMatchingDoiMetadata(string fileName, string entryDoi)
+        {
+            if (string.IsNullOrWhiteSpace(fileName) || string.IsNullOrWhiteSpace(entryDoi))
+                return false;
+
+            try
+            {
+                foreach (var doi in ExtractPdfMetadataDois(fileName))
+                {
+                    if (string.Equals(NormalizeDoi(doi), entryDoi, StringComparison.OrdinalIgnoreCase))
+                        return true;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+
+            return false;
+        }
+
+        private IEnumerable<string> ExtractPdfMetadataDois(string fileName)
+        {
+            byte[] data = File.ReadAllBytes(fileName);
+            string pdfText = Encoding.GetEncoding("ISO-8859-1").GetString(data);
+
+            var results = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            AddRegexMatches(results, pdfText, @"(?is)<prism:doi>\s*(?<doi>.*?)\s*</prism:doi>");
+            AddRegexMatches(results, pdfText, @"(?is)<pdfx:doi>\s*(?<doi>.*?)\s*</pdfx:doi>");
+            AddRegexMatches(results, pdfText, @"(?is)<dc:identifier>\s*(?:doi:\s*)?(?<doi>10\.\d{4,9}/[^<\s]+)\s*</dc:identifier>");
+            AddRegexMatches(results, pdfText, @"(?is)/DOI\s*\((?<doi>10\.\d{4,9}/[^)]*)\)");
+
+            foreach (Match match in Regex.Matches(pdfText, @"(?is)/DOI\s*<(?<hex>[0-9A-F]+)>"))
+            {
+                string decoded = DecodePdfHexString(match.Groups["hex"].Value);
+                string normalized = NormalizeDoi(decoded);
+                if (!string.IsNullOrWhiteSpace(normalized))
+                    results.Add(normalized);
+            }
+
+            return results;
+        }
+
+        private void AddRegexMatches(HashSet<string> results, string pdfText, string pattern)
+        {
+            foreach (Match match in Regex.Matches(pdfText, pattern))
+            {
+                string normalized = NormalizeDoi(match.Groups["doi"].Value);
+                if (!string.IsNullOrWhiteSpace(normalized))
+                    results.Add(normalized);
+            }
+        }
+
+        private string DecodePdfHexString(string hex)
+        {
+            if (string.IsNullOrWhiteSpace(hex))
+                return null;
+
+            hex = Regex.Replace(hex, @"\s+", string.Empty);
+            if (hex.Length % 2 == 1)
+                hex += "0";
+
+            byte[] bytes = new byte[hex.Length / 2];
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                bytes[i] = Convert.ToByte(hex.Substring(i * 2, 2), 16);
+            }
+
+            return Encoding.GetEncoding("ISO-8859-1").GetString(bytes);
+        }
+
+        private string NormalizeDoi(string doi)
+        {
+            if (string.IsNullOrWhiteSpace(doi))
+                return null;
+
+            string normalized = doi.Trim();
+            normalized = Regex.Replace(normalized, @"^https?://(dx\.)?doi\.org/", string.Empty, RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"^doi:\s*", string.Empty, RegexOptions.IgnoreCase);
+            normalized = normalized.Trim().TrimEnd('/', '.', ',', ';');
+
+            return normalized.ToLowerInvariant();
         }
 
         private void OpenPdf(BibtexEntry entry)
@@ -1230,6 +1518,25 @@ namespace ScientificReviews.Forms
             return toExport.ToArray();
         }
 
+        private BibtexEntry[] GetSelectedOrdered()
+        {
+            if (dataGridView1.SelectedRows.Count == 0)
+                return new BibtexEntry[0];
+
+            List<BibtexEntry> toExport = new List<BibtexEntry>();
+
+            foreach (DataGridViewRow dgvr in dataGridView1.SelectedRows.Cast<DataGridViewRow>().OrderBy(r => r.Index))
+            {
+                if (dgvr.DataBoundItem is DataRowView drv && drv.Row != null)
+                {
+                    var entry = (BibtexEntry)drv.Row["Entry"];
+                    toExport.Add(entry);
+                }
+            }
+
+            return toExport.ToArray();
+        }
+
 
         private async void exportSelectedToolStripMenuItem_Click(object sender, EventArgs e)
         {
@@ -1241,29 +1548,20 @@ namespace ScientificReviews.Forms
         {
             foreach (var entry in entries)
             {
-
-                if (entry == null || entry.Tags == null)
+                if (entry == null || entry.Tags == null || string.IsNullOrWhiteSpace(entry.Key))
                     continue;
 
-                // Najdi tag "title" (case-insensitive)
-                var titleTag = entry.Tags
-                    .FirstOrDefault(t => string.Equals(t.Key, "title", StringComparison.OrdinalIgnoreCase));
-
-                if (titleTag == null || string.IsNullOrWhiteSpace(titleTag.Value))
+                string filename = FindPdfFile(entry);
+                if (string.IsNullOrWhiteSpace(filename))
                     continue;
-
-                string title = titleTag.Value;
-                title = title.Replace(":", "").Replace("  ", " ").Replace("?", "");
-
-                string filename = Path.Combine(Program.AppSettings.Data.PdfFolder, title + ".pdf");
-
-                if (File.Exists(filename) == false)
-                {
-                    continue;
-
-                }
 
                 string filename2 = Path.Combine(Program.AppSettings.Data.PdfFolder, entry.Key + ".pdf");
+                if (string.Equals(filename, filename2, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                if (File.Exists(filename2))
+                    continue;
+
                 File.Move(filename, filename2);
 
             }
@@ -1271,6 +1569,7 @@ namespace ScientificReviews.Forms
 
         private void checkPdfToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            var pdfFiles = GetPdfFiles();
             foreach (var entry in entries)
             {
 
@@ -1292,8 +1591,7 @@ namespace ScientificReviews.Forms
                 }
 
 
-                string filename = Path.Combine(Program.AppSettings.Data.PdfFolder, entry.Key + ".pdf");
-                if (File.Exists(filename) == false)
+                if (string.IsNullOrWhiteSpace(FindPdfFile(entry, pdfFiles)))
                 {
                     haspdfTag.Value = "no";
                 }

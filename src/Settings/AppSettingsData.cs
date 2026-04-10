@@ -27,6 +27,12 @@ namespace ScientificReviews
         [Editor(typeof(PathEditor), typeof(UITypeEditor))]
         public string PdfFolder { get; set; }
 
+        [Browsable(true)]
+        [Category(GENERAL_CAT)]
+        [DisplayName("Recursive PDF search")]
+        [Description("If true, PDFs are searched in Pdf Folder including all subfolders")]
+        public bool RecursivePdfSearch { get; set; } = false;
+
 
         [Browsable(true)]
         [Category(BACKUP_CAT)]
