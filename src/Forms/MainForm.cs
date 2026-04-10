@@ -779,12 +779,15 @@ namespace ScientificReviews.Forms
             {
                 if (entry.Type == "article")
                 {
-                    string journalName = BibtexUtils.RemoveLatex(entry.GetTagValue("journal")).ToLower();
+                    string journalValue = entry.GetTagValue("journal");
+                    if (string.IsNullOrWhiteSpace(journalValue))
+                        continue;
+
+                    string journalName = BibtexUtils.RemoveLatex(journalValue).ToLower();
 
                     if (dic.ContainsKey(journalName))
                     {
                         var report = dic[journalName];
-                        var list = entry.Tags.ToList();
 
                         // Calc average percentile JIF
                         double percentile = 0;
@@ -796,19 +799,110 @@ namespace ScientificReviews.Forms
                         // Set quartile from percentile
                         string quartile = percentile >= 75 ? "Q1" : percentile >= 50 ? "Q2" : percentile >= 25 ? "Q3" : "Q4";
 
-                        entry.RemoveIfExists("jif");
-                        entry.RemoveIfExists("jif_" + report.Year.ToString());
-                        entry.RemoveIfExists("jif_Q");
-
-                        list.Add(new BibtexTag("jif", Math.Round(percentile, 1).ToString(CultureInfo.InvariantCulture)));
-                        list.Add(new BibtexTag("jif_" + report.Year.ToString(), Math.Round(percentile, 1).ToString(CultureInfo.InvariantCulture)));
-                        list.Add(new BibtexTag("jif_Q", quartile));
-                        entry.Tags = list.ToArray();
+                        string percentileText = Math.Round(percentile, 1).ToString(CultureInfo.InvariantCulture);
+                        SetSingleTagValue(entry, "jif", percentileText);
+                        SetSingleTagValue(entry, "jif_" + report.Year.ToString(), percentileText);
+                        SetSingleTagValue(entry, "jif_Q", quartile);
                     }
                 }
             }
             // Refresh table 
             LoadData(entries.ToArray());
+            Changed();
+        }
+
+        private void removeDuplicateTagsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            int changedEntries = 0;
+            int removedTags = 0;
+
+            foreach (var entry in entries)
+            {
+                int removedForEntry = RemoveDuplicateTags(entry);
+                if (removedForEntry > 0)
+                {
+                    changedEntries++;
+                    removedTags += removedForEntry;
+                }
+            }
+
+            LoadData(entries.ToArray(), txtSearch.Text);
+
+            if (removedTags > 0)
+            {
+                Changed();
+                lblStatus.Text = $"Removed {removedTags} duplicate tag(s) in {changedEntries} record(s).";
+            }
+            else
+            {
+                lblStatus.Text = "No duplicate tags found.";
+            }
+        }
+
+        private void SetSingleTagValue(BibtexEntry entry, string key, string value)
+        {
+            if (entry == null || string.IsNullOrWhiteSpace(key))
+                return;
+
+            var tags = (entry.Tags ?? Array.Empty<BibtexTag>()).ToList();
+            var updatedTags = new List<BibtexTag>();
+            bool updated = false;
+
+            foreach (var tag in tags)
+            {
+                if (tag == null)
+                    continue;
+
+                if (string.Equals(tag.Key, key, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (updated)
+                        continue;
+
+                    tag.Value = value;
+                    updatedTags.Add(tag);
+                    updated = true;
+                    continue;
+                }
+
+                updatedTags.Add(tag);
+            }
+
+            if (!updated)
+            {
+                updatedTags.Add(new BibtexTag(key, value));
+            }
+
+            entry.Tags = updatedTags.ToArray();
+        }
+
+        private int RemoveDuplicateTags(BibtexEntry entry)
+        {
+            if (entry?.Tags == null || entry.Tags.Length <= 1)
+                return 0;
+
+            var uniqueTags = new List<BibtexTag>();
+            var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            for (int i = entry.Tags.Length - 1; i >= 0; i--)
+            {
+                var tag = entry.Tags[i];
+                if (tag == null)
+                    continue;
+
+                string tagKey = tag.Key ?? string.Empty;
+                if (seenKeys.Add(tagKey))
+                {
+                    uniqueTags.Insert(0, tag);
+                }
+            }
+
+            int removed = entry.Tags.Length - uniqueTags.Count;
+            if (removed > 0)
+            {
+                entry.Tags = uniqueTags.ToArray();
+            }
+
+            return removed;
         }
 
         private async void loadBibTexFileToolStripMenuItem_Click(object sender, EventArgs e)

@@ -55,6 +55,7 @@
             this.updatePageTagFormatToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.excludeEntriesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.excludeEntriesByTitleToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.removeDuplicateTagsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.recordToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.allowEditToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripMenuItem1 = new System.Windows.Forms.ToolStripSeparator();
@@ -247,7 +248,8 @@
             this.removeWithoutDOIToolStripMenuItem,
             this.updatePageTagFormatToolStripMenuItem,
             this.excludeEntriesToolStripMenuItem,
-            this.excludeEntriesByTitleToolStripMenuItem});
+            this.excludeEntriesByTitleToolStripMenuItem,
+            this.removeDuplicateTagsToolStripMenuItem});
             this.databaseToolStripMenuItem.Name = "databaseToolStripMenuItem";
             this.databaseToolStripMenuItem.Size = new System.Drawing.Size(67, 20);
             this.databaseToolStripMenuItem.Text = "Database";
@@ -315,6 +317,13 @@
             this.excludeEntriesByTitleToolStripMenuItem.Size = new System.Drawing.Size(213, 22);
             this.excludeEntriesByTitleToolStripMenuItem.Text = "Exclude entries by title";
             this.excludeEntriesByTitleToolStripMenuItem.Click += new System.EventHandler(this.excludeEntriesByTitleToolStripMenuItem_Click);
+            // 
+            // removeDuplicateTagsToolStripMenuItem
+            // 
+            this.removeDuplicateTagsToolStripMenuItem.Name = "removeDuplicateTagsToolStripMenuItem";
+            this.removeDuplicateTagsToolStripMenuItem.Size = new System.Drawing.Size(213, 22);
+            this.removeDuplicateTagsToolStripMenuItem.Text = "Remove duplicate tags";
+            this.removeDuplicateTagsToolStripMenuItem.Click += new System.EventHandler(this.removeDuplicateTagsToolStripMenuItem_Click);
             // 
             // recordToolStripMenuItem
             // 
@@ -800,6 +809,7 @@
         private System.Windows.Forms.ToolStripMenuItem loadBibTexFileToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem excludeEntriesToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem excludeEntriesByTitleToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem removeDuplicateTagsToolStripMenuItem;
         private System.Windows.Forms.BindingSource bindingSource1;
         private System.Windows.Forms.ToolStrip toolStrip1;
         private System.Windows.Forms.ToolStripLabel toolStripLabel1;
