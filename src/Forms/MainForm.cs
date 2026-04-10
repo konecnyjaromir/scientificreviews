@@ -228,6 +228,112 @@ namespace ScientificReviews.Forms
             return null;
         }
 
+        private bool ConfirmReplaceCurrentArchive()
+        {
+            if (entries.Count == 0)
+                return true;
+
+            DialogResult result = MessageBox.Show(
+                "A BibTeX archive is already loaded. Do you want to clear it and load a new one?",
+                Program.APP_NAME,
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
+
+            return result == DialogResult.Yes;
+        }
+
+        private void ClearCurrentArchiveState(bool markChanged)
+        {
+            entries = new List<BibtexEntry>();
+            visibleEntries = new List<BibtexEntry>();
+            propertyGrid1.SelectedObject = null;
+            propertyGrid1.Tag = null;
+            richTextBox1.Clear();
+            lblSelected.Text = "(-)";
+            SetCurrentBibTex(null);
+            LoadData(entries.ToArray());
+
+            if (markChanged)
+                Changed();
+        }
+
+        private async Task<bool> LoadBibTexFolderAsync(bool replaceExisting)
+        {
+            using (FolderBrowserDialog folderDialog = new FolderBrowserDialog()
+            {
+                SelectedPath = Program.AppSettings.Data.LastDirectory
+            })
+            {
+                DialogResult result = folderDialog.ShowDialog(this);
+                if (result != DialogResult.OK || string.IsNullOrWhiteSpace(folderDialog.SelectedPath))
+                    return false;
+
+                if (replaceExisting && ConfirmReplaceCurrentArchive() == false)
+                    return false;
+
+                Program.AppSettings.Data.LastDirectory = folderDialog.SelectedPath;
+
+                if (replaceExisting)
+                    ClearCurrentArchiveState(false);
+
+                var loadedEntries = await Task.Run(() =>
+                {
+                    var list = new List<BibtexEntry>();
+                    string[] files = Directory.GetFiles(folderDialog.SelectedPath, "*.bib", SearchOption.AllDirectories);
+                    BibtexParser parser = new BibtexParser();
+                    foreach (string file in files)
+                    {
+                        list.AddRange(parser.ParseFile(File.ReadAllText(file)));
+                    }
+
+                    return list;
+                });
+
+                SetCurrentBibTex(null);
+                entries.AddRange(loadedEntries);
+                LoadData(entries.ToArray());
+                Changed();
+                return true;
+            }
+        }
+
+        private async Task<bool> LoadBibTexFileAsync(bool replaceExisting)
+        {
+            OpenFileDialog ofd = new OpenFileDialog()
+            {
+                CheckPathExists = true,
+                CheckFileExists = true,
+                Filter = "Bibtex database *.bib|*.bib",
+                InitialDirectory = string.IsNullOrWhiteSpace(Program.AppSettings.Data.LastBibTex)
+                    ? Program.AppSettings.Data.LastDirectory
+                    : Path.GetDirectoryName(Program.AppSettings.Data.LastBibTex)
+            };
+
+            if (ofd.ShowDialog(this) != DialogResult.OK)
+                return false;
+
+            if (replaceExisting && ConfirmReplaceCurrentArchive() == false)
+                return false;
+
+            string fileName = ofd.FileName;
+            Program.AppSettings.Data.LastDirectory = Path.GetDirectoryName(fileName);
+
+            if (replaceExisting)
+                ClearCurrentArchiveState(false);
+
+            var loadedEntries = await Task.Run(() =>
+            {
+                BibtexParser parser = new BibtexParser();
+                return parser.ParseFile(File.ReadAllText(fileName))?.ToList() ?? new List<BibtexEntry>();
+            });
+
+            SetCurrentBibTex(fileName);
+            entries.AddRange(loadedEntries);
+            LoadData(entries.ToArray());
+            Changed();
+            return true;
+        }
+
         private void LoadData(BibtexEntry[] entries, string search = "")
         {
             
@@ -315,29 +421,9 @@ namespace ScientificReviews.Forms
         {
             try
             {
-                using (FolderBrowserDialog folderDialog = new FolderBrowserDialog()
-                {
-                    SelectedPath = Program.AppSettings.Data.LastDirectory
-                })
-                {
-                    DialogResult result = folderDialog.ShowDialog(this);
-                    if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(folderDialog.SelectedPath))
-                    {
-                        Program.AppSettings.Data.LastDirectory = folderDialog.SelectedPath; 
-                        SetCurrentBibTex(null);
-                        await Task.Run(() =>
-                        {                            
-                            string[] files = Directory.GetFiles(folderDialog.SelectedPath, "*.bib", SearchOption.AllDirectories);
-                            BibtexParser parser = new BibtexParser();
-                            foreach (string file in files)
-                            {
-                                entries.AddRange(parser.ParseFile(File.ReadAllText(file)));
-                            }                            
-                        });
-                        LoadData(entries.ToArray());
-                        Changed();
-                    }
-                }
+                bool loaded = await LoadBibTexFolderAsync(false);
+                if (loaded)
+                    lblStatus.Text = "Loaded.";
             }
             catch (Exception ex)
             {
@@ -1173,29 +1259,37 @@ namespace ScientificReviews.Forms
         {
             try
             {
-                OpenFileDialog ofd = new OpenFileDialog()
-                {
-                    CheckPathExists = true,
-                    CheckFileExists = true,
-                    Filter = "Bibtex database *.bib|*.bib",
-                    InitialDirectory = string.IsNullOrWhiteSpace(Program.AppSettings.Data.LastBibTex)
-                        ? Program.AppSettings.Data.LastDirectory
-                        : Path.GetDirectoryName(Program.AppSettings.Data.LastBibTex)
-                };
-                if (ofd.ShowDialog(this) == DialogResult.OK)
-                {
-                    string fileName = ofd.FileName;
-                    await Task.Run(() =>
-                    {                        
-                        BibtexParser parser = new BibtexParser();
-                        entries.AddRange(parser.ParseFile(File.ReadAllText(fileName)));
-                    });
-                    Program.AppSettings.Data.LastDirectory = Path.GetDirectoryName(fileName);
-                    SetCurrentBibTex(fileName);
-                    LoadData(entries.ToArray());
-                    Changed();
-                }
-                lblStatus.Text = "Loaded.";
+                bool loaded = await LoadBibTexFileAsync(false);
+                if (loaded)
+                    lblStatus.Text = "Loaded.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
+        private async void loadReplaceBibTexFileToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                bool loaded = await LoadBibTexFileAsync(true);
+                if (loaded)
+                    lblStatus.Text = "Loaded as a new archive.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
+        private async void loadReplaceBibTexFolderToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                bool loaded = await LoadBibTexFolderAsync(true);
+                if (loaded)
+                    lblStatus.Text = "Loaded folder as a new archive.";
             }
             catch (Exception ex)
             {
@@ -2867,6 +2961,11 @@ namespace ScientificReviews.Forms
             {
                 lblStatus.Text = "Failed to load autosave: " + ex.Message;
             }
+        }
+
+        private void toolStripStatusLabel1_Click(object sender, EventArgs e)
+        {
+
         }
 
         //private void manualJCRDatabaseToolStripMenuItem_Click(object sender, EventArgs e)
