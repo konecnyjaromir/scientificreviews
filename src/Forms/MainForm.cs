@@ -3,6 +3,7 @@ using ScientificReviews.Bibtex;
 using ScientificReviews.Helpers;
 using ScientificReviews.JCR;
 using ScientificReviews.JCR.Dto;
+using ScientificReviews.Logs;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -30,6 +31,7 @@ namespace ScientificReviews.Forms
         public MainForm()
         {
             InitializeComponent();
+            _operationManager = new StatusStripOperationManager(statusStrip1, toolStripStatusLabel1, this);
             UpdateWindowTitle();
             InitializeRecordContextMenu();
             dataGridView1.CellMouseDoubleClick += dataGridView1_CellMouseDoubleClick;
@@ -42,6 +44,7 @@ namespace ScientificReviews.Forms
 
         private CancellationTokenSource _changedCts;
         private readonly SemaphoreSlim _autosaveLock = new SemaphoreSlim(1, 1);
+        private readonly StatusStripOperationManager _operationManager;
         private ContextMenuStrip _recordContextMenu;
         private ToolStripMenuItem _contextEditMenuItem;
         private ToolStripMenuItem _contextCopyMenuItem;
@@ -71,6 +74,21 @@ namespace ScientificReviews.Forms
             public string DestinationPath { get; set; }
             public string Doi { get; set; }
             public bool InjectDoiMetadata { get; set; }
+        }
+
+        private sealed class AutoPairResult
+        {
+            public int DirectMatches { get; set; }
+            public int SmartMatches { get; set; }
+            public int Unmatched { get; set; }
+            public bool NoPdfsFound { get; set; }
+        }
+
+        private sealed class JcrUpdateResult
+        {
+            public int MissingJournalCount { get; set; }
+            public int AddedJournalCount { get; set; }
+            public int NotFoundJournalCount { get; set; }
         }
 
         private int GetConfiguredThreadCount()
@@ -228,6 +246,33 @@ namespace ScientificReviews.Forms
             return null;
         }
 
+        private StatusStripOperationHandle StartTrackedOperation(string key, string name, string details = null, bool silentIfAlreadyRunning = false)
+        {
+            var operation = _operationManager.StartOperation(key, name, details);
+            if (operation == null && !silentIfAlreadyRunning)
+            {
+                lblStatus.Text = $"{name} is already running.";
+            }
+
+            return operation;
+        }
+
+        private void StartAutomaticBackgroundOperationsAfterLoad()
+        {
+            if (entries.Count == 0)
+                return;
+
+            if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.PdfFolder) == false)
+            {
+                _ = StartAutoPairOperationAsync(true);
+            }
+
+            if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.JcrApiKey) == false)
+            {
+                _ = StartUpdateJcrOperationAsync(true);
+            }
+        }
+
         private bool ConfirmReplaceCurrentArchive()
         {
             if (entries.Count == 0)
@@ -271,29 +316,54 @@ namespace ScientificReviews.Forms
                 if (replaceExisting && ConfirmReplaceCurrentArchive() == false)
                     return false;
 
+                var operation = StartTrackedOperation(
+                    "load-bibtex",
+                    replaceExisting ? "Open folder" : "Add folder",
+                    folderDialog.SelectedPath);
+                if (operation == null)
+                    return false;
+
                 Program.AppSettings.Data.LastDirectory = folderDialog.SelectedPath;
 
-                if (replaceExisting)
-                    ClearCurrentArchiveState(false);
-
-                var loadedEntries = await Task.Run(() =>
+                try
                 {
-                    var list = new List<BibtexEntry>();
-                    string[] files = Directory.GetFiles(folderDialog.SelectedPath, "*.bib", SearchOption.AllDirectories);
-                    BibtexParser parser = new BibtexParser();
-                    foreach (string file in files)
+                    if (replaceExisting)
+                        ClearCurrentArchiveState(false);
+
+                    var loadedEntries = await Task.Run(() =>
                     {
-                        list.AddRange(parser.ParseFile(File.ReadAllText(file)));
-                    }
+                        var list = new List<BibtexEntry>();
+                        string[] files = Directory.GetFiles(folderDialog.SelectedPath, "*.bib", SearchOption.AllDirectories);
+                        BibtexParser parser = new BibtexParser();
+                        operation.Report("Scanning folder...", folderDialog.SelectedPath, isIndeterminate: true);
 
-                    return list;
-                });
+                        for (int index = 0; index < files.Length; index++)
+                        {
+                            string file = files[index];
+                            list.AddRange(parser.ParseFile(File.ReadAllText(file)));
+                            operation.Report(
+                                $"Reading file {index + 1}/{files.Length}",
+                                file,
+                                isIndeterminate: true);
+                        }
 
-                SetCurrentBibTex(null);
-                entries.AddRange(loadedEntries);
-                LoadData(entries.ToArray());
-                Changed();
-                return true;
+                        return list;
+                    });
+
+                    SetCurrentBibTex(null);
+                    entries.AddRange(loadedEntries);
+                    LoadData(entries.ToArray());
+                    Changed();
+
+                    operation.Complete($"Loaded {loadedEntries.Count} record(s).", folderDialog.SelectedPath);
+                    StartAutomaticBackgroundOperationsAfterLoad();
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    operation.Fail(ex, "Failed");
+                    throw;
+                }
             }
         }
 
@@ -316,22 +386,41 @@ namespace ScientificReviews.Forms
                 return false;
 
             string fileName = ofd.FileName;
+            var operation = StartTrackedOperation(
+                "load-bibtex",
+                replaceExisting ? "Open file" : "Add file",
+                fileName);
+            if (operation == null)
+                return false;
+
             Program.AppSettings.Data.LastDirectory = Path.GetDirectoryName(fileName);
 
-            if (replaceExisting)
-                ClearCurrentArchiveState(false);
-
-            var loadedEntries = await Task.Run(() =>
+            try
             {
-                BibtexParser parser = new BibtexParser();
-                return parser.ParseFile(File.ReadAllText(fileName))?.ToList() ?? new List<BibtexEntry>();
-            });
+                if (replaceExisting)
+                    ClearCurrentArchiveState(false);
 
-            SetCurrentBibTex(fileName);
-            entries.AddRange(loadedEntries);
-            LoadData(entries.ToArray());
-            Changed();
-            return true;
+                operation.Report("Reading BibTeX file...", fileName, isIndeterminate: true);
+                var loadedEntries = await Task.Run(() =>
+                {
+                    BibtexParser parser = new BibtexParser();
+                    return parser.ParseFile(File.ReadAllText(fileName))?.ToList() ?? new List<BibtexEntry>();
+                });
+
+                SetCurrentBibTex(fileName);
+                entries.AddRange(loadedEntries);
+                LoadData(entries.ToArray());
+                Changed();
+
+                operation.Complete($"Loaded {loadedEntries.Count} record(s).", fileName);
+                StartAutomaticBackgroundOperationsAfterLoad();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                operation.Fail(ex, "Failed");
+                throw;
+            }
         }
 
         private void LoadData(BibtexEntry[] entries, string search = "")
@@ -1002,98 +1091,150 @@ namespace ScientificReviews.Forms
 
         private async void updateJournalsDatabaseToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            await StartUpdateJcrOperationAsync(false);
+        }
+
+        private async Task StartUpdateJcrOperationAsync(bool startedAutomatically)
+        {
+            if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.JcrApiKey))
+            {
+                if (!startedAutomatically)
+                    lblStatus.Text = "JCR Api key is not set.";
+                return;
+            }
+
+            var operation = StartTrackedOperation(
+                "update-jcr",
+                "Update JCR",
+                "Fetching missing journals from Clarivate",
+                startedAutomatically);
+            if (operation == null)
+                return;
+
             try
             {
-                //Get actual year - 1
-                int year = DateTime.Now.Year - 1;
-
                 lblStatus.Text = "Updating database...";
-                // Find journals, that missing information about quartiles
-                JcrApiClient jcrApiClient = new JcrApiClient(Program.AppSettings.Data.JcrApiKey);
-                List<string> missingJournals = new List<string>();
-                var journalReports = Program.JournalsDatabase.Data.JournalReports;
-                Dictionary<string, JournalReportsDto> dic = journalReports.ToDictionary(rep => rep.Journal.Name.ToLower());
-                foreach (var entry in entries)
-                {
-                    if (entry.Type == "article")
-                    {
-                        string journalName = BibtexUtils.RemoveLatex(entry.GetTagValue("journal")).ToLower();
+                JcrUpdateResult result = await RunUpdateJcrAsync(operation);
 
-                        if (dic.Keys.Contains(journalName) == false)
-                        {
-                            if (missingJournals.Contains(journalName) == false)
-                                missingJournals.Add(journalName);
-                        }
-                    }
-                }
-                missingJournals.Sort();
+                string summary = result.MissingJournalCount == 0
+                    ? "No missing journals."
+                    : $"Added {result.AddedJournalCount}, missing {result.NotFoundJournalCount}";
 
-                var notFoundJournals = new List<string>();
+                operation.Complete(summary, "Click to see details.");
 
-                foreach (string missingJournal in missingJournals)
-                {
-                    lblStatus.Text = $"Updating database... ({missingJournal})";
-
-                    // Get journals by name
-                    try
-                    {
-                        var resp = await jcrApiClient.GetJournalsAsync(missingJournal.Replace("&", "").Replace("-", " "));
-                        foreach (var hit in resp.Hits)
-                        {
-                            JournalReportsDto report = null;
-                            //Try fetch journal report for actual year, if not exists, try to fetch for previous year, and so on, until 2020. I want to do this, because some journals have not yet published report for actual year, but they have published for previous years, and I want to have at least some data about quartiles, even if it is not for actual year.
-                            for (int i = year; i > 2020; i--)
-                            {
-                                try
-                                {
-                                    // Get journal reports for particular journal and year
-                                    report = await jcrApiClient.GetJournalReportsAsync(hit.Id, i);
-                                    break;
-                                }
-                                catch (Exception)
-                                {
-                                    continue;
-                                }
-
-                            }
-
-                            if (report == null) {                                     
-                                notFoundJournals.Add(missingJournal);
-                                lblStatus.Text = $"Journal {missingJournal} was not found for any year, skipping...";
-                                continue;
-                            }
-
-                            var dicTmp = journalReports.ToDictionary(rep => rep.Journal.Name.ToLower());
-                            if (dicTmp.ContainsKey(report.Journal.Name.ToLower()) == false)
-                            {
-                                journalReports.Add(report);
-                            }
-                            else
-                            {
-                                //do nothing, because we do not want to overwrite existing data in database. We want only to add missing journals, but not update existing ones.
-                            }
-
-                            Program.JournalsDatabase.Save();
-
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        lblStatus.Text = $"Journal {missingJournal} failed to fetch, reason: {ex.Message}";
-                        notFoundJournals.Add(missingJournal);
-                        continue;
-                    }
-                }
-                if (notFoundJournals.Count > 0)
-                {
-                    lblStatus.Text = $"Some journals wasnt found, I found:{missingJournals.Count - notFoundJournals.Count}/{missingJournals.Count}... More informations in logs.";
-                }
-                else lblStatus.Text = "Journal database updated.";
+                if (result.MissingJournalCount == 0)
+                    lblStatus.Text = "Journal database is already up to date.";
+                else if (result.NotFoundJournalCount > 0)
+                    lblStatus.Text = $"Some journals were not found. Added {result.AddedJournalCount}/{result.MissingJournalCount}.";
+                else
+                    lblStatus.Text = "Journal database updated.";
             }
             catch (Exception ex)
             {
+                operation.Fail(ex, "Failed");
                 lblStatus.Text = ex.Message;
             }
+        }
+
+        private async Task<JcrUpdateResult> RunUpdateJcrAsync(StatusStripOperationHandle operation)
+        {
+            int year = DateTime.Now.Year - 1;
+            JcrApiClient jcrApiClient = new JcrApiClient(Program.AppSettings.Data.JcrApiKey);
+            List<string> missingJournals = new List<string>();
+            var journalReports = Program.JournalsDatabase.Data.JournalReports;
+            Dictionary<string, JournalReportsDto> dic = journalReports.ToDictionary(rep => rep.Journal.Name.ToLower());
+
+            foreach (var entry in entries)
+            {
+                if (entry.Type != "article")
+                    continue;
+
+                string journalValue = entry.GetTagValue("journal");
+                if (string.IsNullOrWhiteSpace(journalValue))
+                    continue;
+
+                string journalName = BibtexUtils.RemoveLatex(journalValue).ToLower();
+                if (dic.ContainsKey(journalName) == false && missingJournals.Contains(journalName) == false)
+                    missingJournals.Add(journalName);
+            }
+
+            missingJournals.Sort();
+            if (missingJournals.Count == 0)
+            {
+                operation.Report("No missing journals.", "Local JCR database already covers all loaded records.", 1, 1, false);
+                return new JcrUpdateResult();
+            }
+
+            var notFoundJournals = new List<string>();
+            int addedJournals = 0;
+
+            for (int journalIndex = 0; journalIndex < missingJournals.Count; journalIndex++)
+            {
+                string missingJournal = missingJournals[journalIndex];
+                operation.Report($"{journalIndex + 1}/{missingJournals.Count}", missingJournal, journalIndex + 1, missingJournals.Count, false);
+
+                try
+                {
+                    var response = await jcrApiClient.GetJournalsAsync(missingJournal.Replace("&", "").Replace("-", " "));
+                    bool foundAnyReport = false;
+
+                    foreach (var hit in response.Hits)
+                    {
+                        JournalReportsDto report = null;
+                        for (int currentYear = year; currentYear > 2020; currentYear--)
+                        {
+                            try
+                            {
+                                report = await jcrApiClient.GetJournalReportsAsync(hit.Id, currentYear);
+                                break;
+                            }
+                            catch (Exception)
+                            {
+                                continue;
+                            }
+                        }
+
+                        if (report == null)
+                            continue;
+
+                        foundAnyReport = true;
+                        var currentReports = journalReports.ToDictionary(rep => rep.Journal.Name.ToLower());
+                        if (currentReports.ContainsKey(report.Journal.Name.ToLower()) == false)
+                        {
+                            journalReports.Add(report);
+                            addedJournals++;
+                            Program.JournalsDatabase.Save();
+                        }
+                    }
+
+                    if (!foundAnyReport)
+                        notFoundJournals.Add(missingJournal);
+                }
+                catch (Exception ex)
+                {
+                    operation.Report($"{journalIndex + 1}/{missingJournals.Count}", $"Failed: {missingJournal}", journalIndex + 1, missingJournals.Count, false);
+                    notFoundJournals.Add(missingJournal);
+                    AppLog.Log($"JCR update failed for journal '{missingJournal}': {ex.Message}", AppLog.MessageType.Error);
+                }
+            }
+
+            string details = notFoundJournals.Count == 0
+                ? "All missing journals were resolved."
+                : "Not found: " + string.Join(", ", notFoundJournals);
+
+            operation.Report(
+                $"Added {addedJournals}",
+                details,
+                missingJournals.Count,
+                missingJournals.Count,
+                false);
+
+            return new JcrUpdateResult
+            {
+                MissingJournalCount = missingJournals.Count,
+                AddedJournalCount = addedJournals,
+                NotFoundJournalCount = notFoundJournals.Count
+            };
         }
 
 
@@ -2282,140 +2423,196 @@ namespace ScientificReviews.Forms
 
         private async void autoPairWithPdfsToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            await StartAutoPairOperationAsync(false);
+        }
+
+        private async Task StartAutoPairOperationAsync(bool startedAutomatically)
+        {
+            var operation = StartTrackedOperation(
+                "auto-pair-pdfs",
+                "Auto-pair PDFs",
+                Program.AppSettings.Data.PdfFolder,
+                startedAutomatically);
+            if (operation == null)
+                return;
+
             try
             {
                 lblStatus.Text = $"Auto-pairing PDFs using {GetConfiguredThreadCount()} thread(s)...";
+                AutoPairResult result = await RunAutoPairAsync(operation);
+
+                LoadData(entries.ToArray(), txtSearch.Text);
+                Changed();
+
+                if (result.NoPdfsFound)
+                {
+                    operation.Complete("No PDFs found.", Program.AppSettings.Data.PdfFolder);
+                    lblStatus.Text = "No PDFs found in Pdf Folder.";
+                    return;
+                }
+
+                string summary = $"Direct {result.DirectMatches}, smart {result.SmartMatches}, unmatched {result.Unmatched}";
+                operation.Complete(summary, Program.AppSettings.Data.PdfFolder);
+                lblStatus.Text = $"Auto-pair finished using {GetConfiguredThreadCount()} thread(s). Direct: {result.DirectMatches}, smart: {result.SmartMatches}, unmatched: {result.Unmatched}.";
+            }
+            catch (Exception ex)
+            {
+                operation.Fail(ex, "Failed");
+                lblStatus.Text = ex.Message;
+            }
+        }
+
+        private Task<AutoPairResult> RunAutoPairAsync(StatusStripOperationHandle operation)
+        {
+            return Task.Run(() =>
+            {
+                operation.Report($"Using {GetConfiguredThreadCount()} thread(s)", Program.AppSettings.Data.PdfFolder, 0, 1, true);
 
                 int directMatches = 0;
                 int smartMatches = 0;
                 int unmatched = 0;
                 bool noPdfsFound = false;
 
-                await Task.Run(() =>
+                string[] pdfFiles = GetPdfFiles();
+                if (pdfFiles.Length == 0)
                 {
-                    string[] pdfFiles = GetPdfFiles();
-                    if (pdfFiles.Length == 0)
-                    {
-                        foreach (var entry in entries)
-                        {
-                            ClearPdfAssignment(entry);
-                        }
-
-                        noPdfsFound = true;
-                        return;
-                    }
-
-                    double threshold = Math.Max(0d, Math.Min(100d, Program.AppSettings.Data.PdfAutoPairThresholdPercent)) / 100d;
-                    var assignedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                    var pairedEntries = new HashSet<BibtexEntry>();
-
                     foreach (var entry in entries)
                     {
-                        string storedPdf = FindStoredPdfFile(entry);
-                        if (string.IsNullOrWhiteSpace(storedPdf))
-                        {
-                            ClearPdfAssignment(entry);
-                            continue;
-                        }
-
-                        if (assignedFiles.Add(storedPdf))
-                        {
-                            AssignPdfToEntry(entry, storedPdf);
-                            pairedEntries.Add(entry);
-                            directMatches++;
-                        }
-                        else
-                        {
-                            ClearPdfAssignment(entry);
-                        }
+                        ClearPdfAssignment(entry);
                     }
 
-                    foreach (var entry in entries.Where(item => pairedEntries.Contains(item) == false))
+                    noPdfsFound = true;
+                    return new AutoPairResult
                     {
-                        string directMatch = FindDirectPdfMatch(entry, pdfFiles.Where(file => assignedFiles.Contains(file) == false));
-                        if (string.IsNullOrWhiteSpace(directMatch))
-                            continue;
+                        DirectMatches = 0,
+                        SmartMatches = 0,
+                        Unmatched = entries.Count,
+                        NoPdfsFound = true
+                    };
+                }
 
+                double threshold = Math.Max(0d, Math.Min(100d, Program.AppSettings.Data.PdfAutoPairThresholdPercent)) / 100d;
+                var assignedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                var pairedEntries = new HashSet<BibtexEntry>();
+
+                operation.Report("Matching stored PDF links...", null, 0, Math.Max(1, entries.Count), false);
+                for (int index = 0; index < entries.Count; index++)
+                {
+                    var entry = entries[index];
+                    string storedPdf = FindStoredPdfFile(entry);
+                    if (string.IsNullOrWhiteSpace(storedPdf))
+                    {
+                        ClearPdfAssignment(entry);
+                        operation.Report($"{index + 1}/{entries.Count}", storedPdf, index + 1, entries.Count, false);
+                        continue;
+                    }
+
+                    if (assignedFiles.Add(storedPdf))
+                    {
+                        AssignPdfToEntry(entry, storedPdf);
+                        pairedEntries.Add(entry);
+                        directMatches++;
+                    }
+                    else
+                    {
+                        ClearPdfAssignment(entry);
+                    }
+
+                    operation.Report($"{index + 1}/{entries.Count}", storedPdf, index + 1, entries.Count, false);
+                }
+
+                var entriesToDirectMatch = entries.Where(item => pairedEntries.Contains(item) == false).ToList();
+                operation.Report("Matching direct PDF names...", null, 0, Math.Max(1, entriesToDirectMatch.Count), false);
+                for (int index = 0; index < entriesToDirectMatch.Count; index++)
+                {
+                    var entry = entriesToDirectMatch[index];
+                    string directMatch = FindDirectPdfMatch(entry, pdfFiles.Where(file => assignedFiles.Contains(file) == false));
+                    if (string.IsNullOrWhiteSpace(directMatch) == false)
+                    {
                         AssignPdfToEntry(entry, directMatch);
                         assignedFiles.Add(directMatch);
                         pairedEntries.Add(entry);
                         directMatches++;
                     }
 
-                    var remainingEntries = entries.Where(item => pairedEntries.Contains(item) == false).ToList();
-                    var remainingPdfPaths = pdfFiles
-                        .Where(file => assignedFiles.Contains(file) == false)
-                        .ToArray();
-
-                    var remainingPdfsBag = new ConcurrentBag<PdfArchiveItem>();
-                    Parallel.ForEach(remainingPdfPaths, CreateParallelOptions(), file =>
-                    {
-                        remainingPdfsBag.Add(BuildPdfArchiveItem(file));
-                    });
-
-                    var remainingPdfs = remainingPdfsBag
-                        .OrderBy(item => item.FilePath, StringComparer.OrdinalIgnoreCase)
-                        .ToList();
-
-                    var candidates = new ConcurrentBag<PdfSimilarityCandidate>();
-                    Parallel.ForEach(remainingEntries, CreateParallelOptions(), entry =>
-                    {
-                        foreach (var pdf in remainingPdfs)
-                        {
-                            double score = ComputeSimilarityScore(entry, pdf);
-                            if (score >= threshold)
-                            {
-                                candidates.Add(new PdfSimilarityCandidate
-                                {
-                                    Entry = entry,
-                                    Pdf = pdf,
-                                    Score = score
-                                });
-                            }
-                        }
-                    });
-
-                    foreach (var candidate in candidates.OrderByDescending(item => item.Score).ThenBy(item => item.Pdf.FilePath, StringComparer.OrdinalIgnoreCase))
-                    {
-                        if (pairedEntries.Contains(candidate.Entry) || assignedFiles.Contains(candidate.Pdf.FilePath))
-                            continue;
-
-                        AssignPdfToEntry(candidate.Entry, candidate.Pdf.FilePath);
-                        assignedFiles.Add(candidate.Pdf.FilePath);
-                        pairedEntries.Add(candidate.Entry);
-                        smartMatches++;
-                    }
-
-                    foreach (var entry in entries)
-                    {
-                        bool hasPdf = pairedEntries.Contains(entry);
-                        if (hasPdf == false)
-                        {
-                            ClearPdfAssignment(entry);
-                            continue;
-                        }
-
-                        UpdateHasPdfTag(entry, hasPdf);
-                    }
-
-                    unmatched = entries.Count - pairedEntries.Count;
-                });
-
-                LoadData(entries.ToArray(), txtSearch.Text);
-                Changed();
-
-                if (noPdfsFound)
-                {
-                    lblStatus.Text = "No PDFs found in Pdf Folder.";
-                    return;
+                    operation.Report($"{index + 1}/{entriesToDirectMatch.Count}", entry.Key, index + 1, Math.Max(1, entriesToDirectMatch.Count), false);
                 }
 
-                lblStatus.Text = $"Auto-pair finished using {GetConfiguredThreadCount()} thread(s). Direct: {directMatches}, smart: {smartMatches}, unmatched: {unmatched}.";
-            }
-            catch (Exception ex)
-            {
-                lblStatus.Text = ex.Message;
-            }
+                var remainingEntries = entries.Where(item => pairedEntries.Contains(item) == false).ToList();
+                var remainingPdfPaths = pdfFiles
+                    .Where(file => assignedFiles.Contains(file) == false)
+                    .ToArray();
+
+                operation.Report("Building PDF archive index...", $"{remainingPdfPaths.Length} PDFs", 0, 1, true);
+                var remainingPdfsBag = new ConcurrentBag<PdfArchiveItem>();
+                Parallel.ForEach(remainingPdfPaths, CreateParallelOptions(), file =>
+                {
+                    remainingPdfsBag.Add(BuildPdfArchiveItem(file));
+                });
+
+                var remainingPdfs = remainingPdfsBag
+                    .OrderBy(item => item.FilePath, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                operation.Report("Comparing titles with PDF names...", $"{remainingEntries.Count} entries, {remainingPdfs.Count} PDFs", 0, 1, true);
+                var candidates = new ConcurrentBag<PdfSimilarityCandidate>();
+                Parallel.ForEach(remainingEntries, CreateParallelOptions(), entry =>
+                {
+                    foreach (var pdf in remainingPdfs)
+                    {
+                        double score = ComputeSimilarityScore(entry, pdf);
+                        if (score >= threshold)
+                        {
+                            candidates.Add(new PdfSimilarityCandidate
+                            {
+                                Entry = entry,
+                                Pdf = pdf,
+                                Score = score
+                            });
+                        }
+                    }
+                });
+
+                operation.Report("Assigning best similarity matches...", $"{candidates.Count} candidates", 0, Math.Max(1, candidates.Count), candidates.Count == 0);
+                int candidateIndex = 0;
+                foreach (var candidate in candidates.OrderByDescending(item => item.Score).ThenBy(item => item.Pdf.FilePath, StringComparer.OrdinalIgnoreCase))
+                {
+                    candidateIndex++;
+                    if (pairedEntries.Contains(candidate.Entry) || assignedFiles.Contains(candidate.Pdf.FilePath))
+                    {
+                        operation.Report($"{candidateIndex}/{candidates.Count}", candidate.Entry.Key, candidateIndex, Math.Max(1, candidates.Count), false);
+                        continue;
+                    }
+
+                    AssignPdfToEntry(candidate.Entry, candidate.Pdf.FilePath);
+                    assignedFiles.Add(candidate.Pdf.FilePath);
+                    pairedEntries.Add(candidate.Entry);
+                    smartMatches++;
+                    operation.Report($"{candidateIndex}/{candidates.Count}", candidate.Entry.Key, candidateIndex, Math.Max(1, candidates.Count), false);
+                }
+
+                foreach (var entry in entries)
+                {
+                    bool hasPdf = pairedEntries.Contains(entry);
+                    if (hasPdf == false)
+                    {
+                        ClearPdfAssignment(entry);
+                        continue;
+                    }
+
+                    UpdateHasPdfTag(entry, true);
+                }
+
+                unmatched = entries.Count - pairedEntries.Count;
+
+                return new AutoPairResult
+                {
+                    DirectMatches = directMatches,
+                    SmartMatches = smartMatches,
+                    Unmatched = unmatched,
+                    NoPdfsFound = noPdfsFound
+                };
+            });
         }
 
         private void exportPdfsToolStripMenuItem_Click(object sender, EventArgs e)

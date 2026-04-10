@@ -59,6 +59,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Helpers\BibtexAutosaveManager.cs" />
+    <Compile Include="Helpers\StatusStripOperationManager.cs" />
     <Compile Include="Forms\EditColumnsForm.cs">
       <SubType>Form</SubType>
     </Compile>
