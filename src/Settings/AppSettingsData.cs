@@ -85,5 +85,8 @@ namespace ScientificReviews
         [Browsable(false)]
         public string LastFile { get; set; }
 
+        [Browsable(false)]
+        public string LastBibTex { get; set; }
+
     }
 }

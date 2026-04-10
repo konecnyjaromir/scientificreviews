@@ -65,9 +65,7 @@
     <Compile Include="Forms\EditColumnsForm.Designer.cs">
       <DependentUpon>EditColumnsForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="Forms\ExportPdfsForm.cs">
-      <SubType>Form</SubType>
-    </Compile>
+    <Compile Include="Forms\ExportPdfsForm.cs" />
     <Compile Include="Forms\InputBoxForm.cs">
       <SubType>Form</SubType>
     </Compile>

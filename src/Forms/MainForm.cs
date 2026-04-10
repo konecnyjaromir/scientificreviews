@@ -30,6 +30,10 @@ namespace ScientificReviews.Forms
         public MainForm()
         {
             InitializeComponent();
+            UpdateWindowTitle();
+            InitializeRecordContextMenu();
+            dataGridView1.CellMouseDoubleClick += dataGridView1_CellMouseDoubleClick;
+            dataGridView1.CellMouseDown += dataGridView1_CellMouseDown;
         }
 
         List<BibtexEntry> entries = new List<BibtexEntry>();
@@ -38,6 +42,12 @@ namespace ScientificReviews.Forms
 
         private CancellationTokenSource _changedCts;
         private readonly SemaphoreSlim _autosaveLock = new SemaphoreSlim(1, 1);
+        private ContextMenuStrip _recordContextMenu;
+        private ToolStripMenuItem _contextEditMenuItem;
+        private ToolStripMenuItem _contextCopyMenuItem;
+        private ToolStripMenuItem _contextCutMenuItem;
+        private ToolStripMenuItem _contextPasteMenuItem;
+        private ToolStripMenuItem _contextDuplicateMenuItem;
 
         private sealed class PdfArchiveItem
         {
@@ -55,6 +65,14 @@ namespace ScientificReviews.Forms
             public double Score { get; set; }
         }
 
+        private sealed class PdfExportJob
+        {
+            public string SourcePdfPath { get; set; }
+            public string DestinationPath { get; set; }
+            public string Doi { get; set; }
+            public bool InjectDoiMetadata { get; set; }
+        }
+
         private int GetConfiguredThreadCount()
         {
             return Math.Max(1, Program.AppSettings.Data.Threads);
@@ -62,10 +80,152 @@ namespace ScientificReviews.Forms
 
         private ParallelOptions CreateParallelOptions()
         {
+            return CreateParallelOptions(CancellationToken.None);
+        }
+
+        private ParallelOptions CreateParallelOptions(CancellationToken cancellationToken)
+        {
             return new ParallelOptions
             {
-                MaxDegreeOfParallelism = GetConfiguredThreadCount()
+                MaxDegreeOfParallelism = GetConfiguredThreadCount(),
+                CancellationToken = cancellationToken
             };
+        }
+
+        private void UpdateWindowTitle()
+        {
+            string title = Program.APP_NAME;
+            string lastBibTex = Program.AppSettings?.Data?.LastBibTex;
+            if (string.IsNullOrWhiteSpace(lastBibTex) == false)
+            {
+                string bibFileName = Path.GetFileName(lastBibTex);
+                if (string.IsNullOrWhiteSpace(bibFileName) == false)
+                {
+                    title += " - " + bibFileName;
+                }
+            }
+
+            Text = title;
+        }
+
+        private void SetCurrentBibTex(string filePath)
+        {
+            Program.AppSettings.Data.LastBibTex = string.IsNullOrWhiteSpace(filePath) ? null : filePath;
+            UpdateWindowTitle();
+        }
+
+        private string GetDefaultPdfExportDirectory()
+        {
+            string lastBibTex = Program.AppSettings.Data.LastBibTex;
+            if (string.IsNullOrWhiteSpace(lastBibTex) == false)
+            {
+                string bibDirectory = Path.GetDirectoryName(lastBibTex);
+                if (string.IsNullOrWhiteSpace(bibDirectory) == false)
+                    return bibDirectory;
+            }
+
+            if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.PdfFolder) == false)
+                return Program.AppSettings.Data.PdfFolder;
+
+            if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.LastDirectory) == false)
+                return Program.AppSettings.Data.LastDirectory;
+
+            return Application.StartupPath;
+        }
+
+        private void InitializeRecordContextMenu()
+        {
+            _contextEditMenuItem = new ToolStripMenuItem("Edit");
+            _contextEditMenuItem.Click += (sender, e) => allowEditToolStripMenuItem_Click(sender, e);
+
+            _contextCopyMenuItem = new ToolStripMenuItem("Copy");
+            _contextCopyMenuItem.Click += (sender, e) => CopySelectedRecordsToClipboard();
+
+            _contextCutMenuItem = new ToolStripMenuItem("Cut");
+            _contextCutMenuItem.Click += (sender, e) => CutSelectedRecordsToClipboard();
+
+            _contextPasteMenuItem = new ToolStripMenuItem("Paste");
+            _contextPasteMenuItem.Click += (sender, e) => PasteRecordsFromClipboard();
+
+            _contextDuplicateMenuItem = new ToolStripMenuItem("Duplicate");
+            _contextDuplicateMenuItem.Click += (sender, e) => DuplicateSelectedRecords();
+
+            _recordContextMenu = new ContextMenuStrip();
+            _recordContextMenu.Items.AddRange(new ToolStripItem[]
+            {
+                _contextEditMenuItem,
+                new ToolStripSeparator(),
+                _contextCopyMenuItem,
+                _contextCutMenuItem,
+                _contextPasteMenuItem,
+                _contextDuplicateMenuItem
+            });
+            _recordContextMenu.Opening += recordContextMenu_Opening;
+        }
+
+        private void recordContextMenu_Opening(object sender, CancelEventArgs e)
+        {
+            bool hasSelection = GetSelectedOrdered().Length > 0;
+
+            _contextEditMenuItem.Checked = allowEditToolStripMenuItem.Checked;
+            _contextCopyMenuItem.Enabled = hasSelection;
+            _contextCutMenuItem.Enabled = hasSelection;
+            _contextPasteMenuItem.Enabled = Clipboard.ContainsText() && string.IsNullOrWhiteSpace(Clipboard.GetText()) == false;
+            _contextDuplicateMenuItem.Enabled = hasSelection;
+        }
+
+        private void dataGridView1_CellMouseDown(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right || e.RowIndex < 0)
+                return;
+
+            if (e.RowIndex >= dataGridView1.Rows.Count)
+                return;
+
+            var row = dataGridView1.Rows[e.RowIndex];
+            if (row.Selected == false)
+            {
+                dataGridView1.ClearSelection();
+                row.Selected = true;
+            }
+
+            if (e.ColumnIndex >= 0)
+                dataGridView1.CurrentCell = row.Cells[e.ColumnIndex];
+
+            Rectangle cellBounds = dataGridView1.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, false);
+            Point menuLocation = new Point(cellBounds.Left + e.X, cellBounds.Top + e.Y);
+            _recordContextMenu?.Show(dataGridView1, menuLocation);
+        }
+
+        private void dataGridView1_CellMouseDoubleClick(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Left || e.RowIndex < 0)
+                return;
+
+            var entry = GetEntryFromRowIndex(e.RowIndex);
+            if (entry == null)
+                return;
+
+            try
+            {
+                OpenPdfOrPromptManualPair(entry);
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
+        private BibtexEntry GetEntryFromRowIndex(int rowIndex)
+        {
+            if (rowIndex < 0 || rowIndex >= dataGridView1.Rows.Count)
+                return null;
+
+            var row = dataGridView1.Rows[rowIndex];
+            if (row?.DataBoundItem is DataRowView drv && drv.Row != null)
+                return drv.Row["Entry"] as BibtexEntry;
+
+            return null;
         }
 
         private void LoadData(BibtexEntry[] entries, string search = "")
@@ -164,6 +324,7 @@ namespace ScientificReviews.Forms
                     if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(folderDialog.SelectedPath))
                     {
                         Program.AppSettings.Data.LastDirectory = folderDialog.SelectedPath; 
+                        SetCurrentBibTex(null);
                         await Task.Run(() =>
                         {                            
                             string[] files = Directory.GetFiles(folderDialog.SelectedPath, "*.bib", SearchOption.AllDirectories);
@@ -532,6 +693,40 @@ namespace ScientificReviews.Forms
         private void btnPasteRecord_Click(object sender, EventArgs e)
         {
             PasteRecordsFromClipboard();
+        }
+
+        private void DuplicateSelectedRecords()
+        {
+            try
+            {
+                var selectedEntries = GetSelectedOrdered();
+                if (selectedEntries.Length == 0)
+                {
+                    lblStatus.Text = "No records selected.";
+                    return;
+                }
+
+                var duplicates = selectedEntries
+                    .Select(entry => entry?.DeepClone())
+                    .Where(entry => entry != null)
+                    .ToArray();
+
+                if (duplicates.Length == 0)
+                {
+                    lblStatus.Text = "No records duplicated.";
+                    return;
+                }
+
+                entries.AddRange(duplicates);
+                LoadData(entries.ToArray(), txtSearch.Text);
+                SelectEntriesInGrid(duplicates);
+                Changed();
+                lblStatus.Text = $"Duplicated {duplicates.Length} record(s).";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
         }
 
         private void SelectEntriesInGrid(IEnumerable<BibtexEntry> selectedEntries)
@@ -982,7 +1177,10 @@ namespace ScientificReviews.Forms
                 {
                     CheckPathExists = true,
                     CheckFileExists = true,
-                    Filter = "Bibtex database *.bib|*.bib"
+                    Filter = "Bibtex database *.bib|*.bib",
+                    InitialDirectory = string.IsNullOrWhiteSpace(Program.AppSettings.Data.LastBibTex)
+                        ? Program.AppSettings.Data.LastDirectory
+                        : Path.GetDirectoryName(Program.AppSettings.Data.LastBibTex)
                 };
                 if (ofd.ShowDialog(this) == DialogResult.OK)
                 {
@@ -992,6 +1190,8 @@ namespace ScientificReviews.Forms
                         BibtexParser parser = new BibtexParser();
                         entries.AddRange(parser.ParseFile(File.ReadAllText(fileName)));
                     });
+                    Program.AppSettings.Data.LastDirectory = Path.GetDirectoryName(fileName);
+                    SetCurrentBibTex(fileName);
                     LoadData(entries.ToArray());
                     Changed();
                 }
@@ -1449,7 +1649,10 @@ namespace ScientificReviews.Forms
 
         private string FindStoredPdfFile(BibtexEntry entry)
         {
-            string storedValue = GetTagValueIgnoreCase(entry, "pdf_file");
+            string storedValue = GetTagValueIgnoreCase(entry, "path_to_pdf");
+            if (string.IsNullOrWhiteSpace(storedValue))
+                storedValue = GetTagValueIgnoreCase(entry, "pdf_file");
+
             if (string.IsNullOrWhiteSpace(storedValue))
                 return null;
 
@@ -1692,33 +1895,25 @@ namespace ScientificReviews.Forms
             if (entry == null || string.IsNullOrWhiteSpace(pdfFilePath))
                 return;
 
+            string fullPdfPath = Path.GetFullPath(pdfFilePath);
+            SetSingleTagValue(entry, "path_to_pdf", fullPdfPath);
             SetSingleTagValue(entry, "pdf_file", GetPdfStorageValue(pdfFilePath));
             SetSingleTagValue(entry, "has_pdf", "yes");
         }
 
+        private void ClearPdfAssignment(BibtexEntry entry)
+        {
+            if (entry == null)
+                return;
+
+            RemoveAllTagsByKey(entry, "path_to_pdf");
+            RemoveAllTagsByKey(entry, "pdf_file");
+            UpdateHasPdfTag(entry, false);
+        }
+
         private string GetPdfStorageValue(string pdfFilePath)
         {
-            string pdfFolder = Program.AppSettings.Data.PdfFolder;
-            if (string.IsNullOrWhiteSpace(pdfFolder))
-                return pdfFilePath;
-
-            try
-            {
-                string folderFullPath = EnsureTrailingSeparator(Path.GetFullPath(pdfFolder));
-                string fileFullPath = Path.GetFullPath(pdfFilePath);
-
-                if (fileFullPath.StartsWith(folderFullPath, StringComparison.OrdinalIgnoreCase))
-                {
-                    Uri folderUri = new Uri(folderFullPath);
-                    Uri fileUri = new Uri(fileFullPath);
-                    return Uri.UnescapeDataString(folderUri.MakeRelativeUri(fileUri).ToString()).Replace('/', Path.DirectorySeparatorChar);
-                }
-            }
-            catch
-            {
-            }
-
-            return pdfFilePath;
+            return Path.GetFileName(pdfFilePath);
         }
 
         private string EnsureTrailingSeparator(string path)
@@ -1737,16 +1932,90 @@ namespace ScientificReviews.Forms
             SetSingleTagValue(entry, "has_pdf", hasPdf ? "yes" : "no");
         }
 
-        private void OpenPdf(BibtexEntry entry)
+        private void OpenPdf(string pdfPath)
         {
-            if (entry == null || entry.Tags == null)
+            if (string.IsNullOrWhiteSpace(pdfPath))
                 return;
                        
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                FileName = GetPdfFileName(entry),
+                FileName = pdfPath,
                 UseShellExecute = true
             });
+        }
+
+        private void OpenPdf(BibtexEntry entry)
+        {
+            if (entry == null || entry.Tags == null)
+                return;
+
+            OpenPdf(GetPdfFileName(entry));
+        }
+
+        private string GetManualPdfPairInitialDirectory(BibtexEntry entry)
+        {
+            string existingPdf = FindStoredPdfFile(entry);
+            if (string.IsNullOrWhiteSpace(existingPdf) == false)
+            {
+                string existingDirectory = Path.GetDirectoryName(existingPdf);
+                if (string.IsNullOrWhiteSpace(existingDirectory) == false && Directory.Exists(existingDirectory))
+                    return existingDirectory;
+            }
+
+            if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.PdfFolder) == false && Directory.Exists(Program.AppSettings.Data.PdfFolder))
+                return Program.AppSettings.Data.PdfFolder;
+
+            string defaultExportDirectory = GetDefaultPdfExportDirectory();
+            if (string.IsNullOrWhiteSpace(defaultExportDirectory) == false && Directory.Exists(defaultExportDirectory))
+                return defaultExportDirectory;
+
+            return Application.StartupPath;
+        }
+
+        private bool PromptManualPdfPair(BibtexEntry entry, bool openAfterPair)
+        {
+            if (entry == null)
+                return false;
+
+            using (var openFileDialog = new OpenFileDialog())
+            {
+                openFileDialog.CheckFileExists = true;
+                openFileDialog.CheckPathExists = true;
+                openFileDialog.Filter = "PDF files (*.pdf)|*.pdf";
+                openFileDialog.Title = "Select PDF for record";
+                openFileDialog.InitialDirectory = GetManualPdfPairInitialDirectory(entry);
+
+                if (openFileDialog.ShowDialog(this) != DialogResult.OK)
+                    return false;
+
+                AssignPdfToEntry(entry, openFileDialog.FileName);
+                LoadData(entries.ToArray(), txtSearch.Text);
+                SelectEntriesInGrid(new[] { entry });
+                Changed();
+                lblStatus.Text = "PDF paired manually.";
+
+                if (openAfterPair)
+                {
+                    OpenPdf(openFileDialog.FileName);
+                }
+
+                return true;
+            }
+        }
+
+        private void OpenPdfOrPromptManualPair(BibtexEntry entry)
+        {
+            if (entry == null)
+                return;
+
+            string pdfPath = FindPdfFile(entry);
+            if (string.IsNullOrWhiteSpace(pdfPath) == false)
+            {
+                OpenPdf(pdfPath);
+                return;
+            }
+
+            PromptManualPdfPair(entry, true);
         }
 
         private void btnGoogle_Click(object sender, EventArgs e)
@@ -1784,7 +2053,7 @@ namespace ScientificReviews.Forms
                         var entry = (BibtexEntry)drv.Row["Entry"];
                         if (entry != null)
                         {
-                            OpenPdf(entry);
+                            OpenPdfOrPromptManualPair(entry);
                         }
                     }
                 }
@@ -1798,6 +2067,7 @@ namespace ScientificReviews.Forms
         private void clearToolStripMenuItem_Click(object sender, EventArgs e)
         {
             entries = new List<BibtexEntry>();
+            SetCurrentBibTex(null);
             LoadData(entries.ToArray());
             Changed();
         }
@@ -1934,8 +2204,7 @@ namespace ScientificReviews.Forms
                     {
                         foreach (var entry in entries)
                         {
-                            RemoveAllTagsByKey(entry, "pdf_file");
-                            UpdateHasPdfTag(entry, false);
+                            ClearPdfAssignment(entry);
                         }
 
                         noPdfsFound = true;
@@ -1951,7 +2220,7 @@ namespace ScientificReviews.Forms
                         string storedPdf = FindStoredPdfFile(entry);
                         if (string.IsNullOrWhiteSpace(storedPdf))
                         {
-                            RemoveAllTagsByKey(entry, "pdf_file");
+                            ClearPdfAssignment(entry);
                             continue;
                         }
 
@@ -1963,7 +2232,7 @@ namespace ScientificReviews.Forms
                         }
                         else
                         {
-                            RemoveAllTagsByKey(entry, "pdf_file");
+                            ClearPdfAssignment(entry);
                         }
                     }
 
@@ -2028,7 +2297,8 @@ namespace ScientificReviews.Forms
                         bool hasPdf = pairedEntries.Contains(entry);
                         if (hasPdf == false)
                         {
-                            RemoveAllTagsByKey(entry, "pdf_file");
+                            ClearPdfAssignment(entry);
+                            continue;
                         }
 
                         UpdateHasPdfTag(entry, hasPdf);
@@ -2064,66 +2334,152 @@ namespace ScientificReviews.Forms
                     return;
                 }
 
-                using (var form = new ExportPdfsForm(Program.AppSettings.Data.PdfFolder, dataGridView1.SelectedRows.Count > 0))
+                using (var form = new ExportPdfsForm(GetDefaultPdfExportDirectory(), dataGridView1.SelectedRows.Count > 0, RunPdfExportAsync))
                 {
-                    if (form.ShowDialog(this) != DialogResult.OK)
-                        return;
-
-                    var toExport = form.ExportSelectedOnly ? GetSelected() : entries.ToArray();
-                    if (toExport.Length == 0)
-                    {
-                        lblStatus.Text = "No records selected for export.";
-                        return;
-                    }
-
-                    Directory.CreateDirectory(form.OutputDirectory);
-
-                    int exported = 0;
-                    int skipped = 0;
-                    int injected = 0;
-
-                    foreach (var entry in toExport)
-                    {
-                        string sourcePdf;
-                        try
-                        {
-                            sourcePdf = GetPdfFileName(entry);
-                        }
-                        catch
-                        {
-                            skipped++;
-                            continue;
-                        }
-
-                        string baseFileName = BuildExportPdfBaseName(entry, form.FileNameMode, form.CustomPattern);
-                        string destination = BuildExportDestinationPath(form.OutputDirectory, baseFileName, sourcePdf);
-                        bool isSameFile = string.Equals(
-                            Path.GetFullPath(sourcePdf),
-                            Path.GetFullPath(destination),
-                            StringComparison.OrdinalIgnoreCase);
-
-                        if (!isSameFile)
-                        {
-                            File.Copy(sourcePdf, destination, false);
-                        }
-
-                        string doi = GetTagValueIgnoreCase(entry, "doi");
-                        if (form.InjectDoiMetadata && string.IsNullOrWhiteSpace(doi) == false)
-                        {
-                            InjectDoiIntoPdfMetadata(destination, doi);
-                            injected++;
-                        }
-
-                        exported++;
-                    }
-
-                    lblStatus.Text = $"Exported {exported} PDF(s), skipped {skipped}, DOI injected into {injected}.";
+                    form.ShowDialog(this);
                 }
             }
             catch (Exception ex)
             {
                 lblStatus.Text = ex.Message;
             }
+        }
+
+        private async Task<ExportPdfsRunResult> RunPdfExportAsync(ExportPdfsRunOptions options, IProgress<ExportPdfsProgress> progress, CancellationToken cancellationToken)
+        {
+            if (options == null)
+                throw new ArgumentNullException(nameof(options));
+
+            var toExport = options.ExportSelectedOnly ? GetSelected() : entries.ToArray();
+            if (toExport.Length == 0)
+                throw new InvalidOperationException("No records selected for export.");
+
+            lblStatus.Text = $"Exporting PDFs using {GetConfiguredThreadCount()} thread(s)...";
+
+            ExportPdfsRunResult result = await Task.Run(() =>
+            {
+                int total = toExport.Length;
+                int completed = 0;
+                int exported = 0;
+                int skipped = 0;
+                int injected = 0;
+                string exportDirectory = options.PackToFolder
+                    ? Path.Combine(options.OutputDirectory, "export")
+                    : options.OutputDirectory;
+
+                try
+                {
+                    Directory.CreateDirectory(exportDirectory);
+
+                    var pdfFiles = GetPdfFiles();
+
+                    var jobs = new List<PdfExportJob>();
+                    var reservedDestinations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                    progress?.Report(new ExportPdfsProgress
+                    {
+                        Total = total,
+                        Completed = 0,
+                        Exported = 0,
+                        Skipped = 0,
+                        Injected = 0,
+                        StatusText = "Preparing export jobs..."
+                    });
+
+                    foreach (var entry in toExport)
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        string sourcePdf = FindPdfFile(entry, pdfFiles);
+                        if (string.IsNullOrWhiteSpace(sourcePdf))
+                        {
+                            int finishedSkipped = Interlocked.Increment(ref skipped);
+                            int finishedCount = Interlocked.Increment(ref completed);
+                            progress?.Report(new ExportPdfsProgress
+                            {
+                                Total = total,
+                                Completed = finishedCount,
+                                Exported = exported,
+                                Skipped = finishedSkipped,
+                                Injected = injected,
+                                StatusText = $"Preparing export... {finishedCount}/{total}"
+                            });
+                            continue;
+                        }
+
+                        string baseFileName = BuildExportPdfBaseName(entry, options.FileNameMode, options.CustomPattern);
+                        string destination = BuildReservedExportDestinationPath(exportDirectory, baseFileName, sourcePdf, reservedDestinations);
+                        jobs.Add(new PdfExportJob
+                        {
+                            SourcePdfPath = sourcePdf,
+                            DestinationPath = destination,
+                            Doi = GetTagValueIgnoreCase(entry, "doi"),
+                            InjectDoiMetadata = options.InjectDoiMetadata
+                        });
+                    }
+
+                    Parallel.ForEach(jobs, CreateParallelOptions(cancellationToken), job =>
+                    {
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        bool isSameFile = string.Equals(
+                            Path.GetFullPath(job.SourcePdfPath),
+                            Path.GetFullPath(job.DestinationPath),
+                            StringComparison.OrdinalIgnoreCase);
+
+                        if (!isSameFile)
+                        {
+                            File.Copy(job.SourcePdfPath, job.DestinationPath, false);
+                        }
+
+                        if (job.InjectDoiMetadata && string.IsNullOrWhiteSpace(job.Doi) == false)
+                        {
+                            InjectDoiIntoPdfMetadata(job.DestinationPath, job.Doi);
+                            Interlocked.Increment(ref injected);
+                        }
+
+                        int finishedExported = Interlocked.Increment(ref exported);
+                        int finishedCount = Interlocked.Increment(ref completed);
+                        progress?.Report(new ExportPdfsProgress
+                        {
+                            Total = total,
+                            Completed = finishedCount,
+                            Exported = finishedExported,
+                            Skipped = skipped,
+                            Injected = injected,
+                            StatusText = $"Exporting PDFs... {finishedCount}/{total}"
+                        });
+                    });
+
+                    return new ExportPdfsRunResult
+                    {
+                        Total = total,
+                        Completed = completed,
+                        Exported = exported,
+                        Skipped = skipped,
+                        Injected = injected,
+                        Cancelled = false
+                    };
+                }
+                catch (OperationCanceledException)
+                {
+                    return new ExportPdfsRunResult
+                    {
+                        Total = total,
+                        Completed = completed,
+                        Exported = exported,
+                        Skipped = skipped,
+                        Injected = injected,
+                        Cancelled = true
+                    };
+                }
+            });
+
+            lblStatus.Text = result.Cancelled
+                ? $"PDF export cancelled after {result.Completed}/{result.Total}."
+                : $"Exported {result.Exported} PDF(s), skipped {result.Skipped}, DOI injected into {result.Injected}.";
+
+            return result;
         }
 
         private string BuildExportPdfBaseName(BibtexEntry entry, PdfExportFileNameMode mode, string customPattern)
@@ -2196,6 +2552,28 @@ namespace ScientificReviews.Forms
                 string candidate = Path.Combine(outputDirectory, $"{baseFileName}_{index}.pdf");
                 if (File.Exists(candidate) == false)
                     return candidate;
+            }
+        }
+
+        private string BuildReservedExportDestinationPath(string outputDirectory, string baseFileName, string sourcePdfPath, HashSet<string> reservedDestinations)
+        {
+            string sourceFullPath = Path.GetFullPath(sourcePdfPath);
+
+            for (int index = 1; ; index++)
+            {
+                string candidateFileName = index == 1 ? baseFileName + ".pdf" : $"{baseFileName}_{index}.pdf";
+                string candidate = Path.Combine(outputDirectory, candidateFileName);
+                string candidateFullPath = Path.GetFullPath(candidate);
+
+                bool isSameFile = string.Equals(candidateFullPath, sourceFullPath, StringComparison.OrdinalIgnoreCase);
+                bool exists = File.Exists(candidateFullPath);
+                bool alreadyReserved = reservedDestinations.Contains(candidateFullPath);
+
+                if ((isSameFile || exists == false) && alreadyReserved == false)
+                {
+                    reservedDestinations.Add(candidateFullPath);
+                    return candidateFullPath;
+                }
             }
         }
 
@@ -2430,6 +2808,8 @@ namespace ScientificReviews.Forms
         {
             try
             {
+                UpdateWindowTitle();
+
                 // pokud už něco máš načtené (např. z předchozí logiky), tak nepřepisuj
                 if (entries != null && entries.Count > 0)
                     return;
