@@ -33,6 +33,18 @@ namespace ScientificReviews
         [Description("If true, PDFs are searched in Pdf Folder including all subfolders")]
         public bool RecursivePdfSearch { get; set; } = false;
 
+        [Browsable(true)]
+        [Category(GENERAL_CAT)]
+        [DisplayName("PDF auto-pair threshold (%)")]
+        [Description("Similarity percentage used by Auto-pair with PDFs")]
+        public int PdfAutoPairThresholdPercent { get; set; } = 95;
+
+        [Browsable(true)]
+        [Category(GENERAL_CAT)]
+        [DisplayName("Threads")]
+        [Description("Maximum number of threads used by multithreaded operations")]
+        public int Threads { get; set; } = 4;
+
 
         [Browsable(true)]
         [Category(BACKUP_CAT)]

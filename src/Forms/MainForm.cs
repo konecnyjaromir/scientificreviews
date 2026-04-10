@@ -4,6 +4,7 @@ using ScientificReviews.Helpers;
 using ScientificReviews.JCR;
 using ScientificReviews.JCR.Dto;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
@@ -37,6 +38,35 @@ namespace ScientificReviews.Forms
 
         private CancellationTokenSource _changedCts;
         private readonly SemaphoreSlim _autosaveLock = new SemaphoreSlim(1, 1);
+
+        private sealed class PdfArchiveItem
+        {
+            public string FilePath { get; set; }
+            public string FileNameWithoutExtension { get; set; }
+            public string StandardizedName { get; set; }
+            public Dictionary<string, int> Tokens { get; set; }
+            public HashSet<string> Keywords { get; set; }
+        }
+
+        private sealed class PdfSimilarityCandidate
+        {
+            public BibtexEntry Entry { get; set; }
+            public PdfArchiveItem Pdf { get; set; }
+            public double Score { get; set; }
+        }
+
+        private int GetConfiguredThreadCount()
+        {
+            return Math.Max(1, Program.AppSettings.Data.Threads);
+        }
+
+        private ParallelOptions CreateParallelOptions()
+        {
+            return new ParallelOptions
+            {
+                MaxDegreeOfParallelism = GetConfiguredThreadCount()
+            };
+        }
 
         private void LoadData(BibtexEntry[] entries, string search = "")
         {
@@ -429,6 +459,11 @@ namespace ScientificReviews.Forms
             }
         }
 
+        private void btnCopyRecord_Click(object sender, EventArgs e)
+        {
+            CopySelectedRecordsToClipboard();
+        }
+
         private void CutSelectedRecordsToClipboard()
         {
             var selectedCount = GetSelectedOrdered().Length;
@@ -450,6 +485,11 @@ namespace ScientificReviews.Forms
             {
                 lblStatus.Text = ex.Message;
             }
+        }
+
+        private void btnCutRecord_Click(object sender, EventArgs e)
+        {
+            CutSelectedRecordsToClipboard();
         }
 
         private void PasteRecordsFromClipboard()
@@ -487,6 +527,11 @@ namespace ScientificReviews.Forms
             {
                 lblStatus.Text = ex.Message;
             }
+        }
+
+        private void btnPasteRecord_Click(object sender, EventArgs e)
+        {
+            PasteRecordsFromClipboard();
         }
 
         private void SelectEntriesInGrid(IEnumerable<BibtexEntry> selectedEntries)
@@ -873,6 +918,30 @@ namespace ScientificReviews.Forms
             }
 
             entry.Tags = updatedTags.ToArray();
+        }
+
+        private string GetTagValueIgnoreCase(BibtexEntry entry, string key)
+        {
+            if (entry?.Tags == null || string.IsNullOrWhiteSpace(key))
+                return null;
+
+            foreach (var tag in entry.Tags)
+            {
+                if (tag != null && string.Equals(tag.Key, key, StringComparison.OrdinalIgnoreCase))
+                    return tag.Value;
+            }
+
+            return null;
+        }
+
+        private void RemoveAllTagsByKey(BibtexEntry entry, string key)
+        {
+            if (entry?.Tags == null || string.IsNullOrWhiteSpace(key))
+                return;
+
+            entry.Tags = entry.Tags
+                .Where(tag => tag != null && string.Equals(tag.Key, key, StringComparison.OrdinalIgnoreCase) == false)
+                .ToArray();
         }
 
         private int RemoveDuplicateTags(BibtexEntry entry)
@@ -1367,14 +1436,47 @@ namespace ScientificReviews.Forms
             if (entry == null)
                 return null;
 
+            string storedPdf = FindStoredPdfFile(entry);
+            if (string.IsNullOrWhiteSpace(storedPdf) == false)
+                return storedPdf;
+
             pdfFiles = pdfFiles ?? GetPdfFiles();
             if (pdfFiles.Length == 0)
+                return null;
+
+            return FindDirectPdfMatch(entry, pdfFiles);
+        }
+
+        private string FindStoredPdfFile(BibtexEntry entry)
+        {
+            string storedValue = GetTagValueIgnoreCase(entry, "pdf_file");
+            if (string.IsNullOrWhiteSpace(storedValue))
+                return null;
+
+            string candidatePath = storedValue;
+            if (!Path.IsPathRooted(candidatePath))
+            {
+                string pdfFolder = Program.AppSettings.Data.PdfFolder;
+                if (string.IsNullOrWhiteSpace(pdfFolder))
+                    return null;
+
+                candidatePath = Path.Combine(pdfFolder, storedValue);
+            }
+
+            candidatePath = Path.GetFullPath(candidatePath);
+            return File.Exists(candidatePath) ? candidatePath : null;
+        }
+
+        private string FindDirectPdfMatch(BibtexEntry entry, IEnumerable<string> pdfFiles)
+        {
+            var files = (pdfFiles ?? Enumerable.Empty<string>()).ToArray();
+            if (files.Length == 0)
                 return null;
 
             string key = (entry.Key ?? string.Empty).Trim();
             if (!string.IsNullOrWhiteSpace(key))
             {
-                var keyMatch = pdfFiles.FirstOrDefault(file =>
+                var keyMatch = files.FirstOrDefault(file =>
                     Path.GetFileNameWithoutExtension(file)
                         .IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0);
 
@@ -1382,24 +1484,14 @@ namespace ScientificReviews.Forms
                     return keyMatch;
             }
 
-            string titleLower = ((entry.GetTagValue("title") ?? string.Empty).Trim()).ToLowerInvariant();
+            string titleLower = GetNormalizedTitleForExactMatch(entry);
             if (!string.IsNullOrWhiteSpace(titleLower))
             {
-                var titleMatch = pdfFiles.FirstOrDefault(file =>
-                    string.Equals(Path.GetFileNameWithoutExtension(file), titleLower, StringComparison.Ordinal));
+                var titleMatch = files.FirstOrDefault(file =>
+                    string.Equals(Path.GetFileNameWithoutExtension(file).Trim().ToLowerInvariant(), titleLower, StringComparison.Ordinal));
 
                 if (!string.IsNullOrWhiteSpace(titleMatch))
                     return titleMatch;
-            }
-
-            string entryDoi = NormalizeDoi(entry.GetTagValue("doi"));
-            if (!string.IsNullOrWhiteSpace(entryDoi))
-            {
-                foreach (var file in pdfFiles)
-                {
-                    if (PdfContainsMatchingDoiMetadata(file, entryDoi))
-                        return file;
-                }
             }
 
             return null;
@@ -1417,80 +1509,35 @@ namespace ScientificReviews.Forms
 
             return Directory
                 .GetFiles(pdfFolder, "*.pdf", searchOption)
+                .Where(file => IsPdfFileAllowed(file, pdfFolder))
                 .OrderBy(Path.GetFileName, StringComparer.OrdinalIgnoreCase)
                 .ToArray();
         }
 
-        private bool PdfContainsMatchingDoiMetadata(string fileName, string entryDoi)
+        private bool IsPdfFileAllowed(string filePath, string rootPdfFolder)
         {
-            if (string.IsNullOrWhiteSpace(fileName) || string.IsNullOrWhiteSpace(entryDoi))
+            if (string.IsNullOrWhiteSpace(filePath))
                 return false;
 
-            try
+            string rootFullPath = Path.GetFullPath(rootPdfFolder);
+            var directory = new DirectoryInfo(Path.GetDirectoryName(filePath) ?? rootFullPath);
+
+            while (directory != null && string.Equals(directory.FullName, rootFullPath, StringComparison.OrdinalIgnoreCase) == false)
             {
-                foreach (var doi in ExtractPdfMetadataDois(fileName))
-                {
-                    if (string.Equals(NormalizeDoi(doi), entryDoi, StringComparison.OrdinalIgnoreCase))
-                        return true;
-                }
-            }
-            catch
-            {
-                return false;
+                if (IsIgnoredPdfFolderName(directory.Name))
+                    return false;
+
+                directory = directory.Parent;
             }
 
-            return false;
+            return true;
         }
 
-        private IEnumerable<string> ExtractPdfMetadataDois(string fileName)
+        private bool IsIgnoredPdfFolderName(string folderName)
         {
-            byte[] data = File.ReadAllBytes(fileName);
-            string pdfText = Encoding.GetEncoding("ISO-8859-1").GetString(data);
-
-            var results = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            AddRegexMatches(results, pdfText, @"(?is)<prism:doi>\s*(?<doi>.*?)\s*</prism:doi>");
-            AddRegexMatches(results, pdfText, @"(?is)<pdfx:doi>\s*(?<doi>.*?)\s*</pdfx:doi>");
-            AddRegexMatches(results, pdfText, @"(?is)<dc:identifier>\s*(?:doi:\s*)?(?<doi>10\.\d{4,9}/[^<\s]+)\s*</dc:identifier>");
-            AddRegexMatches(results, pdfText, @"(?is)/DOI\s*\((?<doi>10\.\d{4,9}/[^)]*)\)");
-
-            foreach (Match match in Regex.Matches(pdfText, @"(?is)/DOI\s*<(?<hex>[0-9A-F]+)>"))
-            {
-                string decoded = DecodePdfHexString(match.Groups["hex"].Value);
-                string normalized = NormalizeDoi(decoded);
-                if (!string.IsNullOrWhiteSpace(normalized))
-                    results.Add(normalized);
-            }
-
-            return results;
-        }
-
-        private void AddRegexMatches(HashSet<string> results, string pdfText, string pattern)
-        {
-            foreach (Match match in Regex.Matches(pdfText, pattern))
-            {
-                string normalized = NormalizeDoi(match.Groups["doi"].Value);
-                if (!string.IsNullOrWhiteSpace(normalized))
-                    results.Add(normalized);
-            }
-        }
-
-        private string DecodePdfHexString(string hex)
-        {
-            if (string.IsNullOrWhiteSpace(hex))
-                return null;
-
-            hex = Regex.Replace(hex, @"\s+", string.Empty);
-            if (hex.Length % 2 == 1)
-                hex += "0";
-
-            byte[] bytes = new byte[hex.Length / 2];
-            for (int i = 0; i < bytes.Length; i++)
-            {
-                bytes[i] = Convert.ToByte(hex.Substring(i * 2, 2), 16);
-            }
-
-            return Encoding.GetEncoding("ISO-8859-1").GetString(bytes);
+            return string.IsNullOrWhiteSpace(folderName) == false &&
+                folderName.StartsWith("__", StringComparison.Ordinal) &&
+                folderName.EndsWith("__", StringComparison.Ordinal);
         }
 
         private string NormalizeDoi(string doi)
@@ -1501,9 +1548,193 @@ namespace ScientificReviews.Forms
             string normalized = doi.Trim();
             normalized = Regex.Replace(normalized, @"^https?://(dx\.)?doi\.org/", string.Empty, RegexOptions.IgnoreCase);
             normalized = Regex.Replace(normalized, @"^doi:\s*", string.Empty, RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"^arxiv:\s*", string.Empty, RegexOptions.IgnoreCase);
             normalized = normalized.Trim().TrimEnd('/', '.', ',', ';');
 
             return normalized.ToLowerInvariant();
+        }
+
+        private string GetNormalizedTitleForExactMatch(BibtexEntry entry)
+        {
+            string title = GetTagValueIgnoreCase(entry, "title");
+            if (string.IsNullOrWhiteSpace(title))
+                return null;
+
+            return BibtexUtils.RemoveLatex(title).Trim().ToLowerInvariant();
+        }
+
+        private string GetStandardizedTitle(BibtexEntry entry)
+        {
+            string title = GetTagValueIgnoreCase(entry, "title");
+            return StandardizeText(BibtexUtils.RemoveLatex(title ?? string.Empty));
+        }
+
+        private PdfArchiveItem BuildPdfArchiveItem(string filePath)
+        {
+            string fileNameWithoutExtension = Path.GetFileNameWithoutExtension(filePath) ?? string.Empty;
+            string standardized = StandardizeText(fileNameWithoutExtension);
+
+            return new PdfArchiveItem
+            {
+                FilePath = filePath,
+                FileNameWithoutExtension = fileNameWithoutExtension,
+                StandardizedName = standardized,
+                Tokens = Tokenize(standardized),
+                Keywords = ExtractKeywords(standardized)
+            };
+        }
+
+        private string StandardizeText(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            string normalized = RemoveDiacritics(value).ToLowerInvariant();
+            normalized = normalized.Replace('_', ' ').Replace('-', ' ');
+            normalized = Regex.Replace(normalized, @"[^a-z0-9\s]", " ");
+            normalized = Regex.Replace(normalized, @"\s+", " ").Trim();
+            return normalized;
+        }
+
+        private string RemoveDiacritics(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return string.Empty;
+
+            string normalized = value.Normalize(NormalizationForm.FormD);
+            var builder = new StringBuilder(normalized.Length);
+            foreach (char c in normalized)
+            {
+                if (CharUnicodeInfo.GetUnicodeCategory(c) != UnicodeCategory.NonSpacingMark)
+                    builder.Append(c);
+            }
+
+            return builder.ToString().Normalize(NormalizationForm.FormC);
+        }
+
+        private Dictionary<string, int> Tokenize(string value)
+        {
+            var tokens = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            foreach (string token in (value ?? string.Empty).Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries))
+            {
+                if (tokens.ContainsKey(token))
+                    tokens[token]++;
+                else
+                    tokens[token] = 1;
+            }
+
+            return tokens;
+        }
+
+        private HashSet<string> ExtractKeywords(string standardizedText)
+        {
+            return new HashSet<string>(
+                (standardizedText ?? string.Empty)
+                    .Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Where(token => token.Length >= 4),
+                StringComparer.OrdinalIgnoreCase);
+        }
+
+        private double ComputeCosineSimilarity(Dictionary<string, int> left, Dictionary<string, int> right)
+        {
+            if (left == null || right == null || left.Count == 0 || right.Count == 0)
+                return 0d;
+
+            double dot = 0d;
+            foreach (var pair in left)
+            {
+                if (right.TryGetValue(pair.Key, out int rightValue))
+                {
+                    dot += pair.Value * rightValue;
+                }
+            }
+
+            double leftNorm = Math.Sqrt(left.Values.Sum(v => v * v));
+            double rightNorm = Math.Sqrt(right.Values.Sum(v => v * v));
+            if (leftNorm == 0d || rightNorm == 0d)
+                return 0d;
+
+            return dot / (leftNorm * rightNorm);
+        }
+
+        private double ComputeKeywordScore(HashSet<string> left, HashSet<string> right)
+        {
+            if (left == null || right == null || left.Count == 0 || right.Count == 0)
+                return 0d;
+
+            int intersection = left.Count(token => right.Contains(token));
+            int union = left.Count + right.Count - intersection;
+            if (union == 0)
+                return 0d;
+
+            return (double)intersection / union;
+        }
+
+        private double ComputeSimilarityScore(BibtexEntry entry, PdfArchiveItem pdf)
+        {
+            string standardizedTitle = GetStandardizedTitle(entry);
+            if (string.IsNullOrWhiteSpace(standardizedTitle) || pdf == null || string.IsNullOrWhiteSpace(pdf.StandardizedName))
+                return 0d;
+
+            if (string.Equals(standardizedTitle, pdf.StandardizedName, StringComparison.Ordinal))
+                return 1d;
+
+            var titleTokens = Tokenize(standardizedTitle);
+            var titleKeywords = ExtractKeywords(standardizedTitle);
+            double cosine = ComputeCosineSimilarity(titleTokens, pdf.Tokens);
+            double keywordScore = ComputeKeywordScore(titleKeywords, pdf.Keywords);
+
+            return Math.Min(1d, (cosine * 0.9d) + (keywordScore * 0.1d));
+        }
+
+        private void AssignPdfToEntry(BibtexEntry entry, string pdfFilePath)
+        {
+            if (entry == null || string.IsNullOrWhiteSpace(pdfFilePath))
+                return;
+
+            SetSingleTagValue(entry, "pdf_file", GetPdfStorageValue(pdfFilePath));
+            SetSingleTagValue(entry, "has_pdf", "yes");
+        }
+
+        private string GetPdfStorageValue(string pdfFilePath)
+        {
+            string pdfFolder = Program.AppSettings.Data.PdfFolder;
+            if (string.IsNullOrWhiteSpace(pdfFolder))
+                return pdfFilePath;
+
+            try
+            {
+                string folderFullPath = EnsureTrailingSeparator(Path.GetFullPath(pdfFolder));
+                string fileFullPath = Path.GetFullPath(pdfFilePath);
+
+                if (fileFullPath.StartsWith(folderFullPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    Uri folderUri = new Uri(folderFullPath);
+                    Uri fileUri = new Uri(fileFullPath);
+                    return Uri.UnescapeDataString(folderUri.MakeRelativeUri(fileUri).ToString()).Replace('/', Path.DirectorySeparatorChar);
+                }
+            }
+            catch
+            {
+            }
+
+            return pdfFilePath;
+        }
+
+        private string EnsureTrailingSeparator(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                return path;
+
+            if (!path.EndsWith(Path.DirectorySeparatorChar.ToString()) && !path.EndsWith(Path.AltDirectorySeparatorChar.ToString()))
+                return path + Path.DirectorySeparatorChar;
+
+            return path;
+        }
+
+        private void UpdateHasPdfTag(BibtexEntry entry, bool hasPdf)
+        {
+            SetSingleTagValue(entry, "has_pdf", hasPdf ? "yes" : "no");
         }
 
         private void OpenPdf(BibtexEntry entry)
@@ -1685,100 +1916,355 @@ namespace ScientificReviews.Forms
             await ExportDatabaseAsync(GetSelected());
         }
 
-        private void renameToolStripMenuItem_Click(object sender, EventArgs e)
+        private async void autoPairWithPdfsToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            foreach (var entry in entries)
-            {
-                if (entry == null || entry.Tags == null || string.IsNullOrWhiteSpace(entry.Key))
-                    continue;
-
-                string filename = FindPdfFile(entry);
-                if (string.IsNullOrWhiteSpace(filename))
-                    continue;
-
-                string filename2 = Path.Combine(Program.AppSettings.Data.PdfFolder, entry.Key + ".pdf");
-                if (string.Equals(filename, filename2, StringComparison.OrdinalIgnoreCase))
-                    continue;
-
-                if (File.Exists(filename2))
-                    continue;
-
-                File.Move(filename, filename2);
-
-            }
-        }
-
-        private void checkPdfToolStripMenuItem_Click(object sender, EventArgs e)
-        {
-            var pdfFiles = GetPdfFiles();
-            foreach (var entry in entries)
-            {
-
-                if (entry == null || entry.Tags == null)
-                    continue;
-
-                var haspdfTag = entry.Tags
-               .FirstOrDefault(t => string.Equals(t.Key, "has_pdf", StringComparison.OrdinalIgnoreCase));
-
-                if (haspdfTag == null)
-                {
-                    haspdfTag = new BibtexTag()
-                    {
-                        Key = "has_pdf"
-                    };
-                    var list = entry.Tags.ToList();
-                    list.Add(haspdfTag);
-                    entry.Tags = list.ToArray();
-                }
-
-
-                if (string.IsNullOrWhiteSpace(FindPdfFile(entry, pdfFiles)))
-                {
-                    haspdfTag.Value = "no";
-                }
-                else
-                {
-                    haspdfTag.Value = "yes";
-                }
-
-            }
-            LoadData(entries.ToArray());
-        }
-
-        private void exportSelectedPDFToolStripMenuItem_Click(object sender, EventArgs e)
-        {      
             try
             {
-                var toExport = GetSelected();
-                if (toExport.Length == 0)
-                    return;
-                lblStatus.Text = "Exporting...";
-                using (FolderBrowserDialog folderDialog = new FolderBrowserDialog()
+                lblStatus.Text = $"Auto-pairing PDFs using {GetConfiguredThreadCount()} thread(s)...";
+
+                int directMatches = 0;
+                int smartMatches = 0;
+                int unmatched = 0;
+                bool noPdfsFound = false;
+
+                await Task.Run(() =>
                 {
-                    SelectedPath = Program.AppSettings.Data.LastDirectory
-                })
-                {
-                    DialogResult result = folderDialog.ShowDialog(this);
-                    if (result == DialogResult.OK && !string.IsNullOrWhiteSpace(folderDialog.SelectedPath))
+                    string[] pdfFiles = GetPdfFiles();
+                    if (pdfFiles.Length == 0)
                     {
-                        foreach (var entry in toExport)
+                        foreach (var entry in entries)
                         {
-                            try
-                            {
-                                string fileName = GetPdfFileName(entry);
-                                string dest = Path.Combine(folderDialog.SelectedPath, entry.Key + ".pdf");
-                                File.Copy(fileName, dest);
-                            }
-                            catch { continue; }
+                            RemoveAllTagsByKey(entry, "pdf_file");
+                            UpdateHasPdfTag(entry, false);
+                        }
+
+                        noPdfsFound = true;
+                        return;
+                    }
+
+                    double threshold = Math.Max(0d, Math.Min(100d, Program.AppSettings.Data.PdfAutoPairThresholdPercent)) / 100d;
+                    var assignedFiles = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    var pairedEntries = new HashSet<BibtexEntry>();
+
+                    foreach (var entry in entries)
+                    {
+                        string storedPdf = FindStoredPdfFile(entry);
+                        if (string.IsNullOrWhiteSpace(storedPdf))
+                        {
+                            RemoveAllTagsByKey(entry, "pdf_file");
+                            continue;
+                        }
+
+                        if (assignedFiles.Add(storedPdf))
+                        {
+                            AssignPdfToEntry(entry, storedPdf);
+                            pairedEntries.Add(entry);
+                            directMatches++;
+                        }
+                        else
+                        {
+                            RemoveAllTagsByKey(entry, "pdf_file");
                         }
                     }
+
+                    foreach (var entry in entries.Where(item => pairedEntries.Contains(item) == false))
+                    {
+                        string directMatch = FindDirectPdfMatch(entry, pdfFiles.Where(file => assignedFiles.Contains(file) == false));
+                        if (string.IsNullOrWhiteSpace(directMatch))
+                            continue;
+
+                        AssignPdfToEntry(entry, directMatch);
+                        assignedFiles.Add(directMatch);
+                        pairedEntries.Add(entry);
+                        directMatches++;
+                    }
+
+                    var remainingEntries = entries.Where(item => pairedEntries.Contains(item) == false).ToList();
+                    var remainingPdfPaths = pdfFiles
+                        .Where(file => assignedFiles.Contains(file) == false)
+                        .ToArray();
+
+                    var remainingPdfsBag = new ConcurrentBag<PdfArchiveItem>();
+                    Parallel.ForEach(remainingPdfPaths, CreateParallelOptions(), file =>
+                    {
+                        remainingPdfsBag.Add(BuildPdfArchiveItem(file));
+                    });
+
+                    var remainingPdfs = remainingPdfsBag
+                        .OrderBy(item => item.FilePath, StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+                    var candidates = new ConcurrentBag<PdfSimilarityCandidate>();
+                    Parallel.ForEach(remainingEntries, CreateParallelOptions(), entry =>
+                    {
+                        foreach (var pdf in remainingPdfs)
+                        {
+                            double score = ComputeSimilarityScore(entry, pdf);
+                            if (score >= threshold)
+                            {
+                                candidates.Add(new PdfSimilarityCandidate
+                                {
+                                    Entry = entry,
+                                    Pdf = pdf,
+                                    Score = score
+                                });
+                            }
+                        }
+                    });
+
+                    foreach (var candidate in candidates.OrderByDescending(item => item.Score).ThenBy(item => item.Pdf.FilePath, StringComparer.OrdinalIgnoreCase))
+                    {
+                        if (pairedEntries.Contains(candidate.Entry) || assignedFiles.Contains(candidate.Pdf.FilePath))
+                            continue;
+
+                        AssignPdfToEntry(candidate.Entry, candidate.Pdf.FilePath);
+                        assignedFiles.Add(candidate.Pdf.FilePath);
+                        pairedEntries.Add(candidate.Entry);
+                        smartMatches++;
+                    }
+
+                    foreach (var entry in entries)
+                    {
+                        bool hasPdf = pairedEntries.Contains(entry);
+                        if (hasPdf == false)
+                        {
+                            RemoveAllTagsByKey(entry, "pdf_file");
+                        }
+
+                        UpdateHasPdfTag(entry, hasPdf);
+                    }
+
+                    unmatched = entries.Count - pairedEntries.Count;
+                });
+
+                LoadData(entries.ToArray(), txtSearch.Text);
+                Changed();
+
+                if (noPdfsFound)
+                {
+                    lblStatus.Text = "No PDFs found in Pdf Folder.";
+                    return;
                 }
-                lblStatus.Text = "Export PDF done.";
+
+                lblStatus.Text = $"Auto-pair finished using {GetConfiguredThreadCount()} thread(s). Direct: {directMatches}, smart: {smartMatches}, unmatched: {unmatched}.";
             }
             catch (Exception ex)
             {
                 lblStatus.Text = ex.Message;
             }
+        }
+
+        private void exportPdfsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                if (entries.Count == 0)
+                {
+                    lblStatus.Text = "No records available for export.";
+                    return;
+                }
+
+                using (var form = new ExportPdfsForm(Program.AppSettings.Data.PdfFolder, dataGridView1.SelectedRows.Count > 0))
+                {
+                    if (form.ShowDialog(this) != DialogResult.OK)
+                        return;
+
+                    var toExport = form.ExportSelectedOnly ? GetSelected() : entries.ToArray();
+                    if (toExport.Length == 0)
+                    {
+                        lblStatus.Text = "No records selected for export.";
+                        return;
+                    }
+
+                    Directory.CreateDirectory(form.OutputDirectory);
+
+                    int exported = 0;
+                    int skipped = 0;
+                    int injected = 0;
+
+                    foreach (var entry in toExport)
+                    {
+                        string sourcePdf;
+                        try
+                        {
+                            sourcePdf = GetPdfFileName(entry);
+                        }
+                        catch
+                        {
+                            skipped++;
+                            continue;
+                        }
+
+                        string baseFileName = BuildExportPdfBaseName(entry, form.FileNameMode, form.CustomPattern);
+                        string destination = BuildExportDestinationPath(form.OutputDirectory, baseFileName, sourcePdf);
+                        bool isSameFile = string.Equals(
+                            Path.GetFullPath(sourcePdf),
+                            Path.GetFullPath(destination),
+                            StringComparison.OrdinalIgnoreCase);
+
+                        if (!isSameFile)
+                        {
+                            File.Copy(sourcePdf, destination, false);
+                        }
+
+                        string doi = GetTagValueIgnoreCase(entry, "doi");
+                        if (form.InjectDoiMetadata && string.IsNullOrWhiteSpace(doi) == false)
+                        {
+                            InjectDoiIntoPdfMetadata(destination, doi);
+                            injected++;
+                        }
+
+                        exported++;
+                    }
+
+                    lblStatus.Text = $"Exported {exported} PDF(s), skipped {skipped}, DOI injected into {injected}.";
+                }
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
+        private string BuildExportPdfBaseName(BibtexEntry entry, PdfExportFileNameMode mode, string customPattern)
+        {
+            string pattern;
+            switch (mode)
+            {
+                case PdfExportFileNameMode.Key:
+                    pattern = "<key>";
+                    break;
+                case PdfExportFileNameMode.Custom:
+                    pattern = string.IsNullOrWhiteSpace(customPattern) ? "<key>" : customPattern;
+                    break;
+                default:
+                    pattern = "<key>_<title>";
+                    break;
+            }
+
+            string rendered = Regex.Replace(pattern, @"<(?<tag>[^>]+)>", match =>
+            {
+                string tagName = match.Groups["tag"].Value.Trim();
+                string value;
+                if (string.Equals(tagName, "key", StringComparison.OrdinalIgnoreCase))
+                    value = entry.Key;
+                else if (string.Equals(tagName, "type", StringComparison.OrdinalIgnoreCase))
+                    value = entry.Type;
+                else
+                    value = GetTagValueIgnoreCase(entry, tagName);
+
+                return SanitizeFileNamePart(BibtexUtils.RemoveLatex(value ?? string.Empty));
+            });
+
+            rendered = Regex.Replace(rendered, @"\s+", " ").Trim();
+            rendered = rendered.Trim(' ', '.', '_', '-');
+
+            if (string.IsNullOrWhiteSpace(rendered))
+                rendered = SanitizeFileNamePart(entry.Key);
+
+            if (string.IsNullOrWhiteSpace(rendered))
+                rendered = "record";
+
+            return rendered;
+        }
+
+        private string SanitizeFileNamePart(string value)
+        {
+            string sanitized = value ?? string.Empty;
+            foreach (char invalidChar in Path.GetInvalidFileNameChars())
+            {
+                sanitized = sanitized.Replace(invalidChar, '_');
+            }
+
+            sanitized = Regex.Replace(sanitized, @"\s+", " ").Trim();
+            return sanitized;
+        }
+
+        private string BuildExportDestinationPath(string outputDirectory, string baseFileName, string sourcePdfPath)
+        {
+            string destination = Path.Combine(outputDirectory, baseFileName + ".pdf");
+            string sourceFullPath = Path.GetFullPath(sourcePdfPath);
+
+            if (string.Equals(Path.GetFullPath(destination), sourceFullPath, StringComparison.OrdinalIgnoreCase))
+                return destination;
+
+            if (File.Exists(destination) == false)
+                return destination;
+
+            for (int index = 2; ; index++)
+            {
+                string candidate = Path.Combine(outputDirectory, $"{baseFileName}_{index}.pdf");
+                if (File.Exists(candidate) == false)
+                    return candidate;
+            }
+        }
+
+        private void InjectDoiIntoPdfMetadata(string fileName, string doi)
+        {
+            if (string.IsNullOrWhiteSpace(fileName) || string.IsNullOrWhiteSpace(doi))
+                return;
+
+            byte[] originalBytes = File.ReadAllBytes(fileName);
+            Encoding encoding = Encoding.GetEncoding("ISO-8859-1");
+            string pdfText = encoding.GetString(originalBytes);
+
+            Match trailerMatch = Regex.Matches(pdfText, @"trailer\s*<<(?<dict>.*?)>>\s*startxref\s*(?<xref>\d+)", RegexOptions.Singleline | RegexOptions.IgnoreCase)
+                .Cast<Match>()
+                .LastOrDefault();
+            if (trailerMatch == null)
+                return;
+
+            string trailerDict = trailerMatch.Groups["dict"].Value;
+            int prevXref = int.Parse(trailerMatch.Groups["xref"].Value, CultureInfo.InvariantCulture);
+
+            Match rootMatch = Regex.Match(trailerDict, @"/Root\s+(?<root>\d+\s+\d+\s+R)", RegexOptions.IgnoreCase);
+            Match sizeMatch = Regex.Match(trailerDict, @"/Size\s+(?<size>\d+)", RegexOptions.IgnoreCase);
+            Match infoMatch = Regex.Match(trailerDict, @"/Info\s+(?<info>\d+)\s+\d+\s+R", RegexOptions.IgnoreCase);
+            Match idMatch = Regex.Match(trailerDict, @"/ID\s*\[[^\]]+\]", RegexOptions.IgnoreCase);
+
+            if (!rootMatch.Success || !sizeMatch.Success)
+                return;
+
+            int newObjectNumber = int.Parse(sizeMatch.Groups["size"].Value, CultureInfo.InvariantCulture);
+            string existingInfoBody = string.Empty;
+            if (infoMatch.Success)
+            {
+                int infoObjectNumber = int.Parse(infoMatch.Groups["info"].Value, CultureInfo.InvariantCulture);
+                Match infoObjectMatch = Regex.Match(pdfText, $@"(?s)\b{infoObjectNumber}\s+0\s+obj\s*<<(.*?)>>\s*endobj");
+                if (infoObjectMatch.Success)
+                {
+                    existingInfoBody = infoObjectMatch.Groups[1].Value;
+                }
+            }
+
+            existingInfoBody = Regex.Replace(existingInfoBody, @"(?is)/DOI\s*(\((?:\\.|[^\\)])*\)|<[^>]*>)", string.Empty).Trim();
+
+            string escapedDoi = EscapePdfLiteralString(doi.Trim());
+            string infoObject = $"{newObjectNumber} 0 obj\n<<\n{existingInfoBody}\n/DOI ({escapedDoi})\n>>\nendobj\n";
+            int objectOffset = originalBytes.Length;
+            string xref = $"xref\n{newObjectNumber} 1\n{objectOffset:D10} 00000 n \n";
+            int xrefOffset = objectOffset + encoding.GetByteCount(infoObject);
+
+            string trailer = $"trailer\n<< /Size {newObjectNumber + 1} /Root {rootMatch.Groups["root"].Value} /Info {newObjectNumber} 0 R";
+            if (idMatch.Success)
+            {
+                trailer += " " + idMatch.Value;
+            }
+
+            trailer += $" /Prev {prevXref} >>\nstartxref\n{xrefOffset}\n%%EOF";
+
+            byte[] appendedBytes = encoding.GetBytes(infoObject + xref + trailer);
+            File.WriteAllBytes(fileName, originalBytes.Concat(appendedBytes).ToArray());
+        }
+
+        private string EscapePdfLiteralString(string value)
+        {
+            return (value ?? string.Empty)
+                .Replace("\\", "\\\\")
+                .Replace("(", "\\(")
+                .Replace(")", "\\)")
+                .Replace("\r", "\\r")
+                .Replace("\n", "\\n");
         }
 
         private void settingsToolStripMenuItem_Click(object sender, EventArgs e)
