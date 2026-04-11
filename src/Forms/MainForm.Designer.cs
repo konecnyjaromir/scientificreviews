@@ -203,7 +203,7 @@
             // 
             this.loadBibTexFolderToolStripMenuItem.Name = "loadBibTexFolderToolStripMenuItem";
             this.loadBibTexFolderToolStripMenuItem.Size = new System.Drawing.Size(239, 26);
-            this.loadBibTexFolderToolStripMenuItem.Text = "Add folfer";
+            this.loadBibTexFolderToolStripMenuItem.Text = "Add folder";
             this.loadBibTexFolderToolStripMenuItem.Click += new System.EventHandler(this.loadBibTexFolderToolStripMenuItem_Click);
             // 
             // clearToolStripMenuItem

@@ -32,13 +32,13 @@ namespace ScientificReviews.Forms
             if (entry == null || entry.Tags == null)
                 return;
 
-            BibtexTag dioTag = entry.Tags
+            BibtexTag doiTag = entry.Tags
                 .FirstOrDefault(t => string.Equals(t.Key, "doi", StringComparison.OrdinalIgnoreCase));
 
-            if (dioTag == null || string.IsNullOrWhiteSpace(dioTag.Value))
+            if (doiTag == null || string.IsNullOrWhiteSpace(doiTag.Value))
                 return;
 
-            string doiValue = dioTag.Value.Trim();
+            string doiValue = doiTag.Value.Trim();
             string normalizedDoi = NormalizeDoi(doiValue);
 
             if (IsClassicDoi(normalizedDoi))

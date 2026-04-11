@@ -1,6 +1,5 @@
 using ScientificReviews.Bibtex;
 using ScientificReviews.Helpers;
-using ScientificReviews.JCR.Dto;
 using ScientificReviews.Logs;
 using System;
 using System.Collections.Generic;

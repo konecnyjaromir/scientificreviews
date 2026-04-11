@@ -1,6 +1,7 @@
 using ScientificReviews.Bibtex;
 using ScientificReviews.Helpers;
 using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Threading.Tasks;
@@ -77,8 +78,8 @@ namespace ScientificReviews.Forms
 
         private void ClearCurrentArchiveState(bool markChanged)
         {
-            entries = new System.Collections.Generic.List<BibtexEntry>();
-            visibleEntries = new System.Collections.Generic.List<BibtexEntry>();
+            entries = new List<BibtexEntry>();
+            visibleEntries = new List<BibtexEntry>();
             propertyGrid1.SelectedObject = null;
             propertyGrid1.Tag = null;
             richTextBox1.Clear();
