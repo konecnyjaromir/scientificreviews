@@ -27,6 +27,24 @@ namespace ScientificReviews
         [Editor(typeof(PathEditor), typeof(UITypeEditor))]
         public string PdfFolder { get; set; }
 
+        [Browsable(true)]
+        [Category(GENERAL_CAT)]
+        [DisplayName("Recursive PDF search")]
+        [Description("If true, PDFs are searched in Pdf Folder including all subfolders")]
+        public bool RecursivePdfSearch { get; set; } = false;
+
+        [Browsable(true)]
+        [Category(GENERAL_CAT)]
+        [DisplayName("PDF auto-pair threshold (%)")]
+        [Description("Similarity percentage used by Auto-pair with PDFs")]
+        public int PdfAutoPairThresholdPercent { get; set; } = 95;
+
+        [Browsable(true)]
+        [Category(GENERAL_CAT)]
+        [DisplayName("Threads")]
+        [Description("Maximum number of threads used by multithreaded operations")]
+        public int Threads { get; set; } = 4;
+
 
         [Browsable(true)]
         [Category(BACKUP_CAT)]
@@ -66,6 +84,9 @@ namespace ScientificReviews
 
         [Browsable(false)]
         public string LastFile { get; set; }
+
+        [Browsable(false)]
+        public string LastBibTex { get; set; }
 
     }
 }
