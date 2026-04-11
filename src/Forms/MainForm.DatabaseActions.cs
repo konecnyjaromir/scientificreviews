@@ -47,7 +47,7 @@ namespace ScientificReviews.Forms
                 keys.Add(myKey);
             }
 
-            LoadData(entries.ToArray());
+            RefreshGrid();
         }
 
         private void removeTagsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -81,6 +81,7 @@ namespace ScientificReviews.Forms
                     entry.Tags = list.ToArray();
                 }
 
+                RefreshGrid();
                 Changed();
             }
         }
@@ -114,14 +115,124 @@ namespace ScientificReviews.Forms
             }
         }
 
-        private async void exportDatabaseToolStripMenuItem_Click(object sender, EventArgs e)
+        private async void saveToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            await ExportDatabaseAsync(entries.ToArray());
+            await SaveCurrentArchiveAsync();
+        }
+
+        private async void saveAsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            await SaveArchiveAsAsync();
         }
 
         private async void exportVisibleToolStripMenuItem_Click(object sender, EventArgs e)
         {
             await ExportDatabaseAsync(visibleEntries.ToArray());
+        }
+
+        private async Task SaveCurrentArchiveAsync()
+        {
+            string currentFile = Program.AppSettings.Data.LastBibTex;
+            if (string.IsNullOrWhiteSpace(currentFile))
+            {
+                await SaveArchiveAsAsync();
+                return;
+            }
+
+            if (Program.AppSettings.Data.SaveWithoutApprove == false)
+            {
+                DialogResult result = MessageBox.Show(
+                    this,
+                    $"Save will overwrite the currently opened file:\r\n{currentFile}\r\n\r\nThis operation cannot be undone. Do you want to continue?",
+                    "Confirm Save",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button1);
+
+                if (result != DialogResult.Yes)
+                {
+                    lblStatus.Text = "Save cancelled.";
+                    return;
+                }
+            }
+
+            await SaveBibtexToFileAsync(entries.ToArray(), currentFile, "Save BibTeX", "Saved.", true);
+        }
+
+        private async Task SaveArchiveAsAsync()
+        {
+            using (SaveFileDialog saveFileDialog = CreateBibtexSaveFileDialog())
+            {
+                if (saveFileDialog.ShowDialog(this) != DialogResult.OK)
+                {
+                    lblStatus.Text = "Save As cancelled.";
+                    return;
+                }
+
+                await SaveBibtexToFileAsync(entries.ToArray(), saveFileDialog.FileName, "Save BibTeX As", "Saved.", true);
+            }
+        }
+
+        private SaveFileDialog CreateBibtexSaveFileDialog()
+        {
+            string initialDirectory = Program.AppSettings.Data.LastDirectory;
+            string currentFile = Program.AppSettings.Data.LastBibTex;
+
+            if (string.IsNullOrWhiteSpace(currentFile) == false)
+            {
+                string currentDirectory = Path.GetDirectoryName(currentFile);
+                if (string.IsNullOrWhiteSpace(currentDirectory) == false)
+                    initialDirectory = currentDirectory;
+            }
+
+            SaveFileDialog saveFileDialog = new SaveFileDialog()
+            {
+                CheckPathExists = true,
+                Filter = "Bibtex database *.bib|*.bib",
+                Title = "Save BibTeX As"
+            };
+
+            if (string.IsNullOrWhiteSpace(initialDirectory) == false)
+                saveFileDialog.InitialDirectory = initialDirectory;
+
+            if (string.IsNullOrWhiteSpace(currentFile) == false)
+                saveFileDialog.FileName = Path.GetFileName(currentFile);
+
+            return saveFileDialog;
+        }
+
+        private async Task SaveBibtexToFileAsync(BibtexEntry[] entriesToSave, string fileName, string processName, string successMessage, bool updateCurrentFile)
+        {
+            ProcessLogScope log = BeginProcessLog(processName, fileName);
+            try
+            {
+                lblStatus.Text = "Saving...";
+                await Task.Run(() =>
+                {
+                    BibtexExporter exporter = new BibtexExporter();
+                    string content = exporter.EntriesToString(entriesToSave ?? Array.Empty<BibtexEntry>());
+                    File.WriteAllText(fileName, content);
+                });
+
+                if (updateCurrentFile)
+                {
+                    Program.AppSettings.Data.LastDirectory = Path.GetDirectoryName(fileName);
+                    SetCurrentBibTex(fileName);
+                    Program.AppSettings.SaveSettings();
+                }
+
+                lblStatus.Text = successMessage;
+                log.Complete($"Saved {entriesToSave?.Length ?? 0} record(s) to {fileName}.");
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+                log.Fail(ex, $"{processName} failed.");
+            }
+            finally
+            {
+                log.Dispose();
+            }
         }
 
         private async Task ExportDatabaseAsync(BibtexEntry[] entriesToExport)
@@ -132,7 +243,8 @@ namespace ScientificReviews.Forms
                 SaveFileDialog saveFileDialog = new SaveFileDialog()
                 {
                     CheckPathExists = true,
-                    Filter = "Bibtex database *.bib|*.bib"
+                    Filter = "Bibtex database *.bib|*.bib",
+                    Title = "Export BibTeX"
                 };
                 if (saveFileDialog.ShowDialog(this) == DialogResult.OK)
                 {
@@ -231,6 +343,7 @@ namespace ScientificReviews.Forms
         private void updatePageTagFormatToolStripMenuItem_Click(object sender, EventArgs e)
         {
             BibtexUtils.UpdatePages(entries);
+            RefreshGrid();
             Changed();
         }
 
@@ -242,6 +355,89 @@ namespace ScientificReviews.Forms
         private void normalizeDoiToolStripMenuItem_Click(object sender, EventArgs e)
         {
             RunNormalizeDoiOperation(entries.ToArray());
+        }
+
+        private async void autofixToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            await StartAutofixOperationAsync();
+        }
+
+        private async Task StartAutofixOperationAsync()
+        {
+            if (entries.Count == 0)
+            {
+                lblStatus.Text = "No records available for autofix.";
+                return;
+            }
+
+            StatusStripOperationHandle operation = StartTrackedOperation(
+                "autofix",
+                "Autofix",
+                "Normalize DOI -> Fetch metadata -> Create entry keys -> Auto-pair PDFs -> Update JCR");
+            if (operation == null)
+                return;
+
+            ProcessLogScope log = BeginProcessLog("Autofix", $"Records: {entries.Count}");
+            List<string> skippedSteps = new List<string>();
+
+            try
+            {
+                operation.Report("Normalize DOI", "Preparing DOI values", 1, 4, false);
+                RunNormalizeDoiOperation(entries.ToArray());
+                LogProcessProgress(log, "Normalize DOI completed.");
+
+                operation.Report("Fetch missing metadata", "Querying metadata services", 2, 4, false);
+                await StartFetchMissingMetadataOperationAsync();
+                LogProcessProgress(log, "Fetch missing metadata completed.");
+
+                operation.Report("Create entry keys", "Generating keys from updated metadata", 3, 5, false);
+                createEntryKeysToolStripMenuItem_Click(this, EventArgs.Empty);
+                LogProcessProgress(log, "Create entry keys completed.");
+
+                if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.PdfFolder))
+                {
+                    skippedSteps.Add("Auto-pair PDFs");
+                    LogProcessProgress(log, "Skipped Auto-pair PDFs", "PDF folder is not set.");
+                }
+                else
+                {
+                    operation.Report("Auto-pair PDFs", "Matching records with PDFs", 4, 5, false);
+                    await StartAutoPairOperationAsync(false);
+                    LogProcessProgress(log, "Auto-pair PDFs completed.");
+                }
+
+                if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.JcrApiKey))
+                {
+                    skippedSteps.Add("Update JCR");
+                    LogProcessProgress(log, "Skipped Update JCR", "JCR API key is not set.");
+                }
+                else
+                {
+                    operation.Report("Update JCR", "Fetching missing journals from Clarivate", 5, 5, false);
+                    await StartUpdateJcrOperationAsync(false);
+                    LogProcessProgress(log, "Update JCR completed.");
+                }
+
+                string details = skippedSteps.Count == 0
+                    ? "All autofix steps completed."
+                    : "Skipped: " + string.Join(", ", skippedSteps) + ".";
+
+                operation.Complete("Autofix finished.", details);
+                log.Complete(details);
+                lblStatus.Text = skippedSteps.Count == 0
+                    ? "Autofix finished."
+                    : $"Autofix finished. Skipped: {string.Join(", ", skippedSteps)}.";
+            }
+            catch (Exception ex)
+            {
+                operation.Fail(ex, "Failed");
+                lblStatus.Text = ex.Message;
+                log.Fail(ex, "Autofix failed.");
+            }
+            finally
+            {
+                log.Dispose();
+            }
         }
 
         private async Task StartFetchMissingMetadataOperationAsync()
@@ -273,7 +469,7 @@ namespace ScientificReviews.Forms
                 lblStatus.Text = $"Fetching metadata using {GetConfiguredThreadCount()} thread(s)...";
                 MetadataUpdateResult result = await RunFetchMissingMetadataAsync(targetEntries, operation);
 
-                LoadData(entries.ToArray(), txtSearch.Text);
+                RefreshGrid();
 
                 if (result.UpdatedEntries > 0)
                     Changed();
@@ -337,7 +533,7 @@ namespace ScientificReviews.Forms
                 DoiNormalizationResult normalization = NormalizeDoisForMetadataFetch(targetEntries);
                 if (normalization.ChangedEntries > 0)
                 {
-                    LoadData(entries.ToArray(), txtSearch.Text);
+                    RefreshGrid();
                     Changed();
                 }
 
@@ -520,7 +716,7 @@ namespace ScientificReviews.Forms
                 }
             }
 
-            LoadData(entries.ToArray());
+            RefreshGrid();
             Changed();
         }
 
@@ -539,7 +735,7 @@ namespace ScientificReviews.Forms
                 }
             }
 
-            LoadData(entries.ToArray(), txtSearch.Text);
+            RefreshGrid();
 
             if (removedTags > 0)
             {

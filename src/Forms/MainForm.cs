@@ -22,6 +22,19 @@ namespace ScientificReviews.Forms
             InitializeRecordContextMenu();
             dataGridView1.CellMouseDoubleClick += dataGridView1_CellMouseDoubleClick;
             dataGridView1.CellMouseDown += dataGridView1_CellMouseDown;
+            dataGridView1.MouseDown += dataGridView1_MouseDown;
+        }
+
+        protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
+        {
+            if (keyData == (Keys.Control | Keys.F))
+            {
+                txtSearch.Focus();
+                txtSearch.SelectAll();
+                return true;
+            }
+
+            return base.ProcessCmdKey(ref msg, keyData);
         }
 
         List<BibtexEntry> entries = new List<BibtexEntry>();
@@ -37,11 +50,13 @@ namespace ScientificReviews.Forms
         private readonly PdfExportService _pdfExportService = new PdfExportService();
         private readonly PdfMatchingService _pdfMatchingService = new PdfMatchingService();
         private ContextMenuStrip _recordContextMenu;
+        private ContextMenuStrip _gridBackgroundContextMenu;
         private ToolStripMenuItem _contextEditMenuItem;
         private ToolStripMenuItem _contextCopyMenuItem;
         private ToolStripMenuItem _contextCutMenuItem;
         private ToolStripMenuItem _contextPasteMenuItem;
         private ToolStripMenuItem _contextDuplicateMenuItem;
+        private ToolStripMenuItem _contextRefreshMenuItem;
 
         private int GetConfiguredThreadCount()
         {
@@ -213,6 +228,42 @@ namespace ScientificReviews.Forms
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
             Program.AppSettings.SaveSettings();
+        }
+
+        private void RefreshGrid(IEnumerable<BibtexEntry> preferredSelection = null, string statusMessage = null)
+        {
+            BibtexEntry[] selectedEntries = preferredSelection?
+                .Where(entry => entry != null)
+                .Distinct()
+                .ToArray()
+                ?? GetSelectedOrdered();
+
+            BibtexEntry currentEntry = null;
+            if (selectedEntries.Length == 0 && bindingSource1.Current is DataRowView currentView && currentView.Row != null)
+                currentEntry = currentView.Row["Entry"] as BibtexEntry;
+
+            LoadData(entries.ToArray(), txtSearch.Text);
+
+            if (selectedEntries.Length > 0)
+                SelectEntriesInGrid(selectedEntries);
+            else if (currentEntry != null)
+                SelectEntriesInGrid(new[] { currentEntry });
+
+            if (statusMessage != null)
+                lblStatus.Text = statusMessage;
+        }
+
+        private void refreshToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            RefreshGrid(statusMessage: "Grid refreshed.");
+        }
+
+        private void aboutToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            using (AboutForm aboutForm = new AboutForm())
+            {
+                aboutForm.ShowDialog(this);
+            }
         }
 
         private async void updateJournalsDatabaseToolStripMenuItem_Click(object sender, EventArgs e)

@@ -18,15 +18,19 @@ namespace ScientificReviews.Forms
             _contextEditMenuItem.Click += (sender, e) => allowEditToolStripMenuItem_Click(sender, e);
 
             _contextCopyMenuItem = new ToolStripMenuItem("Copy");
+            _contextCopyMenuItem.ShortcutKeyDisplayString = "Ctrl+C";
             _contextCopyMenuItem.Click += (sender, e) => CopySelectedRecordsToClipboard();
 
             _contextCutMenuItem = new ToolStripMenuItem("Cut");
+            _contextCutMenuItem.ShortcutKeyDisplayString = "Ctrl+X";
             _contextCutMenuItem.Click += (sender, e) => CutSelectedRecordsToClipboard();
 
             _contextPasteMenuItem = new ToolStripMenuItem("Paste");
+            _contextPasteMenuItem.ShortcutKeyDisplayString = "Ctrl+V";
             _contextPasteMenuItem.Click += (sender, e) => PasteRecordsFromClipboard();
 
             _contextDuplicateMenuItem = new ToolStripMenuItem("Duplicate");
+            _contextDuplicateMenuItem.ShortcutKeyDisplayString = "Ctrl+D";
             _contextDuplicateMenuItem.Click += (sender, e) => DuplicateSelectedRecords();
 
             _recordContextMenu = new ContextMenuStrip();
@@ -40,6 +44,12 @@ namespace ScientificReviews.Forms
                 _contextDuplicateMenuItem
             });
             _recordContextMenu.Opening += recordContextMenu_Opening;
+
+            _contextRefreshMenuItem = new ToolStripMenuItem("Refresh");
+            _contextRefreshMenuItem.Click += (sender, e) => RefreshGrid();
+
+            _gridBackgroundContextMenu = new ContextMenuStrip();
+            _gridBackgroundContextMenu.Items.Add(_contextRefreshMenuItem);
         }
 
         private void recordContextMenu_Opening(object sender, System.ComponentModel.CancelEventArgs e)
@@ -74,6 +84,18 @@ namespace ScientificReviews.Forms
             Rectangle cellBounds = dataGridView1.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, false);
             Point menuLocation = new Point(cellBounds.Left + e.X, cellBounds.Top + e.Y);
             _recordContextMenu?.Show(dataGridView1, menuLocation);
+        }
+
+        private void dataGridView1_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right)
+                return;
+
+            DataGridView.HitTestInfo hitTest = dataGridView1.HitTest(e.X, e.Y);
+            if (hitTest.RowIndex >= 0)
+                return;
+
+            _gridBackgroundContextMenu?.Show(dataGridView1, new Point(e.X, e.Y));
         }
 
         private void dataGridView1_CellMouseDoubleClick(object sender, DataGridViewCellMouseEventArgs e)
@@ -128,6 +150,14 @@ namespace ScientificReviews.Forms
             if (e.Control && e.KeyCode == Keys.V)
             {
                 PasteRecordsFromClipboard();
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                return;
+            }
+
+            if (e.Control && e.KeyCode == Keys.D)
+            {
+                DuplicateSelectedRecords();
                 e.Handled = true;
                 e.SuppressKeyPress = true;
                 return;
@@ -268,6 +298,11 @@ namespace ScientificReviews.Forms
         private void btnPasteRecord_Click(object sender, EventArgs e)
         {
             PasteRecordsFromClipboard();
+        }
+
+        private void duplicateRecordToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            DuplicateSelectedRecords();
         }
 
         private void DuplicateSelectedRecords()
@@ -455,8 +490,7 @@ namespace ScientificReviews.Forms
                     return false;
 
                 AssignPdfToEntry(entry, openFileDialog.FileName);
-                LoadData(entries.ToArray(), txtSearch.Text);
-                SelectEntriesInGrid(new[] { entry });
+                RefreshGrid(new[] { entry });
                 Changed();
                 lblStatus.Text = "PDF paired manually.";
 
