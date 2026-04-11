@@ -246,7 +246,7 @@ namespace ScientificReviews.Forms
                 lblStatus.Text = $"Auto-pairing PDFs using {GetConfiguredThreadCount()} thread(s)...";
                 PdfAutoPairResult result = await RunAutoPairAsync(operation);
 
-                LoadData(entries.ToArray(), txtSearch.Text);
+                RefreshGrid();
                 Changed();
 
                 if (result.NoPdfsFound)

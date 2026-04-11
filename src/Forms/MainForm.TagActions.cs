@@ -41,7 +41,7 @@ namespace ScientificReviews.Forms
                     list.Add(newTag);
                     entry.Tags = list.ToArray();
                     lblStatus.Text = string.Empty;
-                    LoadData(visibleEntries.ToArray());
+                    RefreshGrid(new[] { entry });
                 }
             }
         }
@@ -80,7 +80,7 @@ namespace ScientificReviews.Forms
             }
 
             lblStatus.Text = string.Empty;
-            LoadData(visibleEntries.ToArray());
+            RefreshGrid(GetSelectedOrdered());
         }
 
         private void addTagToolStripMenuItem_Click(object sender, EventArgs e)
@@ -133,9 +133,7 @@ namespace ScientificReviews.Forms
                     .ToArray();
             }
 
-            LoadData(visibleEntries.ToArray());
-            SelectEntriesInGrid(selectedEntries);
-            SelectEntry();
+            RefreshGrid(selectedEntries);
             Changed();
         }
 
@@ -173,8 +171,7 @@ namespace ScientificReviews.Forms
             DataRowView drv = (DataRowView)bindingSource1.Current;
             drv.Row["Entry"] = entry;
 
-            ShowEntry(entry, txtSearch.Text);
-            LoadData(visibleEntries.ToArray());
+            RefreshGrid(new[] { entry });
             Changed();
         }
 
@@ -239,6 +236,7 @@ namespace ScientificReviews.Forms
             }
 
             lblSelected.Text = $"({dataGridView1.SelectedRows.Count})";
+            RefreshGrid(new[] { entry });
             Changed();
         }
 
@@ -361,7 +359,7 @@ namespace ScientificReviews.Forms
             }
 
             lblStatus.Text = string.Empty;
-            LoadData(visibleEntries.ToArray());
+            RefreshGrid(GetSelectedOrdered());
         }
     }
 }

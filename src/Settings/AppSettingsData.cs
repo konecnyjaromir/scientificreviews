@@ -51,6 +51,12 @@ namespace ScientificReviews
         [Description("Optional email used in metadata API User-Agent headers (recommended for Crossref polite pool)")]
         public string MetadataContactEmail { get; set; }
 
+        [Browsable(true)]
+        [Category(GENERAL_CAT)]
+        [DisplayName("Allow unsafe save")]
+        [Description("If true, Save overwrites the current BibTeX file without confirmation")]
+        public bool SaveWithoutApprove { get; set; } = false;
+
 
         [Browsable(true)]
         [Category(BACKUP_CAT)]
