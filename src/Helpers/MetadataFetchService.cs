@@ -232,12 +232,13 @@ namespace ScientificReviews.Helpers
 
         private async Task<MetadataPayload> FetchMetadataAsync(BibtexEntry entry, MetadataUpdateOptions options)
         {
-            string existingDoi = PrepareDoiForLookup(BibtexTagService.GetTagValueIgnoreCase(entry, "doi"));
+            string existingDoi = DoiNormalizationHelper.PrepareDoiForLookup(BibtexTagService.GetTagValueIgnoreCase(entry, "doi"));
             string existingTitle = PrepareTitleForQuery(BibtexTagService.GetTagValueIgnoreCase(entry, "title"));
             string existingAuthor = PrepareAuthorForQuery(BibtexTagService.GetTagValueIgnoreCase(entry, "author"));
             MetadataPayload aggregate = null;
 
-            if (GetDoiKind(existingDoi) == DoiKind.Classic || GetDoiKind(existingDoi) == DoiKind.Arxiv)
+            if (DoiNormalizationHelper.GetDoiValueKind(existingDoi) == DoiValueKind.Classic ||
+                DoiNormalizationHelper.GetDoiValueKind(existingDoi) == DoiValueKind.Arxiv)
                 aggregate = await FetchUsingDoiAsync(existingDoi, existingTitle, existingAuthor, options).ConfigureAwait(false);
 
             if ((aggregate == null || HasAllRequiredMetadata(aggregate) == false) && string.IsNullOrWhiteSpace(existingTitle) == false)
@@ -345,17 +346,9 @@ namespace ScientificReviews.Helpers
                 string.IsNullOrWhiteSpace(payload.Author) == false;
         }
 
-        private enum DoiKind
-        {
-            Empty,
-            Classic,
-            Arxiv,
-            Invalid
-        }
-
         private IEnumerable<IMetadataProvider> GetProvidersForDoi(string doi)
         {
-            if (GetDoiKind(doi) != DoiKind.Arxiv)
+            if (DoiNormalizationHelper.GetDoiValueKind(doi) != DoiValueKind.Arxiv)
                 return _providers;
 
             return new IMetadataProvider[]
@@ -369,7 +362,7 @@ namespace ScientificReviews.Helpers
         private static bool IsAcceptableDoiCandidate(string requestedDoi, string titleHint, string authorHint, MetadataPayload candidate)
         {
             return candidate != null &&
-                RequestedDoiMatchesCandidateDoi(requestedDoi, candidate.Doi) &&
+                DoiNormalizationHelper.RequestedDoiMatchesCandidateDoi(requestedDoi, candidate.Doi) &&
                 CandidateMatchesHints(titleHint, authorHint, candidate);
         }
 
@@ -387,7 +380,7 @@ namespace ScientificReviews.Helpers
             if (string.IsNullOrWhiteSpace(doiHint) || string.IsNullOrWhiteSpace(candidate.Doi))
                 return true;
 
-            return RequestedDoiMatchesCandidateDoi(doiHint, candidate.Doi);
+            return DoiNormalizationHelper.RequestedDoiMatchesCandidateDoi(doiHint, candidate.Doi);
         }
 
         private static bool CandidateMatchesHints(string titleHint, string authorHint, MetadataPayload candidate)
@@ -409,110 +402,6 @@ namespace ScientificReviews.Helpers
                 return false;
 
             return AuthorsMatch(authorHint, candidateAuthor) == false;
-        }
-
-        private static string PrepareDoiForLookup(string doi)
-        {
-            if (string.IsNullOrWhiteSpace(doi))
-                return null;
-
-            string prepared = doi.Trim();
-            prepared = Regex.Replace(prepared, @"^https?://(dx\.)?doi\.org/", string.Empty, RegexOptions.IgnoreCase);
-            prepared = Regex.Replace(prepared, @"^doi:\s*", string.Empty, RegexOptions.IgnoreCase);
-            return prepared.Trim().TrimEnd('/', '.', ',', ';');
-        }
-
-        private static DoiKind GetDoiKind(string doi)
-        {
-            string prepared = PrepareDoiForLookup(doi);
-            if (string.IsNullOrWhiteSpace(prepared))
-                return DoiKind.Empty;
-
-            if (string.IsNullOrWhiteSpace(ExtractArxivIdentifier(prepared)) == false)
-                return DoiKind.Arxiv;
-
-            return IsClassicDoi(prepared) ? DoiKind.Classic : DoiKind.Invalid;
-        }
-
-        private static bool RequestedDoiMatchesCandidateDoi(string requestedDoi, string candidateDoi)
-        {
-            DoiKind requestedKind = GetDoiKind(requestedDoi);
-            if (requestedKind == DoiKind.Empty || requestedKind == DoiKind.Invalid || string.IsNullOrWhiteSpace(candidateDoi))
-                return false;
-
-            if (requestedKind == DoiKind.Arxiv)
-            {
-                return string.Equals(
-                    NormalizeArxivIdentifier(requestedDoi),
-                    GetCandidateArxivIdentifier(candidateDoi),
-                    StringComparison.OrdinalIgnoreCase);
-            }
-
-            return string.Equals(
-                PrepareDoiForLookup(requestedDoi),
-                PrepareDoiForLookup(candidateDoi),
-                StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static string GetCandidateArxivIdentifier(string candidateDoi)
-        {
-            string normalized = NormalizeArxivIdentifier(candidateDoi);
-            if (string.IsNullOrWhiteSpace(normalized) == false)
-                return normalized;
-
-            return ExtractArxivIdentifier(candidateDoi);
-        }
-
-        private static bool IsClassicDoi(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return false;
-
-            return Regex.IsMatch(value.Trim(), @"^10\.\d{4,9}/\S+$", RegexOptions.IgnoreCase);
-        }
-
-        private static string NormalizeArxivIdentifier(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return null;
-
-            string normalized = value.Trim();
-            normalized = Regex.Replace(normalized, @"^arxiv:\s*", string.Empty, RegexOptions.IgnoreCase);
-            normalized = Regex.Replace(normalized, @"^https?://arxiv\.org/(abs|pdf)/", string.Empty, RegexOptions.IgnoreCase);
-            normalized = normalized.Trim().TrimEnd('/', '.', ',', ';');
-
-            return IsArxivIdentifier(normalized) ? normalized.ToLowerInvariant() : null;
-        }
-
-        private static string ExtractArxivIdentifier(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return null;
-
-            string normalized = NormalizeArxivIdentifier(value);
-            if (string.IsNullOrWhiteSpace(normalized) == false)
-                return normalized;
-
-            string prepared = PrepareDoiForLookup(value);
-            if (string.IsNullOrWhiteSpace(prepared))
-                return null;
-
-            Match doiMatch = Regex.Match(prepared, @"^10\.48550/arxiv[\.:](.+)$", RegexOptions.IgnoreCase);
-            if (doiMatch.Success == false)
-                return null;
-
-            return NormalizeArxivIdentifier(doiMatch.Groups[1].Value);
-        }
-
-        private static bool IsArxivIdentifier(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return false;
-
-            return Regex.IsMatch(
-                value.Trim(),
-                @"^(?:\d{4}\.\d{4,5}|[a-z\-]+(?:\.[a-z\-]+)?/\d{7})(v\d+)?$",
-                RegexOptions.IgnoreCase);
         }
 
         private static string NormalizeTitle(string title)
@@ -807,7 +696,7 @@ namespace ScientificReviews.Helpers
                 string year = ExtractCrossrefYear(message);
                 string author = JoinCrossrefAuthors(message["author"] as JArray);
                 string journal = FirstString(message["container-title"]);
-                string eprint = ExtractArxivIdentifier(doi);
+                string eprint = DoiNormalizationHelper.TryExtractArxivIdentifier(doi);
 
                 if (string.IsNullOrWhiteSpace(title) &&
                     string.IsNullOrWhiteSpace(doi) &&
@@ -950,7 +839,7 @@ namespace ScientificReviews.Helpers
                 string summary = CleanAbstract(token["abstract"]);
                 string year = CleanValue(token["year"]);
                 string doi = CleanValue(token["externalIds"]?["DOI"]);
-                string eprint = NormalizeArxivIdentifier(CleanValue(token["externalIds"]?["ArXiv"]));
+                string eprint = DoiNormalizationHelper.NormalizeArxivIdentifier(CleanValue(token["externalIds"]?["ArXiv"]));
                 string journal = CleanValue(token["journal"]?["name"]);
                 string author = JoinSemanticScholarAuthors(token["authors"] as JArray);
 
@@ -999,7 +888,7 @@ namespace ScientificReviews.Helpers
 
             public override async Task<MetadataPayload> FetchByDoiAsync(string doi, string titleHint, string authorHint, MetadataUpdateOptions options)
             {
-                string arxivId = ExtractArxivIdentifier(doi);
+                string arxivId = DoiNormalizationHelper.TryExtractArxivIdentifier(doi);
                 if (string.IsNullOrWhiteSpace(arxivId))
                     return null;
 
@@ -1065,7 +954,7 @@ namespace ScientificReviews.Helpers
                     string doi = CleanValue(entry.Element(ArxivNamespace + "doi")?.Value);
                     string journal = CleanValue(entry.Element(ArxivNamespace + "journal_ref")?.Value);
                     string id = CleanValue(entry.Element(AtomNamespace + "id")?.Value);
-                    string eprint = NormalizeArxivIdentifier(id);
+                    string eprint = DoiNormalizationHelper.NormalizeArxivIdentifier(id);
                     string author = JoinArxivAuthors(entry.Elements(AtomNamespace + "author"));
 
                     if (string.IsNullOrWhiteSpace(doi) && string.IsNullOrWhiteSpace(eprint) == false)

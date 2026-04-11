@@ -7,7 +7,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -22,14 +21,6 @@ namespace ScientificReviews.Forms
             public int CopiedFromEprintEntries { get; set; }
             public int InvalidEntries { get; set; }
             public List<string> InvalidRecordKeys { get; } = new List<string>();
-        }
-
-        private enum DoiValueKind
-        {
-            Empty,
-            Classic,
-            Arxiv,
-            Invalid
         }
 
         private void createEntryKeysToolStripMenuItem_Click(object sender, EventArgs e)
@@ -379,12 +370,12 @@ namespace ScientificReviews.Forms
 
                 bool changed = false;
                 string currentDoi = BibtexTagService.GetTagValueIgnoreCase(entry, "doi");
-                string normalizedDoi = NormalizeDoiValue(currentDoi);
+                string normalizedDoi = DoiNormalizationHelper.NormalizeDoiValue(currentDoi);
 
                 if (string.IsNullOrWhiteSpace(normalizedDoi))
                 {
                     string eprint = BibtexTagService.GetTagValueIgnoreCase(entry, "eprint");
-                    string normalizedFromEprint = TryExtractArxivIdentifier(eprint);
+                    string normalizedFromEprint = DoiNormalizationHelper.TryExtractArxivIdentifier(eprint);
                     if (string.IsNullOrWhiteSpace(normalizedFromEprint) == false)
                     {
                         BibtexTagService.SetSingleTagValue(entry, "doi", normalizedFromEprint);
@@ -400,7 +391,7 @@ namespace ScientificReviews.Forms
                 }
 
                 string finalDoi = BibtexTagService.GetTagValueIgnoreCase(entry, "doi");
-                if (GetDoiValueKind(finalDoi) == DoiValueKind.Invalid)
+                if (DoiNormalizationHelper.GetDoiValueKind(finalDoi) == DoiValueKind.Invalid)
                 {
                     result.InvalidEntries++;
                     result.InvalidRecordKeys.Add(GetDoiRecordLabel(entry));
@@ -425,7 +416,7 @@ namespace ScientificReviews.Forms
                     continue;
 
                 string doi = BibtexTagService.GetTagValueIgnoreCase(entry, "doi");
-                if (GetDoiValueKind(doi) == DoiValueKind.Invalid)
+                if (DoiNormalizationHelper.GetDoiValueKind(doi) == DoiValueKind.Invalid)
                     invalidRecordKeys.Add(GetDoiRecordLabel(entry));
             }
 
@@ -456,96 +447,6 @@ namespace ScientificReviews.Forms
                 summary += $" {normalization.InvalidEntries} record(s) still have invalid DOI.";
 
             return summary;
-        }
-
-        private static string NormalizeDoiValue(string doi)
-        {
-            string prepared = PrepareDoiValue(doi);
-            if (string.IsNullOrWhiteSpace(prepared))
-                return null;
-
-            string arxivIdentifier = TryExtractArxivIdentifier(prepared);
-            if (string.IsNullOrWhiteSpace(arxivIdentifier) == false)
-                return arxivIdentifier;
-
-            if (IsClassicDoiValue(prepared))
-                return prepared.ToLowerInvariant();
-
-            return prepared;
-        }
-
-        private static DoiValueKind GetDoiValueKind(string doi)
-        {
-            string prepared = PrepareDoiValue(doi);
-            if (string.IsNullOrWhiteSpace(prepared))
-                return DoiValueKind.Empty;
-
-            if (string.IsNullOrWhiteSpace(TryExtractArxivIdentifier(prepared)) == false)
-                return DoiValueKind.Arxiv;
-
-            return IsClassicDoiValue(prepared) ? DoiValueKind.Classic : DoiValueKind.Invalid;
-        }
-
-        private static string PrepareDoiValue(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return null;
-
-            string prepared = value.Trim();
-            prepared = Regex.Replace(prepared, @"^https?://(dx\.)?doi\.org/", string.Empty, RegexOptions.IgnoreCase);
-            prepared = Regex.Replace(prepared, @"^doi:\s*", string.Empty, RegexOptions.IgnoreCase);
-            return prepared.Trim().TrimEnd('/', '.', ',', ';');
-        }
-
-        private static string TryExtractArxivIdentifier(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return null;
-
-            string normalized = NormalizeArxivIdentifierValue(value);
-            if (string.IsNullOrWhiteSpace(normalized) == false)
-                return normalized;
-
-            string prepared = PrepareDoiValue(value);
-            if (string.IsNullOrWhiteSpace(prepared))
-                return null;
-
-            Match doiMatch = Regex.Match(prepared, @"^10\.48550/arxiv[\.:](.+)$", RegexOptions.IgnoreCase);
-            if (doiMatch.Success == false)
-                return null;
-
-            return NormalizeArxivIdentifierValue(doiMatch.Groups[1].Value);
-        }
-
-        private static string NormalizeArxivIdentifierValue(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return null;
-
-            string normalized = value.Trim();
-            normalized = Regex.Replace(normalized, @"^arxiv:\s*", string.Empty, RegexOptions.IgnoreCase);
-            normalized = Regex.Replace(normalized, @"^https?://arxiv\.org/(abs|pdf)/", string.Empty, RegexOptions.IgnoreCase);
-            normalized = normalized.Trim().TrimEnd('/', '.', ',', ';');
-            return IsArxivIdentifierValue(normalized) ? normalized.ToLowerInvariant() : null;
-        }
-
-        private static bool IsArxivIdentifierValue(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return false;
-
-            return Regex.IsMatch(
-                value.Trim(),
-                @"^(?:\d{4}\.\d{4,5}|[a-z\-]+(?:\.[a-z\-]+)?/\d{7})(v\d+)?$",
-                RegexOptions.IgnoreCase);
-        }
-
-        private static bool IsClassicDoiValue(string value)
-        {
-            if (string.IsNullOrWhiteSpace(value))
-                return false;
-
-            return Regex.IsMatch(value.Trim(), @"^10\.\d{4,9}/\S+$", RegexOptions.IgnoreCase);
         }
 
         private async Task<MetadataUpdateResult> RunFetchMissingMetadataAsync(IEnumerable<BibtexEntry> targetEntries, StatusStripOperationHandle operation)
