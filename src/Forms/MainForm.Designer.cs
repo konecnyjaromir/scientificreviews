@@ -60,6 +60,7 @@
             this.toolStripSeparator5 = new System.Windows.Forms.ToolStripSeparator();
             this.excludeEntriesByTitleToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.excludeEntriesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.fetchMissingMetadataToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator6 = new System.Windows.Forms.ToolStripSeparator();
             this.updatePageTagFormatToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.recordToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -84,6 +85,7 @@
             this.exportSelectedPDFToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.journalCitationReportsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.updateJournalsDatabaseToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.toolStripSeparator7 = new System.Windows.Forms.ToolStripSeparator();
             this.createExtraJCRTagsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.removeQ3Q4ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.checkPdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -117,7 +119,6 @@
             this.txtValue = new System.Windows.Forms.ToolStripTextBox();
             this.btnAddorEditTag = new System.Windows.Forms.ToolStripButton();
             this.bindingSource1 = new System.Windows.Forms.BindingSource(this.components);
-            this.toolStripSeparator7 = new System.Windows.Forms.ToolStripSeparator();
             this.menuStrip1.SuspendLayout();
             this.statusStrip1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridView1)).BeginInit();
@@ -140,7 +141,7 @@
             this.journalCitationReportsToolStripMenuItem});
             this.menuStrip1.Location = new System.Drawing.Point(0, 0);
             this.menuStrip1.Name = "menuStrip1";
-            this.menuStrip1.Size = new System.Drawing.Size(1840, 30);
+            this.menuStrip1.Size = new System.Drawing.Size(1840, 28);
             this.menuStrip1.TabIndex = 0;
             this.menuStrip1.Text = "menuStrip1";
             // 
@@ -163,7 +164,7 @@
             this.exportDOIsToolStripMenuItem,
             this.exportAsTableToolStripMenuItem});
             this.projectToolStripMenuItem.Name = "projectToolStripMenuItem";
-            this.projectToolStripMenuItem.Size = new System.Drawing.Size(69, 26);
+            this.projectToolStripMenuItem.Size = new System.Drawing.Size(69, 24);
             this.projectToolStripMenuItem.Text = "Project";
             // 
             // loadReplaceBibTexFileToolStripMenuItem
@@ -269,6 +270,7 @@
             // 
             this.databaseToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.createEntryKeysToolStripMenuItem,
+            this.fetchMissingMetadataToolStripMenuItem,
             this.toolStripSeparator3,
             this.removeDuplicitiesToolStripMenuItem,
             this.removeDuplicitiesByDOIToolStripMenuItem,
@@ -283,7 +285,7 @@
             this.toolStripSeparator6,
             this.updatePageTagFormatToolStripMenuItem});
             this.databaseToolStripMenuItem.Name = "databaseToolStripMenuItem";
-            this.databaseToolStripMenuItem.Size = new System.Drawing.Size(86, 26);
+            this.databaseToolStripMenuItem.Size = new System.Drawing.Size(86, 24);
             this.databaseToolStripMenuItem.Text = "Database";
             // 
             // createEntryKeysToolStripMenuItem
@@ -364,6 +366,13 @@
             this.excludeEntriesToolStripMenuItem.Text = "Exclude entries";
             this.excludeEntriesToolStripMenuItem.Click += new System.EventHandler(this.excludeEntriesToolStripMenuItem_Click);
             // 
+            // fetchMissingMetadataToolStripMenuItem
+            // 
+            this.fetchMissingMetadataToolStripMenuItem.Name = "fetchMissingMetadataToolStripMenuItem";
+            this.fetchMissingMetadataToolStripMenuItem.Size = new System.Drawing.Size(268, 26);
+            this.fetchMissingMetadataToolStripMenuItem.Text = "Fetch missing metadata";
+            this.fetchMissingMetadataToolStripMenuItem.Click += new System.EventHandler(this.fetchMissingMetadataToolStripMenuItem_Click);
+            // 
             // toolStripSeparator6
             // 
             this.toolStripSeparator6.Name = "toolStripSeparator6";
@@ -385,7 +394,7 @@
             this.removeTagsToolStripMenuItem1,
             this.deleteSelectedToolStripMenuItem});
             this.recordToolStripMenuItem.Name = "recordToolStripMenuItem";
-            this.recordToolStripMenuItem.Size = new System.Drawing.Size(70, 26);
+            this.recordToolStripMenuItem.Size = new System.Drawing.Size(70, 24);
             this.recordToolStripMenuItem.Text = "Record";
             // 
             // allowEditToolStripMenuItem
@@ -432,7 +441,7 @@
             this.selectedKeysToolStripMenuItem,
             this.selectedTitlesToolStripMenuItem});
             this.copyToolStripMenuItem.Name = "copyToolStripMenuItem";
-            this.copyToolStripMenuItem.Size = new System.Drawing.Size(57, 26);
+            this.copyToolStripMenuItem.Size = new System.Drawing.Size(57, 24);
             this.copyToolStripMenuItem.Text = "Copy";
             // 
             // copyRecordToolStripMenuItem
@@ -487,7 +496,7 @@
             this.viewToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.columnsToolStripMenuItem});
             this.viewToolStripMenuItem.Name = "viewToolStripMenuItem";
-            this.viewToolStripMenuItem.Size = new System.Drawing.Size(78, 26);
+            this.viewToolStripMenuItem.Size = new System.Drawing.Size(78, 24);
             this.viewToolStripMenuItem.Text = "Window";
             // 
             // columnsToolStripMenuItem
@@ -504,7 +513,7 @@
             this.toolStripMenuItem3,
             this.exportSelectedPDFToolStripMenuItem});
             this.pdfToolStripMenuItem.Name = "pdfToolStripMenuItem";
-            this.pdfToolStripMenuItem.Size = new System.Drawing.Size(49, 26);
+            this.pdfToolStripMenuItem.Size = new System.Drawing.Size(49, 24);
             this.pdfToolStripMenuItem.Text = "PDF";
             // 
             // renameToolStripMenuItem
@@ -534,7 +543,7 @@
             this.createExtraJCRTagsToolStripMenuItem,
             this.removeQ3Q4ToolStripMenuItem});
             this.journalCitationReportsToolStripMenuItem.Name = "journalCitationReportsToolStripMenuItem";
-            this.journalCitationReportsToolStripMenuItem.Size = new System.Drawing.Size(282, 26);
+            this.journalCitationReportsToolStripMenuItem.Size = new System.Drawing.Size(282, 24);
             this.journalCitationReportsToolStripMenuItem.Text = "Journal Citation Reports (Experimental)";
             // 
             // updateJournalsDatabaseToolStripMenuItem
@@ -543,6 +552,11 @@
             this.updateJournalsDatabaseToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
             this.updateJournalsDatabaseToolStripMenuItem.Text = "Update Journals Database";
             this.updateJournalsDatabaseToolStripMenuItem.Click += new System.EventHandler(this.updateJournalsDatabaseToolStripMenuItem_Click);
+            // 
+            // toolStripSeparator7
+            // 
+            this.toolStripSeparator7.Name = "toolStripSeparator7";
+            this.toolStripSeparator7.Size = new System.Drawing.Size(262, 6);
             // 
             // createExtraJCRTagsToolStripMenuItem
             // 
@@ -612,22 +626,22 @@
             this.dataGridView1.ColumnHeadersHeightSizeMode = System.Windows.Forms.DataGridViewColumnHeadersHeightSizeMode.AutoSize;
             this.dataGridView1.Dock = System.Windows.Forms.DockStyle.Left;
             this.dataGridView1.EditMode = System.Windows.Forms.DataGridViewEditMode.EditProgrammatically;
-            this.dataGridView1.Location = new System.Drawing.Point(0, 61);
+            this.dataGridView1.Location = new System.Drawing.Point(0, 55);
             this.dataGridView1.Margin = new System.Windows.Forms.Padding(4);
             this.dataGridView1.Name = "dataGridView1";
             this.dataGridView1.RowHeadersWidth = 51;
             this.dataGridView1.SelectionMode = System.Windows.Forms.DataGridViewSelectionMode.FullRowSelect;
-            this.dataGridView1.Size = new System.Drawing.Size(1063, 968);
+            this.dataGridView1.Size = new System.Drawing.Size(1063, 974);
             this.dataGridView1.TabIndex = 2;
             this.dataGridView1.SelectionChanged += new System.EventHandler(this.dataGridView1_SelectionChanged);
             this.dataGridView1.KeyDown += new System.Windows.Forms.KeyEventHandler(this.dataGridView1_KeyDown);
             // 
             // splitter1
             // 
-            this.splitter1.Location = new System.Drawing.Point(1063, 61);
+            this.splitter1.Location = new System.Drawing.Point(1063, 55);
             this.splitter1.Margin = new System.Windows.Forms.Padding(4);
             this.splitter1.Name = "splitter1";
-            this.splitter1.Size = new System.Drawing.Size(13, 968);
+            this.splitter1.Size = new System.Drawing.Size(13, 974);
             this.splitter1.TabIndex = 5;
             this.splitter1.TabStop = false;
             // 
@@ -650,10 +664,10 @@
             this.panel1.Controls.Add(this.propertyGrid1);
             this.panel1.Controls.Add(this.toolStrip2);
             this.panel1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.panel1.Location = new System.Drawing.Point(1076, 61);
+            this.panel1.Location = new System.Drawing.Point(1076, 55);
             this.panel1.Margin = new System.Windows.Forms.Padding(4);
             this.panel1.Name = "panel1";
-            this.panel1.Size = new System.Drawing.Size(764, 968);
+            this.panel1.Size = new System.Drawing.Size(764, 974);
             this.panel1.TabIndex = 7;
             // 
             // richTextBox1
@@ -663,7 +677,7 @@
             this.richTextBox1.Location = new System.Drawing.Point(0, 656);
             this.richTextBox1.Margin = new System.Windows.Forms.Padding(4);
             this.richTextBox1.Name = "richTextBox1";
-            this.richTextBox1.Size = new System.Drawing.Size(764, 312);
+            this.richTextBox1.Size = new System.Drawing.Size(764, 318);
             this.richTextBox1.TabIndex = 7;
             this.richTextBox1.Text = "";
             // 
@@ -735,42 +749,42 @@
             this.toolStripLabel4,
             this.txtValue,
             this.btnAddorEditTag});
-            this.toolStrip1.Location = new System.Drawing.Point(0, 30);
+            this.toolStrip1.Location = new System.Drawing.Point(0, 28);
             this.toolStrip1.Name = "toolStrip1";
-            this.toolStrip1.Size = new System.Drawing.Size(1840, 31);
+            this.toolStrip1.Size = new System.Drawing.Size(1840, 27);
             this.toolStrip1.TabIndex = 8;
             this.toolStrip1.Text = "toolStrip1";
             // 
             // toolStripLabel1
             // 
             this.toolStripLabel1.Name = "toolStripLabel1";
-            this.toolStripLabel1.Size = new System.Drawing.Size(53, 28);
+            this.toolStripLabel1.Size = new System.Drawing.Size(53, 24);
             this.toolStripLabel1.Text = "Search";
             // 
             // txtSearch
             // 
             this.txtSearch.Font = new System.Drawing.Font("Segoe UI", 9F);
             this.txtSearch.Name = "txtSearch";
-            this.txtSearch.Size = new System.Drawing.Size(399, 31);
+            this.txtSearch.Size = new System.Drawing.Size(399, 27);
             this.txtSearch.TextChanged += new System.EventHandler(this.txtSearch_TextChanged);
             // 
             // toolStripLabel2
             // 
             this.toolStripLabel2.Name = "toolStripLabel2";
-            this.toolStripLabel2.Size = new System.Drawing.Size(152, 28);
+            this.toolStripLabel2.Size = new System.Drawing.Size(152, 24);
             this.toolStripLabel2.Text = "Separated by \',\' as OR";
             // 
             // toolStripSeparator1
             // 
             this.toolStripSeparator1.Name = "toolStripSeparator1";
-            this.toolStripSeparator1.Size = new System.Drawing.Size(6, 31);
+            this.toolStripSeparator1.Size = new System.Drawing.Size(6, 27);
             // 
             // btnGoogle
             // 
             this.btnGoogle.Image = global::ScientificReviews.Properties.Resources.google;
             this.btnGoogle.ImageTransparentColor = System.Drawing.Color.Magenta;
             this.btnGoogle.Name = "btnGoogle";
-            this.btnGoogle.Size = new System.Drawing.Size(82, 28);
+            this.btnGoogle.Size = new System.Drawing.Size(82, 24);
             this.btnGoogle.Text = "Google";
             this.btnGoogle.Click += new System.EventHandler(this.btnGoogle_Click);
             // 
@@ -779,7 +793,7 @@
             this.btnDoi.Image = global::ScientificReviews.Properties.Resources.doi_small;
             this.btnDoi.ImageTransparentColor = System.Drawing.Color.Magenta;
             this.btnDoi.Name = "btnDoi";
-            this.btnDoi.Size = new System.Drawing.Size(138, 28);
+            this.btnDoi.Size = new System.Drawing.Size(138, 24);
             this.btnDoi.Text = "Open using DOI";
             this.btnDoi.Click += new System.EventHandler(this.btnDoi_Click);
             // 
@@ -788,52 +802,47 @@
             this.btnPdf.Image = global::ScientificReviews.Properties.Resources.pdf2;
             this.btnPdf.ImageTransparentColor = System.Drawing.Color.Magenta;
             this.btnPdf.Name = "btnPdf";
-            this.btnPdf.Size = new System.Drawing.Size(99, 28);
+            this.btnPdf.Size = new System.Drawing.Size(99, 24);
             this.btnPdf.Text = "Open PDF";
             this.btnPdf.Click += new System.EventHandler(this.btnPdf_Click);
             // 
             // toolStripSeparator2
             // 
             this.toolStripSeparator2.Name = "toolStripSeparator2";
-            this.toolStripSeparator2.Size = new System.Drawing.Size(6, 31);
+            this.toolStripSeparator2.Size = new System.Drawing.Size(6, 27);
             // 
             // toolStripLabel3
             // 
             this.toolStripLabel3.Name = "toolStripLabel3";
-            this.toolStripLabel3.Size = new System.Drawing.Size(33, 28);
+            this.toolStripLabel3.Size = new System.Drawing.Size(33, 24);
             this.toolStripLabel3.Text = "Key";
             // 
             // txtKey
             // 
             this.txtKey.Font = new System.Drawing.Font("Segoe UI", 9F);
             this.txtKey.Name = "txtKey";
-            this.txtKey.Size = new System.Drawing.Size(132, 31);
+            this.txtKey.Size = new System.Drawing.Size(132, 27);
             // 
             // toolStripLabel4
             // 
             this.toolStripLabel4.Name = "toolStripLabel4";
-            this.toolStripLabel4.Size = new System.Drawing.Size(45, 28);
+            this.toolStripLabel4.Size = new System.Drawing.Size(45, 24);
             this.toolStripLabel4.Text = "Value";
             // 
             // txtValue
             // 
             this.txtValue.Font = new System.Drawing.Font("Segoe UI", 9F);
             this.txtValue.Name = "txtValue";
-            this.txtValue.Size = new System.Drawing.Size(132, 31);
+            this.txtValue.Size = new System.Drawing.Size(132, 27);
             // 
             // btnAddorEditTag
             // 
             this.btnAddorEditTag.Image = global::ScientificReviews.Properties.Resources.add;
             this.btnAddorEditTag.ImageTransparentColor = System.Drawing.Color.Magenta;
             this.btnAddorEditTag.Name = "btnAddorEditTag";
-            this.btnAddorEditTag.Size = new System.Drawing.Size(212, 28);
+            this.btnAddorEditTag.Size = new System.Drawing.Size(212, 24);
             this.btnAddorEditTag.Text = "Add or edit tag to selected";
             this.btnAddorEditTag.Click += new System.EventHandler(this.btnAddorEditTag_Click);
-            // 
-            // toolStripSeparator7
-            // 
-            this.toolStripSeparator7.Name = "toolStripSeparator7";
-            this.toolStripSeparator7.Size = new System.Drawing.Size(262, 6);
             // 
             // MainForm
             // 
@@ -959,6 +968,7 @@
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator3;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator4;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator5;
+        private System.Windows.Forms.ToolStripMenuItem fetchMissingMetadataToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator6;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator7;
     }

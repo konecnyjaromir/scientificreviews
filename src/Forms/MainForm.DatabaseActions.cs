@@ -1,6 +1,7 @@
 using ScientificReviews.Bibtex;
 using ScientificReviews.Helpers;
 using ScientificReviews.JCR.Dto;
+using ScientificReviews.Logs;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -116,6 +117,7 @@ namespace ScientificReviews.Forms
 
         private async Task ExportDatabaseAsync(BibtexEntry[] entriesToExport)
         {
+            ProcessLogScope log = BeginProcessLog("Export BibTeX", $"Records: {entriesToExport?.Length ?? 0}");
             try
             {
                 SaveFileDialog saveFileDialog = new SaveFileDialog()
@@ -134,16 +136,28 @@ namespace ScientificReviews.Forms
                         File.WriteAllText(fileName, content);
                     });
                     lblStatus.Text = "Export done.";
+                    log.Complete($"Exported {entriesToExport.Length} record(s) to {saveFileDialog.FileName}.");
+                }
+                else
+                {
+                    log.Step("Cancelled by user.");
+                    log.Complete("No file selected.");
                 }
             }
             catch (Exception ex)
             {
                 lblStatus.Text = ex.Message;
+                log.Fail(ex, "BibTeX export failed.");
+            }
+            finally
+            {
+                log.Dispose();
             }
         }
 
         private void exportDOIsToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            ProcessLogScope log = BeginProcessLog("Export DOI list", $"Records: {entries.Count}");
             try
             {
                 SaveFileDialog saveFileDialog = new SaveFileDialog()
@@ -157,6 +171,12 @@ namespace ScientificReviews.Forms
                     BibtexExporter exporter = new BibtexExporter();
                     string[] content = exporter.GetDois(entries.ToArray());
                     File.WriteAllLines(fileName, content);
+                    log.Complete($"Exported {content.Length} DOI(s) to {fileName}.");
+                }
+                else
+                {
+                    log.Step("Cancelled by user.");
+                    log.Complete("No file selected.");
                 }
 
                 lblStatus.Text = "Export done.";
@@ -164,6 +184,11 @@ namespace ScientificReviews.Forms
             catch (Exception ex)
             {
                 lblStatus.Text = ex.Message;
+                log.Fail(ex, "DOI export failed.");
+            }
+            finally
+            {
+                log.Dispose();
             }
         }
 
@@ -198,6 +223,102 @@ namespace ScientificReviews.Forms
         {
             BibtexUtils.UpdatePages(entries);
             Changed();
+        }
+
+        private async void fetchMissingMetadataToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            await StartFetchMissingMetadataOperationAsync();
+        }
+
+        private async Task StartFetchMissingMetadataOperationAsync()
+        {
+            BibtexEntry[] targetEntries = entries.ToArray();
+
+            if (targetEntries.Length == 0)
+            {
+                lblStatus.Text = "No records available for metadata fetch.";
+                return;
+            }
+
+            string details = $"Fetching metadata for records: {targetEntries.Length}";
+
+            StatusStripOperationHandle operation = StartTrackedOperation(
+                "fetch-metadata",
+                "Fetch metadata",
+                details);
+            if (operation == null)
+                return;
+
+            ProcessLogScope log = BeginProcessLog("Fetch metadata", details);
+
+            try
+            {
+                lblStatus.Text = $"Fetching metadata using {GetConfiguredThreadCount()} thread(s)...";
+                MetadataUpdateResult result = await RunFetchMissingMetadataAsync(targetEntries, operation);
+
+                LoadData(entries.ToArray(), txtSearch.Text);
+
+                if (result.UpdatedEntries > 0)
+                    Changed();
+
+                string summary = $"Updated {result.UpdatedEntries}, unresolved {result.UnresolvedEntries}, failed {result.FailedEntries}";
+                string detailMessage = $"Already complete: {result.AlreadyCompleteEntries}.";
+                operation.Complete(summary, detailMessage);
+                log.Complete($"{summary} {detailMessage}");
+
+                lblStatus.Text = result.UpdatedEntries > 0
+                    ? $"Metadata fetch finished. Updated {result.UpdatedEntries} record(s)."
+                    : "Metadata fetch finished. No missing metadata could be resolved.";
+            }
+            catch (Exception ex)
+            {
+                operation.Fail(ex, "Failed");
+                lblStatus.Text = ex.Message;
+                log.Fail(ex, "Metadata fetch failed.");
+            }
+            finally
+            {
+                log.Dispose();
+            }
+        }
+
+        private async Task<MetadataUpdateResult> RunFetchMissingMetadataAsync(IEnumerable<BibtexEntry> targetEntries, StatusStripOperationHandle operation)
+        {
+            BibtexEntry[] targetArray = targetEntries as BibtexEntry[] ?? targetEntries.ToArray();
+            ProcessLogScope log = BeginProcessLog("Fetch metadata inner", $"Records: {targetArray.Length}");
+            Progress<MetadataUpdateProgress> progress = new Progress<MetadataUpdateProgress>(update =>
+            {
+                operation.Report(
+                    update?.Summary,
+                    update?.Details,
+                    update?.Completed,
+                    update?.Total,
+                    false);
+                LogProcessProgress(log, update?.Summary, update?.Details, update?.Completed, update?.Total);
+            });
+
+            try
+            {
+                MetadataUpdateResult result = await _metadataFetchService.PopulateMissingMetadataAsync(
+                    targetArray,
+                    new MetadataUpdateOptions
+                    {
+                        ContactEmail = Program.AppSettings.Data.MetadataContactEmail,
+                        ThreadCount = GetConfiguredThreadCount()
+                    },
+                    progress);
+                log.Complete("Metadata inner process completed.");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                log.Fail(ex, "Metadata inner process failed.");
+                throw;
+            }
+            finally
+            {
+                log.Dispose();
+            }
         }
 
         private void createExtraJCRTagsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -358,6 +479,7 @@ namespace ScientificReviews.Forms
 
         private void exportAsTableToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            ProcessLogScope log = BeginProcessLog("Export CSV table", $"Records: {entries.Count}");
             try
             {
                 SaveFileDialog saveFileDialog = new SaveFileDialog()
@@ -370,6 +492,12 @@ namespace ScientificReviews.Forms
                     string fileName = saveFileDialog.FileName;
                     var table = BuildTable(entries.ToArray(), Program.AppSettings.Data.Columns);
                     CsvExporter.ExportToCsv(table, fileName);
+                    log.Complete($"Exported table with {table.Rows.Count} row(s) to {fileName}.");
+                }
+                else
+                {
+                    log.Step("Cancelled by user.");
+                    log.Complete("No file selected.");
                 }
 
                 lblStatus.Text = "Export done.";
@@ -377,6 +505,11 @@ namespace ScientificReviews.Forms
             catch (Exception ex)
             {
                 lblStatus.Text = ex.Message;
+                log.Fail(ex, "CSV export failed.");
+            }
+            finally
+            {
+                log.Dispose();
             }
         }
     }

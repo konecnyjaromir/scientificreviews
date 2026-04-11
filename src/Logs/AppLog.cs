@@ -9,6 +9,7 @@ namespace ScientificReviews.Logs
 {
     public static class AppLog
     {
+        private static readonly object Sync = new object();
         private static string _extension = "log";
         /// <summary>
         /// Přípona souborů ErrorLogu
@@ -100,10 +101,13 @@ namespace ScientificReviews.Logs
                         break;
                 }
 
-                using (StreamWriter sw = new StreamWriter(fileName,
-                           append, new UnicodeEncoding(true, true)))
+                lock (Sync)
                 {
-                    sw.WriteLine(string.Format("{0} {1}: {2}", DateTime.Now.ToString(), typeString, message));
+                    using (StreamWriter sw = new StreamWriter(fileName,
+                               append, new UnicodeEncoding(true, true)))
+                    {
+                        sw.WriteLine(string.Format("{0} {1}: {2}", DateTime.Now.ToString(), typeString, message));
+                    }
                 }
                 return fileName;
             }

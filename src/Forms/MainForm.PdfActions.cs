@@ -1,5 +1,6 @@
 using ScientificReviews.Bibtex;
 using ScientificReviews.Helpers;
+using ScientificReviews.Logs;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -238,6 +239,8 @@ namespace ScientificReviews.Forms
             if (operation == null)
                 return;
 
+            ProcessLogScope log = BeginProcessLog("Auto-pair PDFs", Program.AppSettings.Data.PdfFolder);
+
             try
             {
                 lblStatus.Text = $"Auto-pairing PDFs using {GetConfiguredThreadCount()} thread(s)...";
@@ -250,22 +253,30 @@ namespace ScientificReviews.Forms
                 {
                     operation.Complete("No PDFs found.", Program.AppSettings.Data.PdfFolder);
                     lblStatus.Text = "No PDFs found in Pdf Folder.";
+                    log.Complete("No PDFs found.");
                     return;
                 }
 
                 string summary = $"Direct {result.DirectMatches}, smart {result.SmartMatches}, unmatched {result.Unmatched}";
                 operation.Complete(summary, Program.AppSettings.Data.PdfFolder);
                 lblStatus.Text = $"Auto-pair finished using {GetConfiguredThreadCount()} thread(s). Direct: {result.DirectMatches}, smart: {result.SmartMatches}, unmatched: {result.Unmatched}.";
+                log.Complete(summary);
             }
             catch (Exception ex)
             {
                 operation.Fail(ex, "Failed");
                 lblStatus.Text = ex.Message;
+                log.Fail(ex, "Auto-pair failed.");
+            }
+            finally
+            {
+                log.Dispose();
             }
         }
 
-        private Task<PdfAutoPairResult> RunAutoPairAsync(StatusStripOperationHandle operation)
+        private async Task<PdfAutoPairResult> RunAutoPairAsync(StatusStripOperationHandle operation)
         {
+            ProcessLogScope log = BeginProcessLog("Auto-pair PDFs inner", Program.AppSettings.Data.PdfFolder);
             Progress<PdfAutoPairProgress> progress = new Progress<PdfAutoPairProgress>(update =>
             {
                 operation.Report(
@@ -274,9 +285,24 @@ namespace ScientificReviews.Forms
                     update?.Completed,
                     update?.Total,
                     update != null && update.IsIndeterminate);
+                LogProcessProgress(log, update?.Summary, update?.Details, update?.Completed, update?.Total);
             });
 
-            return _pdfMatchingService.AutoPairAsync(entries, CreatePdfMatchingOptions(), progress);
+            try
+            {
+                PdfAutoPairResult result = await _pdfMatchingService.AutoPairAsync(entries, CreatePdfMatchingOptions(), progress);
+                log.Complete("Auto-pair inner process completed.");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                log.Fail(ex, "Auto-pair inner process failed.");
+                throw;
+            }
+            finally
+            {
+                log.Dispose();
+            }
         }
 
         private void exportPdfsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -309,20 +335,44 @@ namespace ScientificReviews.Forms
             if (toExport.Length == 0)
                 throw new InvalidOperationException("No records selected for export.");
 
+            ProcessLogScope log = BeginProcessLog("Export PDFs", $"{toExport.Length} record(s) -> {options.OutputDirectory}");
+            IProgress<ExportPdfsProgress> compositeProgress = new Progress<ExportPdfsProgress>(update =>
+            {
+                progress?.Report(update);
+                LogProcessProgress(log, update?.StatusText, null, update?.Completed, update?.Total);
+            });
+
             lblStatus.Text = $"Exporting PDFs using {GetConfiguredThreadCount()} thread(s)...";
-            ExportPdfsRunResult result = await _pdfExportService.RunExportAsync(
-                toExport,
-                options,
-                _pdfMatchingService,
-                CreatePdfMatchingOptions(),
-                progress,
-                cancellationToken);
+            try
+            {
+                ExportPdfsRunResult result = await _pdfExportService.RunExportAsync(
+                    toExport,
+                    options,
+                    _pdfMatchingService,
+                    CreatePdfMatchingOptions(),
+                    compositeProgress,
+                    cancellationToken);
 
-            lblStatus.Text = result.Cancelled
-                ? $"PDF export cancelled after {result.Completed}/{result.Total}."
-                : $"Exported {result.Exported} PDF(s), skipped {result.Skipped}, DOI injected into {result.Injected}.";
+                lblStatus.Text = result.Cancelled
+                    ? $"PDF export cancelled after {result.Completed}/{result.Total}."
+                    : $"Exported {result.Exported} PDF(s), skipped {result.Skipped}, DOI injected into {result.Injected}.";
 
-            return result;
+                if (result.Cancelled)
+                    log.Fail($"PDF export cancelled after {result.Completed}/{result.Total}.");
+                else
+                    log.Complete($"Exported {result.Exported}, skipped {result.Skipped}, DOI injected into {result.Injected}.");
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                log.Fail(ex, "PDF export failed.");
+                throw;
+            }
+            finally
+            {
+                log.Dispose();
+            }
         }
 
         private void btnDoi_Click(object sender, EventArgs e)

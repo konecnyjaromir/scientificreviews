@@ -1,5 +1,6 @@
 using ScientificReviews.Bibtex;
 using ScientificReviews.Helpers;
+using ScientificReviews.Logs;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -113,6 +114,7 @@ namespace ScientificReviews.Forms
                     return false;
 
                 Program.AppSettings.Data.LastDirectory = folderDialog.SelectedPath;
+                ProcessLogScope log = BeginProcessLog(replaceExisting ? "Load BibTeX folder" : "Add BibTeX folder", folderDialog.SelectedPath);
 
                 try
                 {
@@ -122,6 +124,7 @@ namespace ScientificReviews.Forms
                     var progress = new Progress<BibtexLoadProgress>(update =>
                     {
                         operation.Report(update?.Summary, update?.Details, isIndeterminate: update?.IsIndeterminate);
+                        LogProcessProgress(log, update?.Summary, update?.Details);
                     });
                     BibtexLoadResult loadResult = await _bibtexLoadService.LoadFolderAsync(folderDialog.SelectedPath, progress);
                     var loadedEntries = loadResult.Entries;
@@ -132,13 +135,19 @@ namespace ScientificReviews.Forms
                     Changed();
 
                     operation.Complete($"Loaded {loadedEntries.Count} record(s).", folderDialog.SelectedPath);
+                    log.Complete($"Loaded {loadedEntries.Count} record(s).");
                     StartAutomaticBackgroundOperationsAfterLoad();
                     return true;
                 }
                 catch (Exception ex)
                 {
                     operation.Fail(ex, "Failed");
+                    log.Fail(ex, "Folder load failed.");
                     throw;
+                }
+                finally
+                {
+                    log.Dispose();
                 }
             }
         }
@@ -170,6 +179,7 @@ namespace ScientificReviews.Forms
                 return false;
 
             Program.AppSettings.Data.LastDirectory = Path.GetDirectoryName(fileName);
+            ProcessLogScope log = BeginProcessLog(replaceExisting ? "Load BibTeX file" : "Add BibTeX file", fileName);
 
             try
             {
@@ -179,6 +189,7 @@ namespace ScientificReviews.Forms
                 var progress = new Progress<BibtexLoadProgress>(update =>
                 {
                     operation.Report(update?.Summary, update?.Details, isIndeterminate: update?.IsIndeterminate);
+                    LogProcessProgress(log, update?.Summary, update?.Details);
                 });
                 BibtexLoadResult loadResult = await _bibtexLoadService.LoadFileAsync(fileName, progress);
                 var loadedEntries = loadResult.Entries;
@@ -189,13 +200,19 @@ namespace ScientificReviews.Forms
                 Changed();
 
                 operation.Complete($"Loaded {loadedEntries.Count} record(s).", fileName);
+                log.Complete($"Loaded {loadedEntries.Count} record(s).");
                 StartAutomaticBackgroundOperationsAfterLoad();
                 return true;
             }
             catch (Exception ex)
             {
                 operation.Fail(ex, "Failed");
+                log.Fail(ex, "File load failed.");
                 throw;
+            }
+            finally
+            {
+                log.Dispose();
             }
         }
 

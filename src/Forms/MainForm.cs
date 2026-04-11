@@ -32,6 +32,7 @@ namespace ScientificReviews.Forms
         private readonly SemaphoreSlim _autosaveLock = new SemaphoreSlim(1, 1);
         private readonly StatusStripOperationManager _operationManager;
         private readonly BibtexLoadService _bibtexLoadService = new BibtexLoadService();
+        private readonly MetadataFetchService _metadataFetchService = new MetadataFetchService();
         private readonly JcrUpdateService _jcrUpdateService = new JcrUpdateService();
         private readonly PdfExportService _pdfExportService = new PdfExportService();
         private readonly PdfMatchingService _pdfMatchingService = new PdfMatchingService();
@@ -65,6 +66,26 @@ namespace ScientificReviews.Forms
                 lblStatus.Text = $"{name} is already running.";
 
             return operation;
+        }
+
+        private ProcessLogScope BeginProcessLog(string processName, string details = null)
+        {
+            return ProcessLogger.Begin(processName, details);
+        }
+
+        private void LogProcessProgress(ProcessLogScope log, string summary, string details = null, int? completed = null, int? total = null)
+        {
+            if (log == null)
+                return;
+
+            string message = summary ?? string.Empty;
+            if (completed.HasValue && total.HasValue)
+                message += $" ({completed.Value}/{total.Value})";
+
+            if (string.IsNullOrWhiteSpace(details) == false)
+                message += $" | {details}";
+
+            log.Step(message.Trim());
         }
 
         private void LoadData(BibtexEntry[] entries, string search = "")
@@ -169,18 +190,22 @@ namespace ScientificReviews.Forms
             }
 
             await _autosaveLock.WaitAsync();
+            ProcessLogScope log = BeginProcessLog("Autosave backup", s.BackupFolder);
             try
             {
                 string content = new BibtexExporter().EntriesToString(entries.ToArray());
                 await Task.Run(() => BibtexAutosaveManager.SaveSnapshot(s.BackupFolder, keepBackups, content));
                 lblStatus.Text = "Autosave backup created";
+                log.Complete($"Snapshot saved. Entries: {entries.Count}, keepBackups: {keepBackups}.");
             }
             catch (Exception ex)
             {
                 lblStatus.Text = "Autosave failed: " + ex.Message;
+                log.Fail(ex, $"Snapshot failed. Entries: {entries.Count}, keepBackups: {keepBackups}.");
             }
             finally
             {
+                log.Dispose();
                 _autosaveLock.Release();
             }
         }
@@ -212,6 +237,8 @@ namespace ScientificReviews.Forms
             if (operation == null)
                 return;
 
+            ProcessLogScope log = BeginProcessLog("Update JCR", "Fetching missing journals from Clarivate");
+
             try
             {
                 lblStatus.Text = "Updating database...";
@@ -229,29 +256,52 @@ namespace ScientificReviews.Forms
                     lblStatus.Text = $"Some journals were not found. Added {result.AddedJournalCount}/{result.MissingJournalCount}.";
                 else
                     lblStatus.Text = "Journal database updated.";
+
+                log.Complete($"{summary}. Missing: {result.MissingJournalCount}, not found: {result.NotFoundJournalCount}.");
             }
             catch (Exception ex)
             {
                 operation.Fail(ex, "Failed");
                 lblStatus.Text = ex.Message;
+                log.Fail(ex, "JCR update failed.");
+            }
+            finally
+            {
+                log.Dispose();
             }
         }
 
         private async Task<JcrUpdateResult> RunUpdateJcrAsync(StatusStripOperationHandle operation)
         {
+            ProcessLogScope log = BeginProcessLog("Update JCR inner", "Progress tracking");
             Progress<JcrUpdateProgress> progress = new Progress<JcrUpdateProgress>(update =>
             {
                 operation.Report(update?.Summary, update?.Details, update?.Completed, update?.Total, false);
+                LogProcessProgress(log, update?.Summary, update?.Details, update?.Completed, update?.Total);
             });
 
-            return await _jcrUpdateService.UpdateMissingJournalsAsync(
-                entries,
-                Program.JournalsDatabase.Data.JournalReports,
-                Program.AppSettings.Data.JcrApiKey,
-                DateTime.Now.Year - 1,
-                () => Program.JournalsDatabase.Save(),
-                message => AppLog.Log(message, AppLog.MessageType.Error),
-                progress);
+            try
+            {
+                JcrUpdateResult result = await _jcrUpdateService.UpdateMissingJournalsAsync(
+                    entries,
+                    Program.JournalsDatabase.Data.JournalReports,
+                    Program.AppSettings.Data.JcrApiKey,
+                    DateTime.Now.Year - 1,
+                    () => Program.JournalsDatabase.Save(),
+                    message => AppLog.Log(message, AppLog.MessageType.Error),
+                    progress);
+                log.Complete("JCR inner process completed.");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                log.Fail(ex, "JCR inner process failed.");
+                throw;
+            }
+            finally
+            {
+                log.Dispose();
+            }
         }
 
         private void settingsToolStripMenuItem_Click(object sender, EventArgs e)

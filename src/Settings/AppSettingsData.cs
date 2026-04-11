@@ -45,6 +45,12 @@ namespace ScientificReviews
         [Description("Maximum number of threads used by multithreaded operations")]
         public int Threads { get; set; } = 4;
 
+        [Browsable(true)]
+        [Category(GENERAL_CAT)]
+        [DisplayName("Metadata contact email")]
+        [Description("Optional email used in metadata API User-Agent headers (recommended for Crossref polite pool)")]
+        public string MetadataContactEmail { get; set; }
+
 
         [Browsable(true)]
         [Category(BACKUP_CAT)]

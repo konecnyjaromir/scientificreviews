@@ -65,13 +65,15 @@ namespace ScientificReviews
 
         private static void LogsInitialize()
         {
-            ErrLog.GlobalAppPath = Application.UserAppDataPath;
-            ErrLog.Extension = "err";
-            ErrLog.ErrPath = "err";
+            ErrLog.GlobalAppPath = GlobalPath;
+            ErrLog.Extension = "log";
+            ErrLog.ErrPath = "logs";
+            ErrLog.AppName = "errors";
 
-            AppLog.GlobalAppPath = Application.UserAppDataPath;
+            AppLog.GlobalAppPath = GlobalPath;
             AppLog.Extension = "log";
-            AppLog.ErrPath = "log";
+            AppLog.ErrPath = "logs";
+            AppLog.AppName = "process";
         }
 
         private static void LoadSettings()

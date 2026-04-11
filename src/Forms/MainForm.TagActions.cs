@@ -95,36 +95,48 @@ namespace ScientificReviews.Forms
 
         private void RemoveTags()
         {
-            List<string> tags = new List<string>();
-            if (bindingSource1.Current != null)
+            BibtexEntry[] selectedEntries = GetSelectedOrdered();
+            if (selectedEntries.Length == 0 && bindingSource1.Current is DataRowView currentView && currentView.Row != null)
             {
-                DataRowView drv = bindingSource1.Current as DataRowView;
-                DataRow row = drv.Row as DataRow;
-                BibtexEntry entry = row["Entry"] as BibtexEntry;
-                foreach (BibtexTag item in entry.Tags)
-                {
-                    tags.Add(item.Key);
-                }
-
-                SelectForm frm = new SelectForm();
-                frm.SetData(tags.ToArray());
-                frm.SetSelection(tags.ToArray());
-                if (frm.ShowDialog(this) == DialogResult.OK)
-                {
-                    List<string> tagsToLeave = frm.GetSelected().ToList();
-                    List<BibtexTag> list = new List<BibtexTag>();
-                    foreach (BibtexTag tag in entry.Tags)
-                    {
-                        if (tagsToLeave.Contains(tag.Key))
-                            list.Add(tag);
-                    }
-
-                    entry.Tags = list.ToArray();
-                    SelectEntry();
-                }
-
-                Changed();
+                BibtexEntry currentEntry = currentView.Row["Entry"] as BibtexEntry;
+                if (currentEntry != null)
+                    selectedEntries = new[] { currentEntry };
             }
+
+            if (selectedEntries.Length == 0)
+                return;
+
+            List<string> tags = new List<string>();
+            foreach (BibtexEntry selectedEntry in selectedEntries)
+            {
+                foreach (BibtexTag item in selectedEntry.Tags ?? Array.Empty<BibtexTag>())
+                {
+                    if (string.IsNullOrWhiteSpace(item?.Key) == false && tags.Contains(item.Key) == false)
+                        tags.Add(item.Key);
+                }
+            }
+
+            if (tags.Count == 0)
+                return;
+
+            SelectForm frm = new SelectForm();
+            frm.SetData(tags.ToArray());
+            frm.SetSelection(tags.ToArray());
+            if (frm.ShowDialog(this) != DialogResult.OK)
+                return;
+
+            HashSet<string> tagsToLeave = new HashSet<string>(frm.GetSelected(), StringComparer.Ordinal);
+            foreach (BibtexEntry entry in selectedEntries)
+            {
+                entry.Tags = (entry.Tags ?? Array.Empty<BibtexTag>())
+                    .Where(tag => tag != null && tagsToLeave.Contains(tag.Key))
+                    .ToArray();
+            }
+
+            LoadData(visibleEntries.ToArray());
+            SelectEntriesInGrid(selectedEntries);
+            SelectEntry();
+            Changed();
         }
 
         private void allowEditToolStripMenuItem_Click(object sender, EventArgs e)
