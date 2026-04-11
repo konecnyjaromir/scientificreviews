@@ -100,3 +100,4 @@ yarn-error.log*
 *.gz
 *.user
 packages
+.dotnet-home/
