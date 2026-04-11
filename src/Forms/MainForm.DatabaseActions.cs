@@ -109,6 +109,11 @@ namespace ScientificReviews.Forms
             await ExportDatabaseAsync(entries.ToArray());
         }
 
+        private async void exportVisibleToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            await ExportDatabaseAsync(visibleEntries.ToArray());
+        }
+
         private async Task ExportDatabaseAsync(BibtexEntry[] entriesToExport)
         {
             try
@@ -349,6 +354,30 @@ namespace ScientificReviews.Forms
         private void txtSearch_TextChanged(object sender, EventArgs e)
         {
             LoadData(entries.ToArray(), txtSearch.Text);
+        }
+
+        private void exportAsTableToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                SaveFileDialog saveFileDialog = new SaveFileDialog()
+                {
+                    CheckPathExists = true,
+                    Filter = "Bibtex database *.csv|*.csv"
+                };
+                if (saveFileDialog.ShowDialog(this) == DialogResult.OK)
+                {
+                    string fileName = saveFileDialog.FileName;
+                    var table = BuildTable(entries.ToArray(), Program.AppSettings.Data.Columns);
+                    CsvExporter.ExportToCsv(table, fileName);
+                }
+
+                lblStatus.Text = "Export done.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
         }
     }
 }
