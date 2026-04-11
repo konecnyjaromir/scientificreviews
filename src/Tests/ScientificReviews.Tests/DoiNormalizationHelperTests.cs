@@ -59,6 +59,12 @@ namespace ScientificReviews.Tests
             AssertTrue(DoiNormalizationHelper.RequestedDoiMatchesCandidateDoi("2310.08864v2", "arXiv:2310.08864v2"));
         }
 
+        public static void RequestedDoiMatchesCandidateDoi_MatchesWhenRequestedValueIsArxivDoi()
+        {
+            AssertTrue(DoiNormalizationHelper.RequestedDoiMatchesCandidateDoi("10.48550/arXiv.2310.08864", "2310.08864"));
+            AssertTrue(DoiNormalizationHelper.RequestedDoiMatchesCandidateDoi("https://doi.org/10.48550/arXiv.2310.08864", "10.48550/arXiv.2310.08864"));
+        }
+
         public static void RequestedDoiMatchesCandidateDoi_MatchesClassicDoiCaseInsensitively()
         {
             AssertTrue(DoiNormalizationHelper.RequestedDoiMatchesCandidateDoi("10.1000/xyz", "https://doi.org/10.1000/XYZ"));

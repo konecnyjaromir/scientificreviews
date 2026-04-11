@@ -17,6 +17,7 @@ namespace ScientificReviews.Tests
             RunTest(nameof(DoiNormalizationHelperTests.GetDoiValueKind_ClassifiesExpectedKinds), DoiNormalizationHelperTests.GetDoiValueKind_ClassifiesExpectedKinds, failures);
             RunTest(nameof(DoiNormalizationHelperTests.NormalizeDoiValue_NormalizesClassicAndArxivInputs), DoiNormalizationHelperTests.NormalizeDoiValue_NormalizesClassicAndArxivInputs, failures);
             RunTest(nameof(DoiNormalizationHelperTests.RequestedDoiMatchesCandidateDoi_MatchesEquivalentArxivForms), DoiNormalizationHelperTests.RequestedDoiMatchesCandidateDoi_MatchesEquivalentArxivForms, failures);
+            RunTest(nameof(DoiNormalizationHelperTests.RequestedDoiMatchesCandidateDoi_MatchesWhenRequestedValueIsArxivDoi), DoiNormalizationHelperTests.RequestedDoiMatchesCandidateDoi_MatchesWhenRequestedValueIsArxivDoi, failures);
             RunTest(nameof(DoiNormalizationHelperTests.RequestedDoiMatchesCandidateDoi_MatchesClassicDoiCaseInsensitively), DoiNormalizationHelperTests.RequestedDoiMatchesCandidateDoi_MatchesClassicDoiCaseInsensitively, failures);
             RunTest(nameof(DoiNormalizationHelperTests.RequestedDoiMatchesCandidateDoi_RejectsDifferentKindsAndInvalidValues), DoiNormalizationHelperTests.RequestedDoiMatchesCandidateDoi_RejectsDifferentKindsAndInvalidValues, failures);
 

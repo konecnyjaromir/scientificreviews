@@ -112,7 +112,7 @@ namespace ScientificReviews.Helpers
             if (requestedKind == DoiValueKind.Arxiv)
             {
                 return string.Equals(
-                    NormalizeArxivIdentifier(requestedDoi),
+                    TryExtractArxivIdentifier(requestedDoi),
                     GetCandidateArxivIdentifier(candidateDoi),
                     StringComparison.OrdinalIgnoreCase);
             }
