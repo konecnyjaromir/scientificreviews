@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -14,6 +15,23 @@ namespace ScientificReviews.Forms
 {
     public partial class MainForm
     {
+        private sealed class DoiNormalizationResult
+        {
+            public int ChangedEntries { get; set; }
+            public int NormalizedEntries { get; set; }
+            public int CopiedFromEprintEntries { get; set; }
+            public int InvalidEntries { get; set; }
+            public List<string> InvalidRecordKeys { get; } = new List<string>();
+        }
+
+        private enum DoiValueKind
+        {
+            Empty,
+            Classic,
+            Arxiv,
+            Invalid
+        }
+
         private void createEntryKeysToolStripMenuItem_Click(object sender, EventArgs e)
         {
             List<string> keys = new List<string>();
@@ -230,6 +248,11 @@ namespace ScientificReviews.Forms
             await StartFetchMissingMetadataOperationAsync();
         }
 
+        private void normalizeDoiToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            RunNormalizeDoiOperation(entries.ToArray());
+        }
+
         private async Task StartFetchMissingMetadataOperationAsync()
         {
             BibtexEntry[] targetEntries = entries.ToArray();
@@ -239,6 +262,9 @@ namespace ScientificReviews.Forms
                 lblStatus.Text = "No records available for metadata fetch.";
                 return;
             }
+
+            if (TryPrepareDoisForMetadataFetch(targetEntries) == false)
+                return;
 
             string details = $"Fetching metadata for records: {targetEntries.Length}";
 
@@ -280,6 +306,246 @@ namespace ScientificReviews.Forms
             {
                 log.Dispose();
             }
+        }
+
+        private bool TryPrepareDoisForMetadataFetch(BibtexEntry[] targetEntries)
+        {
+            List<string> invalidRecordKeys = GetInvalidDoiRecordKeys(targetEntries);
+            if (invalidRecordKeys.Count == 0)
+                return true;
+
+            DialogResult response = MessageBox.Show(
+                this,
+                $"{invalidRecordKeys.Count} record(s) contain DOI values that are neither classic DOI nor arXiv DOI/identifier.\r\n\r\nDo you want to normalize DOI values now, copy arXiv eprint to doi where doi is missing, and then run metadata fetch?",
+                "Normalize DOI",
+                MessageBoxButtons.YesNoCancel,
+                MessageBoxIcon.Question);
+
+            if (response == DialogResult.Cancel)
+                return false;
+
+            if (response != DialogResult.Yes)
+                return true;
+
+            RunNormalizeDoiOperation(targetEntries);
+            return true;
+        }
+
+        private void RunNormalizeDoiOperation(IEnumerable<BibtexEntry> sourceEntries)
+        {
+            BibtexEntry[] targetEntries = sourceEntries as BibtexEntry[] ?? sourceEntries?.ToArray() ?? Array.Empty<BibtexEntry>();
+            if (targetEntries.Length == 0)
+            {
+                lblStatus.Text = "No records available for DOI normalization.";
+                return;
+            }
+
+            ProcessLogScope log = BeginProcessLog("Normalize DOI", $"Records: {targetEntries.Length}");
+            try
+            {
+                DoiNormalizationResult normalization = NormalizeDoisForMetadataFetch(targetEntries);
+                if (normalization.ChangedEntries > 0)
+                {
+                    LoadData(entries.ToArray(), txtSearch.Text);
+                    Changed();
+                }
+
+                string summary = BuildDoiNormalizationSummary(normalization);
+                log.Complete(summary);
+                AppLog.Log(summary, AppLog.MessageType.Info);
+                lblStatus.Text = summary;
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+                log.Fail(ex, "DOI normalization failed.");
+            }
+            finally
+            {
+                log.Dispose();
+            }
+        }
+
+        private DoiNormalizationResult NormalizeDoisForMetadataFetch(IEnumerable<BibtexEntry> sourceEntries)
+        {
+            DoiNormalizationResult result = new DoiNormalizationResult();
+            if (sourceEntries == null)
+                return result;
+
+            foreach (BibtexEntry entry in sourceEntries)
+            {
+                if (entry == null)
+                    continue;
+
+                bool changed = false;
+                string currentDoi = BibtexTagService.GetTagValueIgnoreCase(entry, "doi");
+                string normalizedDoi = NormalizeDoiValue(currentDoi);
+
+                if (string.IsNullOrWhiteSpace(normalizedDoi))
+                {
+                    string eprint = BibtexTagService.GetTagValueIgnoreCase(entry, "eprint");
+                    string normalizedFromEprint = TryExtractArxivIdentifier(eprint);
+                    if (string.IsNullOrWhiteSpace(normalizedFromEprint) == false)
+                    {
+                        BibtexTagService.SetSingleTagValue(entry, "doi", normalizedFromEprint);
+                        result.CopiedFromEprintEntries++;
+                        changed = true;
+                    }
+                }
+                else if (string.Equals(currentDoi?.Trim(), normalizedDoi, StringComparison.Ordinal) == false)
+                {
+                    BibtexTagService.SetSingleTagValue(entry, "doi", normalizedDoi);
+                    result.NormalizedEntries++;
+                    changed = true;
+                }
+
+                string finalDoi = BibtexTagService.GetTagValueIgnoreCase(entry, "doi");
+                if (GetDoiValueKind(finalDoi) == DoiValueKind.Invalid)
+                {
+                    result.InvalidEntries++;
+                    result.InvalidRecordKeys.Add(GetDoiRecordLabel(entry));
+                }
+
+                if (changed)
+                    result.ChangedEntries++;
+            }
+
+            return result;
+        }
+
+        private List<string> GetInvalidDoiRecordKeys(IEnumerable<BibtexEntry> sourceEntries)
+        {
+            List<string> invalidRecordKeys = new List<string>();
+            if (sourceEntries == null)
+                return invalidRecordKeys;
+
+            foreach (BibtexEntry entry in sourceEntries)
+            {
+                if (entry == null)
+                    continue;
+
+                string doi = BibtexTagService.GetTagValueIgnoreCase(entry, "doi");
+                if (GetDoiValueKind(doi) == DoiValueKind.Invalid)
+                    invalidRecordKeys.Add(GetDoiRecordLabel(entry));
+            }
+
+            return invalidRecordKeys;
+        }
+
+        private static string GetDoiRecordLabel(BibtexEntry entry)
+        {
+            if (entry == null)
+                return "<null>";
+
+            string title = BibtexTagService.GetTagValueIgnoreCase(entry, "title");
+            if (string.IsNullOrWhiteSpace(title) == false)
+                return BibtexUtils.RemoveLatex(title).Trim();
+
+            if (string.IsNullOrWhiteSpace(entry.Key) == false)
+                return entry.Key.Trim();
+
+            return "<unnamed record>";
+        }
+
+        private static string BuildDoiNormalizationSummary(DoiNormalizationResult normalization)
+        {
+            string summary = $"DOI normalization updated {normalization.ChangedEntries} record(s).";
+            if (normalization.CopiedFromEprintEntries > 0)
+                summary += $" Copied eprint to doi in {normalization.CopiedFromEprintEntries} record(s).";
+            if (normalization.InvalidEntries > 0)
+                summary += $" {normalization.InvalidEntries} record(s) still have invalid DOI.";
+
+            return summary;
+        }
+
+        private static string NormalizeDoiValue(string doi)
+        {
+            string prepared = PrepareDoiValue(doi);
+            if (string.IsNullOrWhiteSpace(prepared))
+                return null;
+
+            string arxivIdentifier = TryExtractArxivIdentifier(prepared);
+            if (string.IsNullOrWhiteSpace(arxivIdentifier) == false)
+                return arxivIdentifier;
+
+            if (IsClassicDoiValue(prepared))
+                return prepared.ToLowerInvariant();
+
+            return prepared;
+        }
+
+        private static DoiValueKind GetDoiValueKind(string doi)
+        {
+            string prepared = PrepareDoiValue(doi);
+            if (string.IsNullOrWhiteSpace(prepared))
+                return DoiValueKind.Empty;
+
+            if (string.IsNullOrWhiteSpace(TryExtractArxivIdentifier(prepared)) == false)
+                return DoiValueKind.Arxiv;
+
+            return IsClassicDoiValue(prepared) ? DoiValueKind.Classic : DoiValueKind.Invalid;
+        }
+
+        private static string PrepareDoiValue(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            string prepared = value.Trim();
+            prepared = Regex.Replace(prepared, @"^https?://(dx\.)?doi\.org/", string.Empty, RegexOptions.IgnoreCase);
+            prepared = Regex.Replace(prepared, @"^doi:\s*", string.Empty, RegexOptions.IgnoreCase);
+            return prepared.Trim().TrimEnd('/', '.', ',', ';');
+        }
+
+        private static string TryExtractArxivIdentifier(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            string normalized = NormalizeArxivIdentifierValue(value);
+            if (string.IsNullOrWhiteSpace(normalized) == false)
+                return normalized;
+
+            string prepared = PrepareDoiValue(value);
+            if (string.IsNullOrWhiteSpace(prepared))
+                return null;
+
+            Match doiMatch = Regex.Match(prepared, @"^10\.48550/arxiv[\.:](.+)$", RegexOptions.IgnoreCase);
+            if (doiMatch.Success == false)
+                return null;
+
+            return NormalizeArxivIdentifierValue(doiMatch.Groups[1].Value);
+        }
+
+        private static string NormalizeArxivIdentifierValue(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            string normalized = value.Trim();
+            normalized = Regex.Replace(normalized, @"^arxiv:\s*", string.Empty, RegexOptions.IgnoreCase);
+            normalized = Regex.Replace(normalized, @"^https?://arxiv\.org/(abs|pdf)/", string.Empty, RegexOptions.IgnoreCase);
+            normalized = normalized.Trim().TrimEnd('/', '.', ',', ';');
+            return IsArxivIdentifierValue(normalized) ? normalized.ToLowerInvariant() : null;
+        }
+
+        private static bool IsArxivIdentifierValue(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            return Regex.IsMatch(
+                value.Trim(),
+                @"^(?:\d{4}\.\d{4,5}|[a-z\-]+(?:\.[a-z\-]+)?/\d{7})(v\d+)?$",
+                RegexOptions.IgnoreCase);
+        }
+
+        private static bool IsClassicDoiValue(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            return Regex.IsMatch(value.Trim(), @"^10\.\d{4,9}/\S+$", RegexOptions.IgnoreCase);
         }
 
         private async Task<MetadataUpdateResult> RunFetchMissingMetadataAsync(IEnumerable<BibtexEntry> targetEntries, StatusStripOperationHandle operation)

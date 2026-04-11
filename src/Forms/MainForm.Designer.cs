@@ -60,6 +60,7 @@
             this.toolStripSeparator5 = new System.Windows.Forms.ToolStripSeparator();
             this.excludeEntriesByTitleToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.excludeEntriesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.normalizeDoiToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.fetchMissingMetadataToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator6 = new System.Windows.Forms.ToolStripSeparator();
             this.updatePageTagFormatToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -270,6 +271,7 @@
             // 
             this.databaseToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.createEntryKeysToolStripMenuItem,
+            this.normalizeDoiToolStripMenuItem,
             this.fetchMissingMetadataToolStripMenuItem,
             this.toolStripSeparator3,
             this.removeDuplicitiesToolStripMenuItem,
@@ -294,6 +296,13 @@
             this.createEntryKeysToolStripMenuItem.Size = new System.Drawing.Size(268, 26);
             this.createEntryKeysToolStripMenuItem.Text = "Create entry keys";
             this.createEntryKeysToolStripMenuItem.Click += new System.EventHandler(this.createEntryKeysToolStripMenuItem_Click);
+            // 
+            // normalizeDoiToolStripMenuItem
+            // 
+            this.normalizeDoiToolStripMenuItem.Name = "normalizeDoiToolStripMenuItem";
+            this.normalizeDoiToolStripMenuItem.Size = new System.Drawing.Size(268, 26);
+            this.normalizeDoiToolStripMenuItem.Text = "Normalize DOI";
+            this.normalizeDoiToolStripMenuItem.Click += new System.EventHandler(this.normalizeDoiToolStripMenuItem_Click);
             // 
             // toolStripSeparator3
             // 
@@ -968,6 +977,7 @@
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator3;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator4;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator5;
+        private System.Windows.Forms.ToolStripMenuItem normalizeDoiToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem fetchMissingMetadataToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator6;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator7;

@@ -1,0 +1,17 @@
+D:\Jirka\VSB\Projekty\scientificreviews\src\tempbin\Debug\ScientificReviews.exe.config
+D:\Jirka\VSB\Projekty\scientificreviews\src\tempbin\Debug\ScientificReviews.exe
+D:\Jirka\VSB\Projekty\scientificreviews\src\tempbin\Debug\ScientificReviews.pdb
+D:\Jirka\VSB\Projekty\scientificreviews\src\tempbin\Debug\Newtonsoft.Json.dll
+D:\Jirka\VSB\Projekty\scientificreviews\src\tempbin\Debug\Newtonsoft.Json.xml
+D:\Jirka\VSB\Projekty\scientificreviews\src\tempobj\Debug\ScientificReviews.csproj.AssemblyReference.cache
+D:\Jirka\VSB\Projekty\scientificreviews\src\tempobj\Debug\ScientificReviews.Forms.InputBoxForm.resources
+D:\Jirka\VSB\Projekty\scientificreviews\src\tempobj\Debug\ScientificReviews.Forms.InputGridForm.resources
+D:\Jirka\VSB\Projekty\scientificreviews\src\tempobj\Debug\ScientificReviews.Forms.MainForm.resources
+D:\Jirka\VSB\Projekty\scientificreviews\src\tempobj\Debug\ScientificReviews.Forms.SelectForm.resources
+D:\Jirka\VSB\Projekty\scientificreviews\src\tempobj\Debug\ScientificReviews.Forms.SettingsForm.resources
+D:\Jirka\VSB\Projekty\scientificreviews\src\tempobj\Debug\ScientificReviews.Properties.Resources.resources
+D:\Jirka\VSB\Projekty\scientificreviews\src\tempobj\Debug\ScientificReviews.csproj.GenerateResource.cache
+D:\Jirka\VSB\Projekty\scientificreviews\src\tempobj\Debug\ScientificReviews.csproj.CoreCompileInputs.cache
+D:\Jirka\VSB\Projekty\scientificreviews\src\tempobj\Debug\Scientif.7591B974.Up2Date
+D:\Jirka\VSB\Projekty\scientificreviews\src\tempobj\Debug\ScientificReviews.exe
+D:\Jirka\VSB\Projekty\scientificreviews\src\tempobj\Debug\ScientificReviews.pdb
