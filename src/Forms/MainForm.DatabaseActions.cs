@@ -349,7 +349,10 @@ namespace ScientificReviews.Forms
 
         private async void fetchMissingMetadataToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            await StartFetchMissingMetadataOperationAsync();
+            if (ConfirmMetadataFetch() == false)
+                return;
+
+            await StartFetchMissingMetadataOperationAsync(true);
         }
 
         private void normalizeDoiToolStripMenuItem_Click(object sender, EventArgs e)
@@ -359,6 +362,9 @@ namespace ScientificReviews.Forms
 
         private async void autofixToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (ConfirmAutofix() == false)
+                return;
+
             await StartAutofixOperationAsync();
         }
 
@@ -387,7 +393,7 @@ namespace ScientificReviews.Forms
                 LogProcessProgress(log, "Normalize DOI completed.");
 
                 operation.Report("Fetch missing metadata", "Querying metadata services", 2, 4, false);
-                await StartFetchMissingMetadataOperationAsync();
+                await StartFetchMissingMetadataOperationAsync(false);
                 LogProcessProgress(log, "Fetch missing metadata completed.");
 
                 operation.Report("Create entry keys", "Generating keys from updated metadata", 3, 5, false);
@@ -440,7 +446,7 @@ namespace ScientificReviews.Forms
             }
         }
 
-        private async Task StartFetchMissingMetadataOperationAsync()
+        private async Task StartFetchMissingMetadataOperationAsync(bool normalizeDoiFirst)
         {
             BibtexEntry[] targetEntries = entries.ToArray();
 
@@ -450,8 +456,8 @@ namespace ScientificReviews.Forms
                 return;
             }
 
-            if (TryPrepareDoisForMetadataFetch(targetEntries) == false)
-                return;
+            if (normalizeDoiFirst)
+                RunNormalizeDoiOperation(targetEntries);
 
             string details = $"Fetching metadata for records: {targetEntries.Length}";
 
@@ -495,27 +501,28 @@ namespace ScientificReviews.Forms
             }
         }
 
-        private bool TryPrepareDoisForMetadataFetch(BibtexEntry[] targetEntries)
+        private bool ConfirmMetadataFetch()
         {
-            List<string> invalidRecordKeys = GetInvalidDoiRecordKeys(targetEntries);
-            if (invalidRecordKeys.Count == 0)
-                return true;
-
             DialogResult response = MessageBox.Show(
                 this,
-                $"{invalidRecordKeys.Count} record(s) contain DOI values that are neither classic DOI nor arXiv DOI/identifier.\r\n\r\nDo you want to normalize DOI values now, copy arXiv eprint to doi where doi is missing, and then run metadata fetch?",
-                "Normalize DOI",
-                MessageBoxButtons.YesNoCancel,
-                MessageBoxIcon.Question);
+                "This process will automatically modify record metadata and download the newest metadata versions from external databases.\r\n\r\nThis operation is irreversible and may damage records.\r\n\r\nBefore fetching metadata, the application will also run DOI normalization.\r\n\r\nDo you want to continue?",
+                "Fetch Missing Metadata",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
 
-            if (response == DialogResult.Cancel)
-                return false;
+            return response == DialogResult.Yes;
+        }
 
-            if (response != DialogResult.Yes)
-                return true;
+        private bool ConfirmAutofix()
+        {
+            DialogResult response = MessageBox.Show(
+                this,
+                "Autofix will automatically modify record metadata and run multiple repair/update steps, including DOI normalization, metadata fetching, entry key generation, PDF auto-pairing, and JCR update when configured.\r\n\r\nThis operation is irreversible and may damage records.\r\n\r\nDo you want to continue?",
+                "Autofix",
+                MessageBoxButtons.YesNo,
+                MessageBoxIcon.Warning);
 
-            RunNormalizeDoiOperation(targetEntries);
-            return true;
+            return response == DialogResult.Yes;
         }
 
         private void RunNormalizeDoiOperation(IEnumerable<BibtexEntry> sourceEntries)
