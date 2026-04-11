@@ -60,7 +60,9 @@
   <ItemGroup>
     <Compile Include="Helpers\BibtexAutosaveManager.cs" />
     <Compile Include="Helpers\BibtexLoadService.cs" />
+    <Compile Include="Helpers\BibtexTagService.cs" />
     <Compile Include="Helpers\JcrUpdateService.cs" />
+    <Compile Include="Helpers\PdfExportService.cs" />
     <Compile Include="Helpers\PdfMatchingService.cs" />
     <Compile Include="Helpers\StatusStripOperationManager.cs" />
     <Compile Include="Forms\EditColumnsForm.cs">

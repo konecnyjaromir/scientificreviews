@@ -12,16 +12,12 @@ using System.Diagnostics;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
-using System.IO.Ports;
 using System.Linq;
 using System.Net.Http;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
-using static System.Windows.Forms.VisualStyles.VisualStyleElement;
 
 namespace ScientificReviews.Forms
 {
@@ -46,6 +42,7 @@ namespace ScientificReviews.Forms
         private readonly StatusStripOperationManager _operationManager;
         private readonly BibtexLoadService _bibtexLoadService = new BibtexLoadService();
         private readonly JcrUpdateService _jcrUpdateService = new JcrUpdateService();
+        private readonly PdfExportService _pdfExportService = new PdfExportService();
         private readonly PdfMatchingService _pdfMatchingService = new PdfMatchingService();
         private ContextMenuStrip _recordContextMenu;
         private ToolStripMenuItem _contextEditMenuItem;
@@ -54,31 +51,9 @@ namespace ScientificReviews.Forms
         private ToolStripMenuItem _contextPasteMenuItem;
         private ToolStripMenuItem _contextDuplicateMenuItem;
 
-        private sealed class PdfExportJob
-        {
-            public string SourcePdfPath { get; set; }
-            public string DestinationPath { get; set; }
-            public string Doi { get; set; }
-            public bool InjectDoiMetadata { get; set; }
-        }
-
         private int GetConfiguredThreadCount()
         {
             return Math.Max(1, Program.AppSettings.Data.Threads);
-        }
-
-        private ParallelOptions CreateParallelOptions()
-        {
-            return CreateParallelOptions(CancellationToken.None);
-        }
-
-        private ParallelOptions CreateParallelOptions(CancellationToken cancellationToken)
-        {
-            return new ParallelOptions
-            {
-                MaxDegreeOfParallelism = GetConfiguredThreadCount(),
-                CancellationToken = cancellationToken
-            };
         }
 
         private PdfMatchingOptions CreatePdfMatchingOptions()
@@ -1152,9 +1127,9 @@ namespace ScientificReviews.Forms
                         string quartile = percentile >= 75 ? "Q1" : percentile >= 50 ? "Q2" : percentile >= 25 ? "Q3" : "Q4";
 
                         string percentileText = Math.Round(percentile, 1).ToString(CultureInfo.InvariantCulture);
-                        SetSingleTagValue(entry, "jif", percentileText);
-                        SetSingleTagValue(entry, "jif_" + report.Year.ToString(), percentileText);
-                        SetSingleTagValue(entry, "jif_Q", quartile);
+                    BibtexTagService.SetSingleTagValue(entry, "jif", percentileText);
+                    BibtexTagService.SetSingleTagValue(entry, "jif_" + report.Year.ToString(), percentileText);
+                    BibtexTagService.SetSingleTagValue(entry, "jif_Q", quartile);
                     }
                 }
             }
@@ -1170,7 +1145,7 @@ namespace ScientificReviews.Forms
 
             foreach (var entry in entries)
             {
-                int removedForEntry = RemoveDuplicateTags(entry);
+                    int removedForEntry = BibtexTagService.RemoveDuplicateTags(entry);
                 if (removedForEntry > 0)
                 {
                     changedEntries++;
@@ -1189,96 +1164,6 @@ namespace ScientificReviews.Forms
             {
                 lblStatus.Text = "No duplicate tags found.";
             }
-        }
-
-        private void SetSingleTagValue(BibtexEntry entry, string key, string value)
-        {
-            if (entry == null || string.IsNullOrWhiteSpace(key))
-                return;
-
-            var tags = (entry.Tags ?? Array.Empty<BibtexTag>()).ToList();
-            var updatedTags = new List<BibtexTag>();
-            bool updated = false;
-
-            foreach (var tag in tags)
-            {
-                if (tag == null)
-                    continue;
-
-                if (string.Equals(tag.Key, key, StringComparison.OrdinalIgnoreCase))
-                {
-                    if (updated)
-                        continue;
-
-                    tag.Value = value;
-                    updatedTags.Add(tag);
-                    updated = true;
-                    continue;
-                }
-
-                updatedTags.Add(tag);
-            }
-
-            if (!updated)
-            {
-                updatedTags.Add(new BibtexTag(key, value));
-            }
-
-            entry.Tags = updatedTags.ToArray();
-        }
-
-        private string GetTagValueIgnoreCase(BibtexEntry entry, string key)
-        {
-            if (entry?.Tags == null || string.IsNullOrWhiteSpace(key))
-                return null;
-
-            foreach (var tag in entry.Tags)
-            {
-                if (tag != null && string.Equals(tag.Key, key, StringComparison.OrdinalIgnoreCase))
-                    return tag.Value;
-            }
-
-            return null;
-        }
-
-        private void RemoveAllTagsByKey(BibtexEntry entry, string key)
-        {
-            if (entry?.Tags == null || string.IsNullOrWhiteSpace(key))
-                return;
-
-            entry.Tags = entry.Tags
-                .Where(tag => tag != null && string.Equals(tag.Key, key, StringComparison.OrdinalIgnoreCase) == false)
-                .ToArray();
-        }
-
-        private int RemoveDuplicateTags(BibtexEntry entry)
-        {
-            if (entry?.Tags == null || entry.Tags.Length <= 1)
-                return 0;
-
-            var uniqueTags = new List<BibtexTag>();
-            var seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-            for (int i = entry.Tags.Length - 1; i >= 0; i--)
-            {
-                var tag = entry.Tags[i];
-                if (tag == null)
-                    continue;
-
-                string tagKey = tag.Key ?? string.Empty;
-                if (seenKeys.Add(tagKey))
-                {
-                    uniqueTags.Insert(0, tag);
-                }
-            }
-
-            int removed = entry.Tags.Length - uniqueTags.Count;
-            if (removed > 0)
-            {
-                entry.Tags = uniqueTags.ToArray();
-            }
-
-            return removed;
         }
 
         private async void loadBibTexFileToolStripMenuItem_Click(object sender, EventArgs e)
@@ -2136,294 +2021,19 @@ namespace ScientificReviews.Forms
                 throw new InvalidOperationException("No records selected for export.");
 
             lblStatus.Text = $"Exporting PDFs using {GetConfiguredThreadCount()} thread(s)...";
-
-            ExportPdfsRunResult result = await Task.Run(() =>
-            {
-                int total = toExport.Length;
-                int completed = 0;
-                int exported = 0;
-                int skipped = 0;
-                int injected = 0;
-                string exportDirectory = options.PackToFolder
-                    ? Path.Combine(options.OutputDirectory, "export")
-                    : options.OutputDirectory;
-
-                try
-                {
-                    Directory.CreateDirectory(exportDirectory);
-
-                    var pdfFiles = GetPdfFiles();
-
-                    var jobs = new List<PdfExportJob>();
-                    var reservedDestinations = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-                    progress?.Report(new ExportPdfsProgress
-                    {
-                        Total = total,
-                        Completed = 0,
-                        Exported = 0,
-                        Skipped = 0,
-                        Injected = 0,
-                        StatusText = "Preparing export jobs..."
-                    });
-
-                    foreach (var entry in toExport)
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-
-                        string sourcePdf = FindPdfFile(entry, pdfFiles);
-                        if (string.IsNullOrWhiteSpace(sourcePdf))
-                        {
-                            int finishedSkipped = Interlocked.Increment(ref skipped);
-                            int finishedCount = Interlocked.Increment(ref completed);
-                            progress?.Report(new ExportPdfsProgress
-                            {
-                                Total = total,
-                                Completed = finishedCount,
-                                Exported = exported,
-                                Skipped = finishedSkipped,
-                                Injected = injected,
-                                StatusText = $"Preparing export... {finishedCount}/{total}"
-                            });
-                            continue;
-                        }
-
-                        string baseFileName = BuildExportPdfBaseName(entry, options.FileNameMode, options.CustomPattern);
-                        string destination = BuildReservedExportDestinationPath(exportDirectory, baseFileName, sourcePdf, reservedDestinations);
-                        jobs.Add(new PdfExportJob
-                        {
-                            SourcePdfPath = sourcePdf,
-                            DestinationPath = destination,
-                            Doi = GetTagValueIgnoreCase(entry, "doi"),
-                            InjectDoiMetadata = options.InjectDoiMetadata
-                        });
-                    }
-
-                    Parallel.ForEach(jobs, CreateParallelOptions(cancellationToken), job =>
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-
-                        bool isSameFile = string.Equals(
-                            Path.GetFullPath(job.SourcePdfPath),
-                            Path.GetFullPath(job.DestinationPath),
-                            StringComparison.OrdinalIgnoreCase);
-
-                        if (!isSameFile)
-                        {
-                            File.Copy(job.SourcePdfPath, job.DestinationPath, false);
-                        }
-
-                        if (job.InjectDoiMetadata && string.IsNullOrWhiteSpace(job.Doi) == false)
-                        {
-                            InjectDoiIntoPdfMetadata(job.DestinationPath, job.Doi);
-                            Interlocked.Increment(ref injected);
-                        }
-
-                        int finishedExported = Interlocked.Increment(ref exported);
-                        int finishedCount = Interlocked.Increment(ref completed);
-                        progress?.Report(new ExportPdfsProgress
-                        {
-                            Total = total,
-                            Completed = finishedCount,
-                            Exported = finishedExported,
-                            Skipped = skipped,
-                            Injected = injected,
-                            StatusText = $"Exporting PDFs... {finishedCount}/{total}"
-                        });
-                    });
-
-                    return new ExportPdfsRunResult
-                    {
-                        Total = total,
-                        Completed = completed,
-                        Exported = exported,
-                        Skipped = skipped,
-                        Injected = injected,
-                        Cancelled = false
-                    };
-                }
-                catch (OperationCanceledException)
-                {
-                    return new ExportPdfsRunResult
-                    {
-                        Total = total,
-                        Completed = completed,
-                        Exported = exported,
-                        Skipped = skipped,
-                        Injected = injected,
-                        Cancelled = true
-                    };
-                }
-            });
+            ExportPdfsRunResult result = await _pdfExportService.RunExportAsync(
+                toExport,
+                options,
+                _pdfMatchingService,
+                CreatePdfMatchingOptions(),
+                progress,
+                cancellationToken);
 
             lblStatus.Text = result.Cancelled
                 ? $"PDF export cancelled after {result.Completed}/{result.Total}."
                 : $"Exported {result.Exported} PDF(s), skipped {result.Skipped}, DOI injected into {result.Injected}.";
 
             return result;
-        }
-
-        private string BuildExportPdfBaseName(BibtexEntry entry, PdfExportFileNameMode mode, string customPattern)
-        {
-            string pattern;
-            switch (mode)
-            {
-                case PdfExportFileNameMode.Key:
-                    pattern = "<key>";
-                    break;
-                case PdfExportFileNameMode.Custom:
-                    pattern = string.IsNullOrWhiteSpace(customPattern) ? "<key>" : customPattern;
-                    break;
-                default:
-                    pattern = "<key>_<title>";
-                    break;
-            }
-
-            string rendered = Regex.Replace(pattern, @"<(?<tag>[^>]+)>", match =>
-            {
-                string tagName = match.Groups["tag"].Value.Trim();
-                string value;
-                if (string.Equals(tagName, "key", StringComparison.OrdinalIgnoreCase))
-                    value = entry.Key;
-                else if (string.Equals(tagName, "type", StringComparison.OrdinalIgnoreCase))
-                    value = entry.Type;
-                else
-                    value = GetTagValueIgnoreCase(entry, tagName);
-
-                return SanitizeFileNamePart(BibtexUtils.RemoveLatex(value ?? string.Empty));
-            });
-
-            rendered = Regex.Replace(rendered, @"\s+", " ").Trim();
-            rendered = rendered.Trim(' ', '.', '_', '-');
-
-            if (string.IsNullOrWhiteSpace(rendered))
-                rendered = SanitizeFileNamePart(entry.Key);
-
-            if (string.IsNullOrWhiteSpace(rendered))
-                rendered = "record";
-
-            return rendered;
-        }
-
-        private string SanitizeFileNamePart(string value)
-        {
-            string sanitized = value ?? string.Empty;
-            foreach (char invalidChar in Path.GetInvalidFileNameChars())
-            {
-                sanitized = sanitized.Replace(invalidChar, '_');
-            }
-
-            sanitized = Regex.Replace(sanitized, @"\s+", " ").Trim();
-            return sanitized;
-        }
-
-        private string BuildExportDestinationPath(string outputDirectory, string baseFileName, string sourcePdfPath)
-        {
-            string destination = Path.Combine(outputDirectory, baseFileName + ".pdf");
-            string sourceFullPath = Path.GetFullPath(sourcePdfPath);
-
-            if (string.Equals(Path.GetFullPath(destination), sourceFullPath, StringComparison.OrdinalIgnoreCase))
-                return destination;
-
-            if (File.Exists(destination) == false)
-                return destination;
-
-            for (int index = 2; ; index++)
-            {
-                string candidate = Path.Combine(outputDirectory, $"{baseFileName}_{index}.pdf");
-                if (File.Exists(candidate) == false)
-                    return candidate;
-            }
-        }
-
-        private string BuildReservedExportDestinationPath(string outputDirectory, string baseFileName, string sourcePdfPath, HashSet<string> reservedDestinations)
-        {
-            string sourceFullPath = Path.GetFullPath(sourcePdfPath);
-
-            for (int index = 1; ; index++)
-            {
-                string candidateFileName = index == 1 ? baseFileName + ".pdf" : $"{baseFileName}_{index}.pdf";
-                string candidate = Path.Combine(outputDirectory, candidateFileName);
-                string candidateFullPath = Path.GetFullPath(candidate);
-
-                bool isSameFile = string.Equals(candidateFullPath, sourceFullPath, StringComparison.OrdinalIgnoreCase);
-                bool exists = File.Exists(candidateFullPath);
-                bool alreadyReserved = reservedDestinations.Contains(candidateFullPath);
-
-                if ((isSameFile || exists == false) && alreadyReserved == false)
-                {
-                    reservedDestinations.Add(candidateFullPath);
-                    return candidateFullPath;
-                }
-            }
-        }
-
-        private void InjectDoiIntoPdfMetadata(string fileName, string doi)
-        {
-            if (string.IsNullOrWhiteSpace(fileName) || string.IsNullOrWhiteSpace(doi))
-                return;
-
-            byte[] originalBytes = File.ReadAllBytes(fileName);
-            Encoding encoding = Encoding.GetEncoding("ISO-8859-1");
-            string pdfText = encoding.GetString(originalBytes);
-
-            Match trailerMatch = Regex.Matches(pdfText, @"trailer\s*<<(?<dict>.*?)>>\s*startxref\s*(?<xref>\d+)", RegexOptions.Singleline | RegexOptions.IgnoreCase)
-                .Cast<Match>()
-                .LastOrDefault();
-            if (trailerMatch == null)
-                return;
-
-            string trailerDict = trailerMatch.Groups["dict"].Value;
-            int prevXref = int.Parse(trailerMatch.Groups["xref"].Value, CultureInfo.InvariantCulture);
-
-            Match rootMatch = Regex.Match(trailerDict, @"/Root\s+(?<root>\d+\s+\d+\s+R)", RegexOptions.IgnoreCase);
-            Match sizeMatch = Regex.Match(trailerDict, @"/Size\s+(?<size>\d+)", RegexOptions.IgnoreCase);
-            Match infoMatch = Regex.Match(trailerDict, @"/Info\s+(?<info>\d+)\s+\d+\s+R", RegexOptions.IgnoreCase);
-            Match idMatch = Regex.Match(trailerDict, @"/ID\s*\[[^\]]+\]", RegexOptions.IgnoreCase);
-
-            if (!rootMatch.Success || !sizeMatch.Success)
-                return;
-
-            int newObjectNumber = int.Parse(sizeMatch.Groups["size"].Value, CultureInfo.InvariantCulture);
-            string existingInfoBody = string.Empty;
-            if (infoMatch.Success)
-            {
-                int infoObjectNumber = int.Parse(infoMatch.Groups["info"].Value, CultureInfo.InvariantCulture);
-                Match infoObjectMatch = Regex.Match(pdfText, $@"(?s)\b{infoObjectNumber}\s+0\s+obj\s*<<(.*?)>>\s*endobj");
-                if (infoObjectMatch.Success)
-                {
-                    existingInfoBody = infoObjectMatch.Groups[1].Value;
-                }
-            }
-
-            existingInfoBody = Regex.Replace(existingInfoBody, @"(?is)/DOI\s*(\((?:\\.|[^\\)])*\)|<[^>]*>)", string.Empty).Trim();
-
-            string escapedDoi = EscapePdfLiteralString(doi.Trim());
-            string infoObject = $"{newObjectNumber} 0 obj\n<<\n{existingInfoBody}\n/DOI ({escapedDoi})\n>>\nendobj\n";
-            int objectOffset = originalBytes.Length;
-            string xref = $"xref\n{newObjectNumber} 1\n{objectOffset:D10} 00000 n \n";
-            int xrefOffset = objectOffset + encoding.GetByteCount(infoObject);
-
-            string trailer = $"trailer\n<< /Size {newObjectNumber + 1} /Root {rootMatch.Groups["root"].Value} /Info {newObjectNumber} 0 R";
-            if (idMatch.Success)
-            {
-                trailer += " " + idMatch.Value;
-            }
-
-            trailer += $" /Prev {prevXref} >>\nstartxref\n{xrefOffset}\n%%EOF";
-
-            byte[] appendedBytes = encoding.GetBytes(infoObject + xref + trailer);
-            File.WriteAllBytes(fileName, originalBytes.Concat(appendedBytes).ToArray());
-        }
-
-        private string EscapePdfLiteralString(string value)
-        {
-            return (value ?? string.Empty)
-                .Replace("\\", "\\\\")
-                .Replace("(", "\\(")
-                .Replace(")", "\\)")
-                .Replace("\r", "\\r")
-                .Replace("\n", "\\n");
         }
 
         private void settingsToolStripMenuItem_Click(object sender, EventArgs e)

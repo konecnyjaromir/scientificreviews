@@ -88,9 +88,9 @@ namespace ScientificReviews.Helpers
 
         public string FindStoredPdfFile(BibtexEntry entry, string pdfFolder)
         {
-            string storedValue = GetTagValueIgnoreCase(entry, "path_to_pdf");
+            string storedValue = BibtexTagService.GetTagValueIgnoreCase(entry, "path_to_pdf");
             if (string.IsNullOrWhiteSpace(storedValue))
-                storedValue = GetTagValueIgnoreCase(entry, "pdf_file");
+                storedValue = BibtexTagService.GetTagValueIgnoreCase(entry, "pdf_file");
 
             if (string.IsNullOrWhiteSpace(storedValue))
                 return null;
@@ -147,9 +147,9 @@ namespace ScientificReviews.Helpers
                 return;
 
             string fullPdfPath = Path.GetFullPath(pdfFilePath);
-            SetSingleTagValue(entry, "path_to_pdf", fullPdfPath);
-            SetSingleTagValue(entry, "pdf_file", Path.GetFileName(pdfFilePath));
-            SetSingleTagValue(entry, "has_pdf", "yes");
+            BibtexTagService.SetSingleTagValue(entry, "path_to_pdf", fullPdfPath);
+            BibtexTagService.SetSingleTagValue(entry, "pdf_file", Path.GetFileName(pdfFilePath));
+            BibtexTagService.SetSingleTagValue(entry, "has_pdf", "yes");
         }
 
         public void ClearPdfAssignment(BibtexEntry entry)
@@ -157,14 +157,14 @@ namespace ScientificReviews.Helpers
             if (entry == null)
                 return;
 
-            RemoveAllTagsByKey(entry, "path_to_pdf");
-            RemoveAllTagsByKey(entry, "pdf_file");
+            BibtexTagService.RemoveAllTagsByKey(entry, "path_to_pdf");
+            BibtexTagService.RemoveAllTagsByKey(entry, "pdf_file");
             UpdateHasPdfTag(entry, false);
         }
 
         public void UpdateHasPdfTag(BibtexEntry entry, bool hasPdf)
         {
-            SetSingleTagValue(entry, "has_pdf", hasPdf ? "yes" : "no");
+            BibtexTagService.SetSingleTagValue(entry, "has_pdf", hasPdf ? "yes" : "no");
         }
 
         public Task<PdfAutoPairResult> AutoPairAsync(
@@ -433,7 +433,7 @@ namespace ScientificReviews.Helpers
 
         private string GetNormalizedTitleForExactMatch(BibtexEntry entry)
         {
-            string title = GetTagValueIgnoreCase(entry, "title");
+            string title = BibtexTagService.GetTagValueIgnoreCase(entry, "title");
             if (string.IsNullOrWhiteSpace(title))
                 return null;
 
@@ -442,7 +442,7 @@ namespace ScientificReviews.Helpers
 
         private string GetStandardizedTitle(BibtexEntry entry)
         {
-            string title = GetTagValueIgnoreCase(entry, "title");
+            string title = BibtexTagService.GetTagValueIgnoreCase(entry, "title");
             return StandardizeText(BibtexUtils.RemoveLatex(title ?? string.Empty));
         }
 
@@ -561,62 +561,5 @@ namespace ScientificReviews.Helpers
             return Math.Min(1d, (cosine * 0.9d) + (keywordScore * 0.1d));
         }
 
-        private void SetSingleTagValue(BibtexEntry entry, string key, string value)
-        {
-            if (entry == null || string.IsNullOrWhiteSpace(key))
-                return;
-
-            List<BibtexTag> tags = (entry.Tags ?? Array.Empty<BibtexTag>()).ToList();
-            var updatedTags = new List<BibtexTag>();
-            bool updated = false;
-
-            foreach (BibtexTag tag in tags)
-            {
-                if (tag == null)
-                    continue;
-
-                if (string.Equals(tag.Key, key, StringComparison.OrdinalIgnoreCase))
-                {
-                    if (updated)
-                        continue;
-
-                    tag.Value = value;
-                    updatedTags.Add(tag);
-                    updated = true;
-                    continue;
-                }
-
-                updatedTags.Add(tag);
-            }
-
-            if (updated == false)
-                updatedTags.Add(new BibtexTag(key, value));
-
-            entry.Tags = updatedTags.ToArray();
-        }
-
-        private string GetTagValueIgnoreCase(BibtexEntry entry, string key)
-        {
-            if (entry?.Tags == null || string.IsNullOrWhiteSpace(key))
-                return null;
-
-            foreach (BibtexTag tag in entry.Tags)
-            {
-                if (tag != null && string.Equals(tag.Key, key, StringComparison.OrdinalIgnoreCase))
-                    return tag.Value;
-            }
-
-            return null;
-        }
-
-        private void RemoveAllTagsByKey(BibtexEntry entry, string key)
-        {
-            if (entry?.Tags == null || string.IsNullOrWhiteSpace(key))
-                return;
-
-            entry.Tags = entry.Tags
-                .Where(tag => tag != null && string.Equals(tag.Key, key, StringComparison.OrdinalIgnoreCase) == false)
-                .ToArray();
-        }
     }
 }
