@@ -91,6 +91,8 @@ namespace ScientificReviews.Forms
 
             if (markChanged)
                 Changed();
+            else
+                SetDatabaseChanged(false);
         }
 
         private async Task<bool> LoadBibTexFolderAsync(bool replaceExisting)
@@ -133,7 +135,10 @@ namespace ScientificReviews.Forms
                     SetCurrentBibTex(null);
                     entries.AddRange(loadedEntries);
                     LoadData(entries.ToArray());
-                    Changed();
+                    Changed(!replaceExisting);
+
+                    if (replaceExisting)
+                        SetDatabaseChanged(false);
 
                     operation.Complete($"Loaded {loadedEntries.Count} record(s).", folderDialog.SelectedPath);
                     log.Complete($"Loaded {loadedEntries.Count} record(s).");
@@ -198,7 +203,10 @@ namespace ScientificReviews.Forms
                 SetCurrentBibTex(fileName);
                 entries.AddRange(loadedEntries);
                 LoadData(entries.ToArray());
-                Changed();
+                Changed(!replaceExisting);
+
+                if (replaceExisting)
+                    SetDatabaseChanged(false);
 
                 operation.Complete($"Loaded {loadedEntries.Count} record(s).", fileName);
                 log.Complete($"Loaded {loadedEntries.Count} record(s).");

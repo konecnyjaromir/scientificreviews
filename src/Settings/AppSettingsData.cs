@@ -81,6 +81,12 @@ namespace ScientificReviews
 
         [Browsable(true)]
         [Category(GENERAL_CAT)]
+        [DisplayName("Allow unsafe closing")]
+        [Description("If true, closing the application bypasses the unsaved database changes warning")]
+        public bool UnsafeClosing { get; set; } = false;
+
+        [Browsable(true)]
+        [Category(GENERAL_CAT)]
         [DisplayName("Standard columns")]
         [Description("Columns used by Export Mode = As standard. Edit them the same way as custom columns.")]
         [Editor(typeof(StringArrayEditor), typeof(UITypeEditor))]

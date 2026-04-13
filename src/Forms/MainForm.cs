@@ -124,6 +124,7 @@ namespace ScientificReviews.Forms
         private readonly DatabaseExportService _databaseExportService = new DatabaseExportService();
         private readonly PdfMatchingService _pdfMatchingService = new PdfMatchingService();
         private string _currentBibTexPath;
+        private bool DatabaseChanged { get; set; }
         private ContextMenuStrip _recordContextMenu;
         private ContextMenuStrip _gridBackgroundContextMenu;
         private ToolStripMenuItem _contextEditMenuItem;
@@ -278,8 +279,16 @@ namespace ScientificReviews.Forms
             return orderedKeys;
         }
 
-        private async void Changed()
+        private void SetDatabaseChanged(bool isChanged)
         {
+            DatabaseChanged = isChanged;
+        }
+
+        private async void Changed(bool markDatabaseChanged = true)
+        {
+            if (markDatabaseChanged)
+                SetDatabaseChanged(true);
+
             AppSettingsData s = Program.AppSettings.Data;
             if (!s.AllowBackup)
                 return;
@@ -330,6 +339,23 @@ namespace ScientificReviews.Forms
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
+            if (DatabaseChanged && !Program.AppSettings.Data.UnsafeClosing)
+            {
+                DialogResult result = MessageBox.Show(
+                    this,
+                    "The current database contains unsaved changes.\r\n\r\nDo you really want to close the application without saving?",
+                    Program.APP_NAME,
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2);
+
+                if (result != DialogResult.Yes)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+            }
+
             Program.AppSettings.SaveSettings();
         }
 
@@ -508,6 +534,7 @@ namespace ScientificReviews.Forms
                 entries = loadedEntries.ToList();
                 visibleEntries = entries;
                 LoadData(visibleEntries.ToArray());
+                SetDatabaseChanged(true);
                 lblStatus.Text = "Loaded latest autosave backup.";
             }
             catch (Exception ex)

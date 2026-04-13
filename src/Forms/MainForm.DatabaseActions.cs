@@ -224,6 +224,7 @@ namespace ScientificReviews.Forms
                 {
                     Program.AppSettings.Data.LastDirectory = Path.GetDirectoryName(fileName);
                     SetCurrentBibTex(fileName);
+                    SetDatabaseChanged(false);
                     Program.AppSettings.SaveSettings();
                 }
 
