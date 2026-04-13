@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -14,6 +15,16 @@ namespace ScientificReviews.Forms
 {
     public partial class MainForm : Form
     {
+        private const int WM_CUT = 0x0300;
+        private const int WM_COPY = 0x0301;
+        private const int WM_PASTE = 0x0302;
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetFocus();
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
         public MainForm()
         {
             InitializeComponent();
@@ -34,7 +45,69 @@ namespace ScientificReviews.Forms
                 return true;
             }
 
+            if (HandleClipboardShortcut(keyData))
+                return true;
+
             return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private bool HandleClipboardShortcut(Keys keyData)
+        {
+            if (keyData != (Keys.Control | Keys.C) &&
+                keyData != (Keys.Control | Keys.X) &&
+                keyData != (Keys.Control | Keys.V))
+                return false;
+
+            if (TryHandleTextClipboardShortcut(keyData))
+                return true;
+
+            if (!ShouldHandleRecordClipboardShortcut())
+                return false;
+
+            if (keyData == (Keys.Control | Keys.C))
+                CopySelectedRecordsToClipboard();
+            else if (keyData == (Keys.Control | Keys.X))
+                CutSelectedRecordsToClipboard();
+            else
+                PasteRecordsFromClipboard();
+
+            return true;
+        }
+
+        private bool TryHandleTextClipboardShortcut(Keys keyData)
+        {
+            if (!IsTextClipboardContext())
+                return false;
+
+            IntPtr focusedHandle = GetFocus();
+            if (focusedHandle == IntPtr.Zero)
+                return false;
+
+            int message = keyData == (Keys.Control | Keys.C)
+                ? WM_COPY
+                : keyData == (Keys.Control | Keys.X)
+                    ? WM_CUT
+                    : WM_PASTE;
+
+            SendMessage(focusedHandle, message, IntPtr.Zero, IntPtr.Zero);
+            return true;
+        }
+
+        private bool IsTextClipboardContext()
+        {
+            return (txtSearch?.TextBox?.ContainsFocus ?? false) ||
+                   (txtKey?.TextBox?.ContainsFocus ?? false) ||
+                   (txtValue?.TextBox?.ContainsFocus ?? false) ||
+                   (richTextBox1?.ContainsFocus ?? false) ||
+                   (propertyGrid1?.ContainsFocus ?? false) ||
+                   (dataGridView1?.IsCurrentCellInEditMode ?? false);
+        }
+
+        private bool ShouldHandleRecordClipboardShortcut()
+        {
+            return dataGridView1 != null &&
+                   dataGridView1.ContainsFocus &&
+                   !dataGridView1.IsCurrentCellInEditMode;
         }
 
         List<BibtexEntry> entries = new List<BibtexEntry>();
