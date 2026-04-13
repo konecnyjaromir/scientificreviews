@@ -795,9 +795,33 @@ namespace ScientificReviews.Forms
                 return;
             }
 
-            BibtexUtils.UpdatePages(targetEntries.ToList());
-            RefreshGrid();
-            Changed();
+            ProcessLogScope log = BeginProcessLog("Normalize page-tag", $"Records: {targetEntries.Length}");
+            try
+            {
+                int changedEntries = BibtexUtils.UpdatePages(targetEntries.ToList());
+                if (changedEntries > 0)
+                {
+                    RefreshGrid();
+                    Changed();
+                }
+
+                string summary = changedEntries > 0
+                    ? $"Page-tag normalization finished. Updated {changedEntries} record(s)."
+                    : "Page-tag normalization finished. No page tags required changes.";
+
+                log.Complete(summary);
+                AppLog.Log(summary, AppLog.MessageType.Info);
+                lblStatus.Text = summary;
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+                log.Fail(ex, "Page-tag normalization failed.");
+            }
+            finally
+            {
+                log.Dispose();
+            }
         }
 
         private DoiNormalizationResult NormalizeDoisForMetadataFetch(IEnumerable<BibtexEntry> sourceEntries)

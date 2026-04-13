@@ -121,13 +121,15 @@ namespace ScientificReviews.Bibtex
 
         }
 
-        public static void UpdatePages(List<BibtexEntry> entries)
+        public static int UpdatePages(List<BibtexEntry> entries)
         {
+            int changedEntries = 0;
             foreach (var entry in entries)
             {
                 var tag = entry.GetTag("pages");
                 if ( tag != null)
                 {
+                    string originalValue = tag.Value;
                     string[] numbers = Regex.Split(tag.Value, "[^0-9]+");
                     int length = numbers.Length;
                     string ret = string.Empty;
@@ -139,9 +141,15 @@ namespace ScientificReviews.Bibtex
                             ret += "--";
                         }
                     }   
-                    tag.Value = ret;
+                    if (string.Equals(originalValue, ret, StringComparison.Ordinal) == false)
+                    {
+                        tag.Value = ret;
+                        changedEntries++;
+                    }
                 }
-            }                       
+            }
+
+            return changedEntries;
         }
 
         public static string RemoveLatex(string value)
