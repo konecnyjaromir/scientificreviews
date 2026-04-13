@@ -70,7 +70,7 @@ namespace ScientificReviews
         [Category(PDF_CAT)]
         [DisplayName("Recursive PDF search")]
         [Description("If enabled, PDFs are searched in the PDF folder including all subfolders.")]
-        public bool RecursivePdfSearch { get; set; } = false;
+        public bool RecursivePdfSearch { get; set; } = true;
 
         [Browsable(true)]
         [Category(PDF_CAT)]
