@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -14,6 +15,16 @@ namespace ScientificReviews.Forms
 {
     public partial class MainForm : Form
     {
+        private const int WM_CUT = 0x0300;
+        private const int WM_COPY = 0x0301;
+        private const int WM_PASTE = 0x0302;
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr GetFocus();
+
+        [DllImport("user32.dll", CharSet = CharSet.Auto)]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
         public MainForm()
         {
             InitializeComponent();
@@ -34,7 +45,69 @@ namespace ScientificReviews.Forms
                 return true;
             }
 
+            if (HandleClipboardShortcut(keyData))
+                return true;
+
             return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private bool HandleClipboardShortcut(Keys keyData)
+        {
+            if (keyData != (Keys.Control | Keys.C) &&
+                keyData != (Keys.Control | Keys.X) &&
+                keyData != (Keys.Control | Keys.V))
+                return false;
+
+            if (TryHandleTextClipboardShortcut(keyData))
+                return true;
+
+            if (!ShouldHandleRecordClipboardShortcut())
+                return false;
+
+            if (keyData == (Keys.Control | Keys.C))
+                CopySelectedRecordsToClipboard();
+            else if (keyData == (Keys.Control | Keys.X))
+                CutSelectedRecordsToClipboard();
+            else
+                PasteRecordsFromClipboard();
+
+            return true;
+        }
+
+        private bool TryHandleTextClipboardShortcut(Keys keyData)
+        {
+            if (!IsTextClipboardContext())
+                return false;
+
+            IntPtr focusedHandle = GetFocus();
+            if (focusedHandle == IntPtr.Zero)
+                return false;
+
+            int message = keyData == (Keys.Control | Keys.C)
+                ? WM_COPY
+                : keyData == (Keys.Control | Keys.X)
+                    ? WM_CUT
+                    : WM_PASTE;
+
+            SendMessage(focusedHandle, message, IntPtr.Zero, IntPtr.Zero);
+            return true;
+        }
+
+        private bool IsTextClipboardContext()
+        {
+            return (txtSearch?.TextBox?.ContainsFocus ?? false) ||
+                   (txtKey?.TextBox?.ContainsFocus ?? false) ||
+                   (txtValue?.TextBox?.ContainsFocus ?? false) ||
+                   (richTextBox1?.ContainsFocus ?? false) ||
+                   (propertyGrid1?.ContainsFocus ?? false) ||
+                   (dataGridView1?.IsCurrentCellInEditMode ?? false);
+        }
+
+        private bool ShouldHandleRecordClipboardShortcut()
+        {
+            return dataGridView1 != null &&
+                   dataGridView1.ContainsFocus &&
+                   !dataGridView1.IsCurrentCellInEditMode;
         }
 
         List<BibtexEntry> entries = new List<BibtexEntry>();
@@ -51,6 +124,7 @@ namespace ScientificReviews.Forms
         private readonly DatabaseExportService _databaseExportService = new DatabaseExportService();
         private readonly PdfMatchingService _pdfMatchingService = new PdfMatchingService();
         private string _currentBibTexPath;
+        private bool DatabaseChanged { get; set; }
         private ContextMenuStrip _recordContextMenu;
         private ContextMenuStrip _gridBackgroundContextMenu;
         private ToolStripMenuItem _contextEditMenuItem;
@@ -76,11 +150,13 @@ namespace ScientificReviews.Forms
             };
         }
 
-        private StatusStripOperationHandle StartTrackedOperation(string key, string name, string details = null, bool silentIfAlreadyRunning = false)
+        private StatusStripOperationHandle StartTrackedOperation(string key, string name, string details = null, bool silentIfAlreadyRunning = false, Action cancelAction = null)
         {
             StatusStripOperationHandle operation = _operationManager.StartOperation(key, name, details);
             if (operation == null && !silentIfAlreadyRunning)
                 lblStatus.Text = $"{name} is already running.";
+
+            operation?.RegisterCancellation(cancelAction);
 
             return operation;
         }
@@ -205,8 +281,16 @@ namespace ScientificReviews.Forms
             return orderedKeys;
         }
 
-        private async void Changed()
+        private void SetDatabaseChanged(bool isChanged)
         {
+            DatabaseChanged = isChanged;
+        }
+
+        private async void Changed(bool markDatabaseChanged = true)
+        {
+            if (markDatabaseChanged)
+                SetDatabaseChanged(true);
+
             AppSettingsData s = Program.AppSettings.Data;
             if (!s.AllowBackup)
                 return;
@@ -257,6 +341,23 @@ namespace ScientificReviews.Forms
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
+            if (DatabaseChanged && !Program.AppSettings.Data.UnsafeClosing)
+            {
+                DialogResult result = MessageBox.Show(
+                    this,
+                    "The current database contains unsaved changes.\r\n\r\nDo you really want to close the application without saving?",
+                    Program.APP_NAME,
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning,
+                    MessageBoxDefaultButton.Button2);
+
+                if (result != DialogResult.Yes)
+                {
+                    e.Cancel = true;
+                    return;
+                }
+            }
+
             Program.AppSettings.SaveSettings();
         }
 
@@ -301,7 +402,7 @@ namespace ScientificReviews.Forms
             await StartUpdateJcrOperationAsync(false);
         }
 
-        private async Task StartUpdateJcrOperationAsync(bool startedAutomatically)
+        private async Task StartUpdateJcrOperationAsync(bool startedAutomatically, CancellationToken externalCancellationToken = default(CancellationToken))
         {
             if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.JcrApiKey))
             {
@@ -319,40 +420,50 @@ namespace ScientificReviews.Forms
                 return;
 
             ProcessLogScope log = BeginProcessLog("Update JCR", "Fetching missing journals from Clarivate");
-
-            try
+            using (CancellationTokenSource cancellation = CancellationTokenSource.CreateLinkedTokenSource(externalCancellationToken))
             {
-                lblStatus.Text = "Updating database...";
-                JcrUpdateResult result = await RunUpdateJcrAsync(operation);
+                operation.RegisterCancellation(cancellation.Cancel);
 
-                string summary = result.MissingJournalCount == 0
-                    ? "No missing journals."
-                    : $"Added {result.AddedJournalCount}, missing {result.NotFoundJournalCount}";
+                try
+                {
+                    lblStatus.Text = "Updating database...";
+                    JcrUpdateResult result = await RunUpdateJcrAsync(operation, cancellation.Token);
 
-                operation.Complete(summary, "Click to see details.");
+                    string summary = result.MissingJournalCount == 0
+                        ? "No missing journals."
+                        : $"Added {result.AddedJournalCount}, missing {result.NotFoundJournalCount}";
 
-                if (result.MissingJournalCount == 0)
-                    lblStatus.Text = "Journal database is already up to date.";
-                else if (result.NotFoundJournalCount > 0)
-                    lblStatus.Text = $"Some journals were not found. Added {result.AddedJournalCount}/{result.MissingJournalCount}.";
-                else
-                    lblStatus.Text = "Journal database updated.";
+                    operation.Complete(summary, "Click to see details.");
 
-                log.Complete($"{summary}. Missing: {result.MissingJournalCount}, not found: {result.NotFoundJournalCount}.");
-            }
-            catch (Exception ex)
-            {
-                operation.Fail(ex, "Failed");
-                lblStatus.Text = ex.Message;
-                log.Fail(ex, "JCR update failed.");
-            }
-            finally
-            {
-                log.Dispose();
+                    if (result.MissingJournalCount == 0)
+                        lblStatus.Text = "Journal database is already up to date.";
+                    else if (result.NotFoundJournalCount > 0)
+                        lblStatus.Text = $"Some journals were not found. Added {result.AddedJournalCount}/{result.MissingJournalCount}.";
+                    else
+                        lblStatus.Text = "Journal database updated.";
+
+                    log.Complete($"{summary}. Missing: {result.MissingJournalCount}, not found: {result.NotFoundJournalCount}.");
+                }
+                catch (OperationCanceledException)
+                {
+                    operation.Cancel("Cancelled", "JCR update was stopped by user.");
+                    lblStatus.Text = "JCR update cancelled.";
+                    log.Complete("JCR update cancelled.");
+                }
+                catch (Exception ex)
+                {
+                    operation.Fail(ex, "Failed");
+                    lblStatus.Text = ex.Message;
+                    log.Fail(ex, "JCR update failed.");
+                }
+                finally
+                {
+                    log.Dispose();
+                }
             }
         }
 
-        private async Task<JcrUpdateResult> RunUpdateJcrAsync(StatusStripOperationHandle operation)
+        private async Task<JcrUpdateResult> RunUpdateJcrAsync(StatusStripOperationHandle operation, CancellationToken cancellationToken)
         {
             ProcessLogScope log = BeginProcessLog("Update JCR inner", "Progress tracking");
             Progress<JcrUpdateProgress> progress = new Progress<JcrUpdateProgress>(update =>
@@ -370,7 +481,8 @@ namespace ScientificReviews.Forms
                     DateTime.Now.Year - 1,
                     () => Program.JournalsDatabase.Save(),
                     message => AppLog.Log(message, AppLog.MessageType.Error),
-                    progress);
+                    progress,
+                    cancellationToken);
                 log.Complete("JCR inner process completed.");
                 return result;
             }
@@ -435,6 +547,7 @@ namespace ScientificReviews.Forms
                 entries = loadedEntries.ToList();
                 visibleEntries = entries;
                 LoadData(visibleEntries.ToArray());
+                SetDatabaseChanged(true);
                 lblStatus.Text = "Loaded latest autosave backup.";
             }
             catch (Exception ex)

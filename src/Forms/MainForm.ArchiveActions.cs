@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -57,11 +58,14 @@ namespace ScientificReviews.Forms
             if (entries.Count == 0)
                 return;
 
-            if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.PdfFolder) == false)
-                _ = StartAutoPairOperationAsync(true);
+            if (Program.AppSettings.Data.AutoPreprocessingMode == AutoPreprocessingMode.Off)
+                return;
 
-            if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.JcrApiKey) == false)
-                _ = StartUpdateJcrOperationAsync(true);
+            _ = StartPreprocessingPipelineAsync(
+                Program.AppSettings.Data.AutoPreprocessingMode,
+                startedAutomatically: true,
+                operationKey: "auto-preprocessing",
+                operationName: "Auto-preprocessing");
         }
 
         private bool ConfirmReplaceCurrentArchive()
@@ -91,6 +95,8 @@ namespace ScientificReviews.Forms
 
             if (markChanged)
                 Changed();
+            else
+                SetDatabaseChanged(false);
         }
 
         private async Task<bool> LoadBibTexFolderAsync(bool replaceExisting)
@@ -110,45 +116,60 @@ namespace ScientificReviews.Forms
                 StatusStripOperationHandle operation = StartTrackedOperation(
                     "load-bibtex",
                     replaceExisting ? "Open folder" : "Add folder",
-                    folderDialog.SelectedPath);
+                    folderDialog.SelectedPath,
+                    cancelAction: null);
                 if (operation == null)
                     return false;
 
                 Program.AppSettings.Data.LastDirectory = folderDialog.SelectedPath;
                 ProcessLogScope log = BeginProcessLog(replaceExisting ? "Load BibTeX folder" : "Add BibTeX folder", folderDialog.SelectedPath);
-
-                try
+                using (CancellationTokenSource cancellation = new CancellationTokenSource())
                 {
-                    if (replaceExisting)
-                        ClearCurrentArchiveState(false);
+                    operation.RegisterCancellation(cancellation.Cancel);
 
-                    var progress = new Progress<BibtexLoadProgress>(update =>
+                    try
                     {
-                        operation.Report(update?.Summary, update?.Details, isIndeterminate: update?.IsIndeterminate);
-                        LogProcessProgress(log, update?.Summary, update?.Details);
-                    });
-                    BibtexLoadResult loadResult = await _bibtexLoadService.LoadFolderAsync(folderDialog.SelectedPath, progress);
-                    var loadedEntries = loadResult.Entries;
+                        if (replaceExisting)
+                            ClearCurrentArchiveState(false);
 
-                    SetCurrentBibTex(null);
-                    entries.AddRange(loadedEntries);
-                    LoadData(entries.ToArray());
-                    Changed();
+                        var progress = new Progress<BibtexLoadProgress>(update =>
+                        {
+                            operation.Report(update?.Summary, update?.Details, isIndeterminate: update?.IsIndeterminate);
+                            LogProcessProgress(log, update?.Summary, update?.Details);
+                        });
+                        BibtexLoadResult loadResult = await _bibtexLoadService.LoadFolderAsync(folderDialog.SelectedPath, progress, cancellation.Token);
+                        var loadedEntries = loadResult.Entries;
 
-                    operation.Complete($"Loaded {loadedEntries.Count} record(s).", folderDialog.SelectedPath);
-                    log.Complete($"Loaded {loadedEntries.Count} record(s).");
-                    StartAutomaticBackgroundOperationsAfterLoad();
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    operation.Fail(ex, "Failed");
-                    log.Fail(ex, "Folder load failed.");
-                    throw;
-                }
-                finally
-                {
-                    log.Dispose();
+                        SetCurrentBibTex(null);
+                        entries.AddRange(loadedEntries);
+                        LoadData(entries.ToArray());
+                        Changed(!replaceExisting);
+
+                        if (replaceExisting)
+                            SetDatabaseChanged(false);
+
+                        operation.Complete($"Loaded {loadedEntries.Count} record(s).", folderDialog.SelectedPath);
+                        log.Complete($"Loaded {loadedEntries.Count} record(s).");
+                        StartAutomaticBackgroundOperationsAfterLoad();
+                        return true;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        operation.Cancel("Cancelled", "Folder loading was stopped by user.");
+                        lblStatus.Text = "Folder load cancelled.";
+                        log.Complete("Folder load cancelled.");
+                        return false;
+                    }
+                    catch (Exception ex)
+                    {
+                        operation.Fail(ex, "Failed");
+                        log.Fail(ex, "Folder load failed.");
+                        throw;
+                    }
+                    finally
+                    {
+                        log.Dispose();
+                    }
                 }
             }
         }
@@ -175,45 +196,60 @@ namespace ScientificReviews.Forms
             StatusStripOperationHandle operation = StartTrackedOperation(
                 "load-bibtex",
                 replaceExisting ? "Open file" : "Add file",
-                fileName);
+                fileName,
+                cancelAction: null);
             if (operation == null)
                 return false;
 
             Program.AppSettings.Data.LastDirectory = Path.GetDirectoryName(fileName);
             ProcessLogScope log = BeginProcessLog(replaceExisting ? "Load BibTeX file" : "Add BibTeX file", fileName);
-
-            try
+            using (CancellationTokenSource cancellation = new CancellationTokenSource())
             {
-                if (replaceExisting)
-                    ClearCurrentArchiveState(false);
+                operation.RegisterCancellation(cancellation.Cancel);
 
-                var progress = new Progress<BibtexLoadProgress>(update =>
+                try
                 {
-                    operation.Report(update?.Summary, update?.Details, isIndeterminate: update?.IsIndeterminate);
-                    LogProcessProgress(log, update?.Summary, update?.Details);
-                });
-                BibtexLoadResult loadResult = await _bibtexLoadService.LoadFileAsync(fileName, progress);
-                var loadedEntries = loadResult.Entries;
+                    if (replaceExisting)
+                        ClearCurrentArchiveState(false);
 
-                SetCurrentBibTex(fileName);
-                entries.AddRange(loadedEntries);
-                LoadData(entries.ToArray());
-                Changed();
+                    var progress = new Progress<BibtexLoadProgress>(update =>
+                    {
+                        operation.Report(update?.Summary, update?.Details, isIndeterminate: update?.IsIndeterminate);
+                        LogProcessProgress(log, update?.Summary, update?.Details);
+                    });
+                    BibtexLoadResult loadResult = await _bibtexLoadService.LoadFileAsync(fileName, progress, cancellation.Token);
+                    var loadedEntries = loadResult.Entries;
 
-                operation.Complete($"Loaded {loadedEntries.Count} record(s).", fileName);
-                log.Complete($"Loaded {loadedEntries.Count} record(s).");
-                StartAutomaticBackgroundOperationsAfterLoad();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                operation.Fail(ex, "Failed");
-                log.Fail(ex, "File load failed.");
-                throw;
-            }
-            finally
-            {
-                log.Dispose();
+                    SetCurrentBibTex(fileName);
+                    entries.AddRange(loadedEntries);
+                    LoadData(entries.ToArray());
+                    Changed(!replaceExisting);
+
+                    if (replaceExisting)
+                        SetDatabaseChanged(false);
+
+                    operation.Complete($"Loaded {loadedEntries.Count} record(s).", fileName);
+                    log.Complete($"Loaded {loadedEntries.Count} record(s).");
+                    StartAutomaticBackgroundOperationsAfterLoad();
+                    return true;
+                }
+                catch (OperationCanceledException)
+                {
+                    operation.Cancel("Cancelled", "File loading was stopped by user.");
+                    lblStatus.Text = "File load cancelled.";
+                    log.Complete("File load cancelled.");
+                    return false;
+                }
+                catch (Exception ex)
+                {
+                    operation.Fail(ex, "Failed");
+                    log.Fail(ex, "File load failed.");
+                    throw;
+                }
+                finally
+                {
+                    log.Dispose();
+                }
             }
         }
 

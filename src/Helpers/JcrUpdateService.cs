@@ -4,6 +4,7 @@ using ScientificReviews.JCR.Dto;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace ScientificReviews.Helpers
@@ -33,7 +34,8 @@ namespace ScientificReviews.Helpers
             int fromYear,
             Action saveJournalDatabase,
             Action<string> logError,
-            IProgress<JcrUpdateProgress> progress = null)
+            IProgress<JcrUpdateProgress> progress = null,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             if (entries == null)
                 throw new ArgumentNullException(nameof(entries));
@@ -81,6 +83,7 @@ namespace ScientificReviews.Helpers
 
             for (int journalIndex = 0; journalIndex < missingJournals.Count; journalIndex++)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 string missingJournal = missingJournals[journalIndex];
                 progress?.Report(new JcrUpdateProgress
                 {
@@ -97,13 +100,19 @@ namespace ScientificReviews.Helpers
 
                     foreach (var hit in response.Hits)
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         JournalReportsDto report = null;
                         for (int currentYear = fromYear; currentYear > 2020; currentYear--)
                         {
+                            cancellationToken.ThrowIfCancellationRequested();
                             try
                             {
                                 report = await jcrApiClient.GetJournalReportsAsync(hit.Id, currentYear);
                                 break;
+                            }
+                            catch (OperationCanceledException)
+                            {
+                                throw;
                             }
                             catch (Exception)
                             {
@@ -128,6 +137,10 @@ namespace ScientificReviews.Helpers
 
                     if (!foundAnyReport)
                         notFoundJournals.Add(missingJournal);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
                 }
                 catch (Exception ex)
                 {

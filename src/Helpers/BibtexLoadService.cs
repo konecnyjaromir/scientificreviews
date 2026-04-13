@@ -2,6 +2,7 @@ using ScientificReviews.Bibtex;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace ScientificReviews.Helpers
@@ -22,13 +23,14 @@ namespace ScientificReviews.Helpers
 
     public sealed class BibtexLoadService
     {
-        public Task<BibtexLoadResult> LoadFileAsync(string fileName, IProgress<BibtexLoadProgress> progress = null)
+        public Task<BibtexLoadResult> LoadFileAsync(string fileName, IProgress<BibtexLoadProgress> progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (string.IsNullOrWhiteSpace(fileName))
                 throw new ArgumentException("File name must not be empty.", nameof(fileName));
 
             return Task.Run(() =>
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 progress?.Report(new BibtexLoadProgress
                 {
                     Summary = "Reading BibTeX file...",
@@ -37,6 +39,7 @@ namespace ScientificReviews.Helpers
                 });
 
                 BibtexParser parser = new BibtexParser();
+                cancellationToken.ThrowIfCancellationRequested();
                 var entries = parser.ParseFile(File.ReadAllText(fileName));
 
                 return new BibtexLoadResult
@@ -45,16 +48,17 @@ namespace ScientificReviews.Helpers
                     SourcePath = fileName,
                     IsFolderLoad = false
                 };
-            });
+            }, cancellationToken);
         }
 
-        public Task<BibtexLoadResult> LoadFolderAsync(string folderPath, IProgress<BibtexLoadProgress> progress = null)
+        public Task<BibtexLoadResult> LoadFolderAsync(string folderPath, IProgress<BibtexLoadProgress> progress = null, CancellationToken cancellationToken = default(CancellationToken))
         {
             if (string.IsNullOrWhiteSpace(folderPath))
                 throw new ArgumentException("Folder path must not be empty.", nameof(folderPath));
 
             return Task.Run(() =>
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 var list = new List<BibtexEntry>();
                 string[] files = Directory.GetFiles(folderPath, "*.bib", SearchOption.AllDirectories);
                 BibtexParser parser = new BibtexParser();
@@ -68,6 +72,7 @@ namespace ScientificReviews.Helpers
 
                 for (int index = 0; index < files.Length; index++)
                 {
+                    cancellationToken.ThrowIfCancellationRequested();
                     string file = files[index];
                     list.AddRange(parser.ParseFile(File.ReadAllText(file)));
                     progress?.Report(new BibtexLoadProgress
@@ -84,7 +89,7 @@ namespace ScientificReviews.Helpers
                     SourcePath = folderPath,
                     IsFolderLoad = true
                 };
-            });
+            }, cancellationToken);
         }
 
     }
