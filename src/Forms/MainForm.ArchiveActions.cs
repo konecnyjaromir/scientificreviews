@@ -57,11 +57,14 @@ namespace ScientificReviews.Forms
             if (entries.Count == 0)
                 return;
 
-            if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.PdfFolder) == false)
-                _ = StartAutoPairOperationAsync(true);
+            if (Program.AppSettings.Data.AutoPreprocessingMode == AutoPreprocessingMode.Off)
+                return;
 
-            if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.JcrApiKey) == false)
-                _ = StartUpdateJcrOperationAsync(true);
+            _ = StartPreprocessingPipelineAsync(
+                Program.AppSettings.Data.AutoPreprocessingMode,
+                startedAutomatically: true,
+                operationKey: "auto-preprocessing",
+                operationName: "Auto-preprocessing");
         }
 
         private bool ConfirmReplaceCurrentArchive()

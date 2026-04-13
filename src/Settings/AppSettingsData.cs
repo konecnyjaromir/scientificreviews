@@ -11,6 +11,13 @@ namespace ScientificReviews
         OnlyMissingAndArxivDois
     }
 
+    public enum AutoPreprocessingMode
+    {
+        Off,
+        Fast,
+        Deep
+    }
+
     public class LastExportSettingsData
     {
         public string Scope { get; set; } = "All";
@@ -45,6 +52,12 @@ namespace ScientificReviews
         [DisplayName("Allow unsafe closing")]
         [Description("If enabled, closing the application bypasses the warning about unsaved database changes.")]
         public bool UnsafeClosing { get; set; } = false;
+
+        [Browsable(true)]
+        [Category(APPLICATION_CAT)]
+        [DisplayName("Auto-preprocessing mode")]
+        [Description("Selects which automatic preprocessing steps run after opening a BibTeX database: Off = none, Fast = local quick fixes and PDF pairing, Deep = all preprocessing including metadata fetch and JCR update.")]
+        public AutoPreprocessingMode AutoPreprocessingMode { get; set; } = AutoPreprocessingMode.Fast;
 
         [Browsable(true)]
         [Category(PDF_CAT)]

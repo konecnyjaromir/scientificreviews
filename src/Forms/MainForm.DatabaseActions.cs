@@ -26,29 +26,7 @@ namespace ScientificReviews.Forms
 
         private void createEntryKeysToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            List<string> keys = new List<string>();
-            foreach (BibtexEntry entry in entries)
-            {
-                string authors = entry.GetTagValue("author");
-                string year = entry.GetTagValue("year");
-                if (authors == null || year == null)
-                    continue;
-
-                string key = BibtexUtils.GetFirstAuthorLastName(authors).Replace(" ", "") + year;
-                key = key.ToLower();
-                string myKey = key;
-                int i = 1;
-                while (keys.Contains(myKey))
-                {
-                    myKey = key + "_" + i.ToString();
-                    i++;
-                }
-
-                entry.Key = myKey;
-                keys.Add(myKey);
-            }
-
-            RefreshGrid();
+            RunCreateEntryKeysOperation(entries.ToArray());
         }
 
         private void removeTagsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -593,83 +571,143 @@ namespace ScientificReviews.Forms
 
         private async Task StartAutofixOperationAsync()
         {
+            await StartPreprocessingPipelineAsync(
+                AutoPreprocessingMode.Deep,
+                startedAutomatically: false,
+                operationKey: "autofix",
+                operationName: "Autofix");
+        }
+
+        private async Task StartPreprocessingPipelineAsync(
+            AutoPreprocessingMode mode,
+            bool startedAutomatically,
+            string operationKey,
+            string operationName)
+        {
+            if (mode == AutoPreprocessingMode.Off)
+                return;
+
             if (entries.Count == 0)
             {
-                lblStatus.Text = "No records available for autofix.";
+                if (!startedAutomatically)
+                    lblStatus.Text = $"No records available for {operationName.ToLowerInvariant()}.";
                 return;
             }
 
             StatusStripOperationHandle operation = StartTrackedOperation(
-                "autofix",
-                "Autofix",
-                "Normalize DOI -> Fetch metadata -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs -> Update JCR");
+                operationKey,
+                operationName,
+                BuildPreprocessingSummary(mode),
+                startedAutomatically);
             if (operation == null)
                 return;
 
-            ProcessLogScope log = BeginProcessLog("Autofix", $"Records: {entries.Count}");
+            ProcessLogScope log = BeginProcessLog(operationName, $"Records: {entries.Count}, mode: {mode}");
             List<string> skippedSteps = new List<string>();
+            int totalSteps = GetPreprocessingStepCount(mode);
+            int currentStep = 0;
 
             try
             {
-                operation.Report("Normalize DOI", "Preparing DOI values", 1, 6, false);
+                currentStep++;
+                operation.Report("Normalize DOI", "Preparing DOI values", currentStep, totalSteps, false);
                 RunNormalizeDoiOperation(entries.ToArray());
                 LogProcessProgress(log, "Normalize DOI completed.");
 
-                operation.Report("Fetch missing metadata", "Querying metadata services", 2, 6, false);
-                await StartFetchMissingMetadataOperationAsync(false);
-                LogProcessProgress(log, "Fetch missing metadata completed.");
+                if (mode == AutoPreprocessingMode.Deep)
+                {
+                    currentStep++;
+                    operation.Report("Fetch missing metadata", "Querying metadata services", currentStep, totalSteps, false);
+                    await StartFetchMissingMetadataOperationAsync(false);
+                    LogProcessProgress(log, "Fetch missing metadata completed.");
+                }
 
-                operation.Report("Normalize page-tag", "Normalizing pages ranges", 3, 6, false);
+                currentStep++;
+                operation.Report("Normalize page-tag", "Normalizing pages ranges", currentStep, totalSteps, false);
                 RunNormalizePageTagOperation(entries.ToArray());
                 LogProcessProgress(log, "Normalize page-tag completed.");
 
-                operation.Report("Create entry keys", "Generating keys from updated metadata", 4, 6, false);
-                createEntryKeysToolStripMenuItem_Click(this, EventArgs.Empty);
+                currentStep++;
+                operation.Report("Create entry keys", "Generating keys from updated metadata", currentStep, totalSteps, false);
+                RunCreateEntryKeysOperation(entries.ToArray());
                 LogProcessProgress(log, "Create entry keys completed.");
 
+                currentStep++;
                 if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.PdfFolder))
                 {
                     skippedSteps.Add("Auto-pair PDFs");
+                    operation.Report("Auto-pair PDFs", "Skipped: PDF folder is not set.", currentStep, totalSteps, false);
                     LogProcessProgress(log, "Skipped Auto-pair PDFs", "PDF folder is not set.");
                 }
                 else
                 {
-                    operation.Report("Auto-pair PDFs", "Matching records with PDFs", 5, 6, false);
-                    await StartAutoPairOperationAsync(false);
+                    operation.Report("Auto-pair PDFs", "Matching records with PDFs", currentStep, totalSteps, false);
+                    await StartAutoPairOperationAsync(startedAutomatically);
                     LogProcessProgress(log, "Auto-pair PDFs completed.");
                 }
 
-                if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.JcrApiKey))
+                if (mode == AutoPreprocessingMode.Deep)
                 {
-                    skippedSteps.Add("Update JCR");
-                    LogProcessProgress(log, "Skipped Update JCR", "JCR API key is not set.");
-                }
-                else
-                {
-                    operation.Report("Update JCR", "Fetching missing journals from Clarivate", 6, 6, false);
-                    await StartUpdateJcrOperationAsync(false);
-                    LogProcessProgress(log, "Update JCR completed.");
+                    currentStep++;
+                    if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.JcrApiKey))
+                    {
+                        skippedSteps.Add("Update JCR");
+                        operation.Report("Update JCR", "Skipped: JCR API key is not set.", currentStep, totalSteps, false);
+                        LogProcessProgress(log, "Skipped Update JCR", "JCR API key is not set.");
+                    }
+                    else
+                    {
+                        operation.Report("Update JCR", "Fetching missing journals from Clarivate", currentStep, totalSteps, false);
+                        await StartUpdateJcrOperationAsync(startedAutomatically);
+                        LogProcessProgress(log, "Update JCR completed.");
+                    }
                 }
 
                 string details = skippedSteps.Count == 0
-                    ? "All autofix steps completed."
+                    ? $"All {operationName.ToLowerInvariant()} steps completed."
                     : "Skipped: " + string.Join(", ", skippedSteps) + ".";
 
-                operation.Complete("Autofix finished.", details);
+                operation.Complete($"{operationName} finished.", details);
                 log.Complete(details);
                 lblStatus.Text = skippedSteps.Count == 0
-                    ? "Autofix finished."
-                    : $"Autofix finished. Skipped: {string.Join(", ", skippedSteps)}.";
+                    ? $"{operationName} finished."
+                    : $"{operationName} finished. Skipped: {string.Join(", ", skippedSteps)}.";
             }
             catch (Exception ex)
             {
                 operation.Fail(ex, "Failed");
                 lblStatus.Text = ex.Message;
-                log.Fail(ex, "Autofix failed.");
+                log.Fail(ex, $"{operationName} failed.");
             }
             finally
             {
                 log.Dispose();
+            }
+        }
+
+        private static int GetPreprocessingStepCount(AutoPreprocessingMode mode)
+        {
+            switch (mode)
+            {
+                case AutoPreprocessingMode.Deep:
+                    return 6;
+                case AutoPreprocessingMode.Fast:
+                    return 4;
+                default:
+                    return 0;
+            }
+        }
+
+        private static string BuildPreprocessingSummary(AutoPreprocessingMode mode)
+        {
+            switch (mode)
+            {
+                case AutoPreprocessingMode.Deep:
+                    return "Normalize DOI -> Fetch metadata -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs -> Update JCR";
+                case AutoPreprocessingMode.Fast:
+                    return "Normalize DOI -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs";
+                default:
+                    return "No preprocessing";
             }
         }
 
@@ -752,6 +790,44 @@ namespace ScientificReviews.Forms
             return response == DialogResult.Yes;
         }
 
+        private void RunCreateEntryKeysOperation(IEnumerable<BibtexEntry> sourceEntries)
+        {
+            BibtexEntry[] targetEntries = sourceEntries as BibtexEntry[] ?? sourceEntries?.ToArray() ?? Array.Empty<BibtexEntry>();
+            if (targetEntries.Length == 0)
+            {
+                lblStatus.Text = "No records available for entry key generation.";
+                return;
+            }
+
+            ProcessLogScope log = BeginProcessLog("Create entry keys", $"Records: {targetEntries.Length}");
+            try
+            {
+                int changedEntries = CreateEntryKeys(targetEntries);
+                if (changedEntries > 0)
+                {
+                    RefreshGrid();
+                    Changed();
+                }
+
+                string summary = changedEntries > 0
+                    ? $"Entry key generation finished. Updated {changedEntries} record(s)."
+                    : "Entry key generation finished. No entry keys required changes.";
+
+                log.Complete(summary);
+                AppLog.Log(summary, AppLog.MessageType.Info);
+                lblStatus.Text = summary;
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+                log.Fail(ex, "Entry key generation failed.");
+            }
+            finally
+            {
+                log.Dispose();
+            }
+        }
+
         private void RunNormalizeDoiOperation(IEnumerable<BibtexEntry> sourceEntries)
         {
             BibtexEntry[] targetEntries = sourceEntries as BibtexEntry[] ?? sourceEntries?.ToArray() ?? Array.Empty<BibtexEntry>();
@@ -823,6 +899,41 @@ namespace ScientificReviews.Forms
             {
                 log.Dispose();
             }
+        }
+
+        private int CreateEntryKeys(IEnumerable<BibtexEntry> sourceEntries)
+        {
+            BibtexEntry[] targetEntries = sourceEntries as BibtexEntry[] ?? sourceEntries?.ToArray() ?? Array.Empty<BibtexEntry>();
+            List<string> keys = new List<string>();
+            int changedEntries = 0;
+
+            foreach (BibtexEntry entry in targetEntries)
+            {
+                string authors = entry.GetTagValue("author");
+                string year = entry.GetTagValue("year");
+                if (authors == null || year == null)
+                    continue;
+
+                string key = BibtexUtils.GetFirstAuthorLastName(authors).Replace(" ", "") + year;
+                key = key.ToLowerInvariant();
+                string myKey = key;
+                int i = 1;
+                while (keys.Contains(myKey))
+                {
+                    myKey = key + "_" + i.ToString();
+                    i++;
+                }
+
+                if (!string.Equals(entry.Key, myKey, StringComparison.Ordinal))
+                {
+                    entry.Key = myKey;
+                    changedEntries++;
+                }
+
+                keys.Add(myKey);
+            }
+
+            return changedEntries;
         }
 
         private DoiNormalizationResult NormalizeDoisForMetadataFetch(IEnumerable<BibtexEntry> sourceEntries)
