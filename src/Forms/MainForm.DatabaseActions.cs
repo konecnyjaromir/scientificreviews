@@ -138,7 +138,7 @@ namespace ScientificReviews.Forms
 
         private async Task SaveCurrentArchiveAsync()
         {
-            string currentFile = Program.AppSettings.Data.LastBibTex;
+            string currentFile = _currentBibTexPath;
             if (string.IsNullOrWhiteSpace(currentFile))
             {
                 await SaveArchiveAsAsync();
@@ -182,7 +182,7 @@ namespace ScientificReviews.Forms
         private SaveFileDialog CreateBibtexSaveFileDialog()
         {
             string initialDirectory = Program.AppSettings.Data.LastDirectory;
-            string currentFile = Program.AppSettings.Data.LastBibTex;
+            string currentFile = _currentBibTexPath;
 
             if (string.IsNullOrWhiteSpace(currentFile) == false)
             {
@@ -398,7 +398,7 @@ namespace ScientificReviews.Forms
 
         private string GetDefaultExportOutputPath(DatabaseExportFormat format)
         {
-            string currentFile = Program.AppSettings.Data.LastBibTex;
+            string currentFile = _currentBibTexPath;
             string initialDirectory = Program.AppSettings.Data.LastDirectory;
             string defaultFileName = "export";
 

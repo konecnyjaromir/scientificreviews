@@ -15,10 +15,9 @@ namespace ScientificReviews.Forms
         private void UpdateWindowTitle()
         {
             string title = Program.APP_NAME;
-            string lastBibTex = Program.AppSettings?.Data?.LastBibTex;
-            if (string.IsNullOrWhiteSpace(lastBibTex) == false)
+            if (string.IsNullOrWhiteSpace(_currentBibTexPath) == false)
             {
-                string bibFileName = Path.GetFileName(lastBibTex);
+                string bibFileName = Path.GetFileName(_currentBibTexPath);
                 if (string.IsNullOrWhiteSpace(bibFileName) == false)
                     title += " - " + bibFileName;
             }
@@ -28,16 +27,18 @@ namespace ScientificReviews.Forms
 
         private void SetCurrentBibTex(string filePath)
         {
-            Program.AppSettings.Data.LastBibTex = string.IsNullOrWhiteSpace(filePath) ? null : filePath;
+            _currentBibTexPath = string.IsNullOrWhiteSpace(filePath) ? null : filePath;
+            if (string.IsNullOrWhiteSpace(filePath) == false)
+                Program.AppSettings.Data.LastBibTex = filePath;
+
             UpdateWindowTitle();
         }
 
         private string GetDefaultPdfExportDirectory()
         {
-            string lastBibTex = Program.AppSettings.Data.LastBibTex;
-            if (string.IsNullOrWhiteSpace(lastBibTex) == false)
+            if (string.IsNullOrWhiteSpace(_currentBibTexPath) == false)
             {
-                string bibDirectory = Path.GetDirectoryName(lastBibTex);
+                string bibDirectory = Path.GetDirectoryName(_currentBibTexPath);
                 if (string.IsNullOrWhiteSpace(bibDirectory) == false)
                     return bibDirectory;
             }

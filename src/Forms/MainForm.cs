@@ -50,6 +50,7 @@ namespace ScientificReviews.Forms
         private readonly PdfExportService _pdfExportService = new PdfExportService();
         private readonly DatabaseExportService _databaseExportService = new DatabaseExportService();
         private readonly PdfMatchingService _pdfMatchingService = new PdfMatchingService();
+        private string _currentBibTexPath;
         private ContextMenuStrip _recordContextMenu;
         private ContextMenuStrip _gridBackgroundContextMenu;
         private ToolStripMenuItem _contextEditMenuItem;
