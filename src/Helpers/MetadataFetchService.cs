@@ -232,7 +232,7 @@ namespace ScientificReviews.Helpers
 
         private async Task<MetadataPayload> FetchMetadataAsync(BibtexEntry entry, MetadataUpdateOptions options)
         {
-            string existingDoi = DoiNormalizationHelper.PrepareDoiForLookup(BibtexTagService.GetTagValueIgnoreCase(entry, "doi"));
+            string existingDoi = DoiNormalizationHelper.NormalizeDoiValue(BibtexTagService.GetTagValueIgnoreCase(entry, "doi"));
             string existingTitle = PrepareTitleForQuery(BibtexTagService.GetTagValueIgnoreCase(entry, "title"));
             string existingAuthor = PrepareAuthorForQuery(BibtexTagService.GetTagValueIgnoreCase(entry, "author"));
             MetadataPayload aggregate = null;
@@ -289,9 +289,10 @@ namespace ScientificReviews.Helpers
             if (entry == null || payload == null)
                 return false;
 
+            string normalizedDoi = DoiNormalizationHelper.NormalizeDoiValue(payload.Doi) ?? payload.Doi;
             bool updated = false;
             updated |= SetTagIfMissing(entry, "title", payload.Title);
-            updated |= SetTagIfMissing(entry, "doi", payload.Doi);
+            updated |= SetTagIfMissing(entry, "doi", normalizedDoi);
             updated |= SetTagIfMissing(entry, "abstract", payload.Abstract);
             updated |= SetTagIfMissing(entry, "year", payload.Year);
             updated |= SetTagIfMissing(entry, "author", payload.Author);
@@ -691,7 +692,7 @@ namespace ScientificReviews.Helpers
                     return null;
 
                 string title = FirstString(message["title"]);
-                string doi = CleanValue(message["DOI"]);
+                string doi = DoiNormalizationHelper.NormalizeDoiValue(CleanValue(message["DOI"]));
                 string summary = CleanAbstract(message["abstract"]);
                 string year = ExtractCrossrefYear(message);
                 string author = JoinCrossrefAuthors(message["author"] as JArray);
@@ -838,7 +839,7 @@ namespace ScientificReviews.Helpers
                 string title = CleanValue(token["title"]);
                 string summary = CleanAbstract(token["abstract"]);
                 string year = CleanValue(token["year"]);
-                string doi = CleanValue(token["externalIds"]?["DOI"]);
+                string doi = DoiNormalizationHelper.NormalizeDoiValue(CleanValue(token["externalIds"]?["DOI"]));
                 string eprint = DoiNormalizationHelper.NormalizeArxivIdentifier(CleanValue(token["externalIds"]?["ArXiv"]));
                 string journal = CleanValue(token["journal"]?["name"]);
                 string author = JoinSemanticScholarAuthors(token["authors"] as JArray);
@@ -851,7 +852,7 @@ namespace ScientificReviews.Helpers
                     return null;
 
                 if (string.IsNullOrWhiteSpace(doi) && string.IsNullOrWhiteSpace(eprint) == false)
-                    doi = eprint;
+                    doi = DoiNormalizationHelper.BuildArxivDoi(eprint);
 
                 return new MetadataPayload
                 {
@@ -951,14 +952,14 @@ namespace ScientificReviews.Helpers
                     string published = CleanValue(entry.Element(AtomNamespace + "published")?.Value);
                     string updated = CleanValue(entry.Element(AtomNamespace + "updated")?.Value);
                     string year = ExtractYearFromDate(published) ?? ExtractYearFromDate(updated);
-                    string doi = CleanValue(entry.Element(ArxivNamespace + "doi")?.Value);
+                    string doi = DoiNormalizationHelper.NormalizeDoiValue(CleanValue(entry.Element(ArxivNamespace + "doi")?.Value));
                     string journal = CleanValue(entry.Element(ArxivNamespace + "journal_ref")?.Value);
                     string id = CleanValue(entry.Element(AtomNamespace + "id")?.Value);
                     string eprint = DoiNormalizationHelper.NormalizeArxivIdentifier(id);
                     string author = JoinArxivAuthors(entry.Elements(AtomNamespace + "author"));
 
                     if (string.IsNullOrWhiteSpace(doi) && string.IsNullOrWhiteSpace(eprint) == false)
-                        doi = eprint;
+                        doi = DoiNormalizationHelper.BuildArxivDoi(eprint);
 
                     if (string.IsNullOrWhiteSpace(title) &&
                         string.IsNullOrWhiteSpace(doi) &&

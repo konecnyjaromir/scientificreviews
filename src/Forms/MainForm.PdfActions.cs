@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -37,43 +36,30 @@ namespace ScientificReviews.Forms
                 .FirstOrDefault(t => string.Equals(t.Key, "doi", StringComparison.OrdinalIgnoreCase));
 
             if (doiTag == null || string.IsNullOrWhiteSpace(doiTag.Value))
+            {
+                lblStatus.Text = "Record does not contain DOI. Opened in Google search.";
+                SearchEntryTitleOnGoogle(entry);
                 return;
+            }
 
             string doiValue = doiTag.Value.Trim();
-            string normalizedDoi = NormalizeDoi(doiValue);
+            string normalizedDoi = DoiNormalizationHelper.NormalizeDoiValue(doiValue);
+            DoiValueKind doiKind = DoiNormalizationHelper.GetDoiValueKind(normalizedDoi);
 
-            if (IsClassicDoi(normalizedDoi))
+            if (doiKind == DoiValueKind.Classic || doiKind == DoiValueKind.Arxiv)
             {
                 OpenUrl($"https://doi.org/{Uri.EscapeDataString(normalizedDoi)}");
                 return;
             }
 
-            if (IsArxivIdentifier(normalizedDoi))
-            {
-                OpenUrl($"https://arxiv.org/pdf/{Uri.EscapeDataString(normalizedDoi)}");
-                return;
-            }
-
             MessageBox.Show(
-                "Unsupported DOI format. The DOI will be opened using Google search.",
+                "Unsupported DOI format. The record will be opened using Google search.",
                 Program.APP_NAME,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
 
             lblStatus.Text = "Unsupported DOI format. Opened in Google search.";
             OpenUrl(BuildGoogleSearchUrl(doiValue));
-        }
-
-        private bool IsClassicDoi(string doi)
-        {
-            return string.IsNullOrWhiteSpace(doi) == false &&
-                Regex.IsMatch(doi, @"^10\.\d{4,9}/\S+$", RegexOptions.IgnoreCase);
-        }
-
-        private bool IsArxivIdentifier(string doi)
-        {
-            return string.IsNullOrWhiteSpace(doi) == false &&
-                Regex.IsMatch(doi, @"^\d{4}\.\d{4,5}(v\d+)?$", RegexOptions.IgnoreCase);
         }
 
         private string BuildGoogleSearchUrl(string query)
@@ -112,20 +98,6 @@ namespace ScientificReviews.Forms
         private string[] GetPdfFiles()
         {
             return _pdfMatchingService.GetPdfFiles(CreatePdfMatchingOptions());
-        }
-
-        private string NormalizeDoi(string doi)
-        {
-            if (string.IsNullOrWhiteSpace(doi))
-                return null;
-
-            string normalized = doi.Trim();
-            normalized = Regex.Replace(normalized, @"^https?://(dx\.)?doi\.org/", string.Empty, RegexOptions.IgnoreCase);
-            normalized = Regex.Replace(normalized, @"^doi:\s*", string.Empty, RegexOptions.IgnoreCase);
-            normalized = Regex.Replace(normalized, @"^arxiv:\s*", string.Empty, RegexOptions.IgnoreCase);
-            normalized = normalized.Trim().TrimEnd('/', '.', ',', ';');
-
-            return normalized.ToLowerInvariant();
         }
 
         private void AssignPdfToEntry(BibtexEntry entry, string pdfFilePath)

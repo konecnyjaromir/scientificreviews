@@ -13,6 +13,8 @@ namespace ScientificReviews.Helpers
 
     public static class DoiNormalizationHelper
     {
+        private const string ArxivDoiPrefix = "10.48550/arXiv.";
+
         public static string PrepareDoiForLookup(string value)
         {
             if (string.IsNullOrWhiteSpace(value))
@@ -32,7 +34,7 @@ namespace ScientificReviews.Helpers
 
             string arxivIdentifier = TryExtractArxivIdentifier(prepared);
             if (string.IsNullOrWhiteSpace(arxivIdentifier) == false)
-                return arxivIdentifier;
+                return BuildArxivDoi(arxivIdentifier);
 
             if (IsClassicDoiValue(prepared))
                 return prepared.ToLowerInvariant();
@@ -62,6 +64,15 @@ namespace ScientificReviews.Helpers
             normalized = Regex.Replace(normalized, @"^https?://arxiv\.org/(abs|pdf)/", string.Empty, RegexOptions.IgnoreCase);
             normalized = normalized.Trim().TrimEnd('/', '.', ',', ';');
             return IsArxivIdentifier(normalized) ? normalized.ToLowerInvariant() : null;
+        }
+
+        public static string BuildArxivDoi(string value)
+        {
+            string normalizedIdentifier = NormalizeArxivIdentifier(value);
+            if (string.IsNullOrWhiteSpace(normalizedIdentifier))
+                return null;
+
+            return ArxivDoiPrefix + normalizedIdentifier;
         }
 
         public static string TryExtractArxivIdentifier(string value)
@@ -106,30 +117,20 @@ namespace ScientificReviews.Helpers
         public static bool RequestedDoiMatchesCandidateDoi(string requestedDoi, string candidateDoi)
         {
             DoiValueKind requestedKind = GetDoiValueKind(requestedDoi);
-            if (requestedKind == DoiValueKind.Empty || requestedKind == DoiValueKind.Invalid || string.IsNullOrWhiteSpace(candidateDoi))
+            DoiValueKind candidateKind = GetDoiValueKind(candidateDoi);
+            if (requestedKind == DoiValueKind.Empty ||
+                requestedKind == DoiValueKind.Invalid ||
+                candidateKind == DoiValueKind.Empty ||
+                candidateKind == DoiValueKind.Invalid)
                 return false;
 
-            if (requestedKind == DoiValueKind.Arxiv)
-            {
-                return string.Equals(
-                    TryExtractArxivIdentifier(requestedDoi),
-                    GetCandidateArxivIdentifier(candidateDoi),
-                    StringComparison.OrdinalIgnoreCase);
-            }
+            if (requestedKind != candidateKind)
+                return false;
 
             return string.Equals(
-                PrepareDoiForLookup(requestedDoi),
-                PrepareDoiForLookup(candidateDoi),
+                NormalizeDoiValue(requestedDoi),
+                NormalizeDoiValue(candidateDoi),
                 StringComparison.OrdinalIgnoreCase);
-        }
-
-        private static string GetCandidateArxivIdentifier(string candidateDoi)
-        {
-            string normalized = NormalizeArxivIdentifier(candidateDoi);
-            if (string.IsNullOrWhiteSpace(normalized) == false)
-                return normalized;
-
-            return TryExtractArxivIdentifier(candidateDoi);
         }
     }
 }

@@ -578,7 +578,7 @@ namespace ScientificReviews.Forms
                 if (string.IsNullOrWhiteSpace(normalizedDoi))
                 {
                     string eprint = BibtexTagService.GetTagValueIgnoreCase(entry, "eprint");
-                    string normalizedFromEprint = DoiNormalizationHelper.TryExtractArxivIdentifier(eprint);
+                    string normalizedFromEprint = DoiNormalizationHelper.BuildArxivDoi(eprint);
                     if (string.IsNullOrWhiteSpace(normalizedFromEprint) == false)
                     {
                         BibtexTagService.SetSingleTagValue(entry, "doi", normalizedFromEprint);

@@ -11,6 +11,7 @@ namespace ScientificReviews.Tests
 
             RunTest(nameof(DoiNormalizationHelperTests.PrepareDoiForLookup_StripsKnownPrefixesAndTrailingPunctuation), DoiNormalizationHelperTests.PrepareDoiForLookup_StripsKnownPrefixesAndTrailingPunctuation, failures);
             RunTest(nameof(DoiNormalizationHelperTests.NormalizeArxivIdentifier_NormalizesSupportedInputs), DoiNormalizationHelperTests.NormalizeArxivIdentifier_NormalizesSupportedInputs, failures);
+            RunTest(nameof(DoiNormalizationHelperTests.BuildArxivDoi_BuildsCanonicalDataciteFormat), DoiNormalizationHelperTests.BuildArxivDoi_BuildsCanonicalDataciteFormat, failures);
             RunTest(nameof(DoiNormalizationHelperTests.TryExtractArxivIdentifier_ExtractsFromRawIdentifier), DoiNormalizationHelperTests.TryExtractArxivIdentifier_ExtractsFromRawIdentifier, failures);
             RunTest(nameof(DoiNormalizationHelperTests.TryExtractArxivIdentifier_ExtractsFromArxivDoi), DoiNormalizationHelperTests.TryExtractArxivIdentifier_ExtractsFromArxivDoi, failures);
             RunTest(nameof(DoiNormalizationHelperTests.TryExtractArxivIdentifier_ReturnsNullForClassicDoi), DoiNormalizationHelperTests.TryExtractArxivIdentifier_ReturnsNullForClassicDoi, failures);

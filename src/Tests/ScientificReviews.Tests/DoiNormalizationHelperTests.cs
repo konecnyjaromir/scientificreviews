@@ -18,6 +18,13 @@ namespace ScientificReviews.Tests
             AssertNull(DoiNormalizationHelper.NormalizeArxivIdentifier("10.1000/xyz"));
         }
 
+        public static void BuildArxivDoi_BuildsCanonicalDataciteFormat()
+        {
+            AssertEqual("10.48550/arXiv.2310.08864", DoiNormalizationHelper.BuildArxivDoi("2310.08864"));
+            AssertEqual("10.48550/arXiv.hep-th/9901001", DoiNormalizationHelper.BuildArxivDoi("arXiv:hep-th/9901001"));
+            AssertNull(DoiNormalizationHelper.BuildArxivDoi("10.1000/xyz"));
+        }
+
         public static void TryExtractArxivIdentifier_ExtractsFromRawIdentifier()
         {
             AssertEqual("2310.08864", DoiNormalizationHelper.TryExtractArxivIdentifier("2310.08864"));
@@ -49,7 +56,8 @@ namespace ScientificReviews.Tests
         public static void NormalizeDoiValue_NormalizesClassicAndArxivInputs()
         {
             AssertEqual("10.1000/xyz", DoiNormalizationHelper.NormalizeDoiValue("DOI:10.1000/XYZ"));
-            AssertEqual("2310.08864", DoiNormalizationHelper.NormalizeDoiValue("https://doi.org/10.48550/arXiv.2310.08864"));
+            AssertEqual("10.48550/arXiv.2310.08864", DoiNormalizationHelper.NormalizeDoiValue("https://doi.org/10.48550/arXiv.2310.08864"));
+            AssertEqual("10.48550/arXiv.2310.08864", DoiNormalizationHelper.NormalizeDoiValue("2310.08864"));
             AssertEqual("wrong", DoiNormalizationHelper.NormalizeDoiValue("wrong"));
         }
 
