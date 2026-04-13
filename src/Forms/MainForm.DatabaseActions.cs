@@ -341,7 +341,7 @@ namespace ScientificReviews.Forms
 
             string[] exportColumns = GetColumnsForExportMode(options.Mode, entriesToExport);
             if (options.Mode == DatabaseExportMode.AsColumns && exportColumns.Length == 0)
-                throw new InvalidOperationException("No custom columns configured. Configure them in View -> Columns first.");
+                throw new InvalidOperationException("No custom columns configured. Configure them in Settings first.");
 
             SaveLastExportSettings(options);
 
@@ -1096,6 +1096,11 @@ namespace ScientificReviews.Forms
             }
         }
 
+        private void txtSearch_TextChanged(object sender, EventArgs e)
+        {
+            LoadData(entries.ToArray(), txtSearch.Text);
+        }
+
         private void columnsToolStripMenuItem_Click(object sender, EventArgs e)
         {
             EditColumnsForm frm = new EditColumnsForm();
@@ -1104,13 +1109,9 @@ namespace ScientificReviews.Forms
             if (frm.ShowDialog(this) == DialogResult.OK)
             {
                 Program.AppSettings.Data.Columns = frm.GetColumns();
-                LoadData(entries.ToArray());
+                Program.AppSettings.SaveSettings();
+                RefreshGrid(statusMessage: "Custom columns updated.");
             }
-        }
-
-        private void txtSearch_TextChanged(object sender, EventArgs e)
-        {
-            LoadData(entries.ToArray(), txtSearch.Text);
         }
 
         private async void exportAsTableToolStripMenuItem_Click(object sender, EventArgs e)

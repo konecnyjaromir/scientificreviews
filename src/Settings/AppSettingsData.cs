@@ -87,8 +87,15 @@ namespace ScientificReviews
 
         [Browsable(true)]
         [Category(GENERAL_CAT)]
+        [DisplayName("Custom columns")]
+        [Description("Columns shown in the main grid and used by Export Mode = As columns.")]
+        [Editor(typeof(StringArrayEditor), typeof(UITypeEditor))]
+        public string[] Columns { get; set; }
+
+        [Browsable(true)]
+        [Category(GENERAL_CAT)]
         [DisplayName("Standard columns")]
-        [Description("Columns used by Export Mode = As standard. Edit them the same way as custom columns.")]
+        [Description("Columns used by Export Mode = As standard.")]
         [Editor(typeof(StringArrayEditor), typeof(UITypeEditor))]
         public string[] StandardColumns { get; set; } = new[] { "title", "author", "year", "doi" };
 
@@ -119,11 +126,6 @@ namespace ScientificReviews
         [Description("Set the path, where you will have backup bibtexes")]
         [Editor(typeof(PathEditor), typeof(UITypeEditor))]
         public string BackupFolder { get; set; }
-
-
-
-        [Browsable(false)]
-        public string[] Columns { get; set; }
 
 
         [Browsable(false)]

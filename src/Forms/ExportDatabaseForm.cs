@@ -848,7 +848,7 @@ namespace ScientificReviews.Forms
             switch (GetSelectedMode())
             {
                 case DatabaseExportMode.AsColumns:
-                    _lblModeHint.Text = "Exports only tags listed in custom columns from View -> Columns.";
+                    _lblModeHint.Text = "Exports only tags listed in Custom columns from Settings.";
                     break;
                 case DatabaseExportMode.AsStandard:
                     _lblModeHint.Text = "Exports only tags listed in Standard columns from Settings.";
