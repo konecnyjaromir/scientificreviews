@@ -564,11 +564,9 @@ namespace ScientificReviews.Forms
             Changed();
         }
 
-        private void updatePageTagFormatToolStripMenuItem_Click(object sender, EventArgs e)
+        private void normalizePageTagToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            BibtexUtils.UpdatePages(entries);
-            RefreshGrid();
-            Changed();
+            RunNormalizePageTagOperation(entries.ToArray());
         }
 
         private async void fetchMissingMetadataToolStripMenuItem_Click(object sender, EventArgs e)
@@ -603,7 +601,7 @@ namespace ScientificReviews.Forms
             StatusStripOperationHandle operation = StartTrackedOperation(
                 "autofix",
                 "Autofix",
-                "Normalize DOI -> Fetch metadata -> Create entry keys -> Auto-pair PDFs -> Update JCR");
+                "Normalize DOI -> Fetch metadata -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs -> Update JCR");
             if (operation == null)
                 return;
 
@@ -612,15 +610,19 @@ namespace ScientificReviews.Forms
 
             try
             {
-                operation.Report("Normalize DOI", "Preparing DOI values", 1, 4, false);
+                operation.Report("Normalize DOI", "Preparing DOI values", 1, 6, false);
                 RunNormalizeDoiOperation(entries.ToArray());
                 LogProcessProgress(log, "Normalize DOI completed.");
 
-                operation.Report("Fetch missing metadata", "Querying metadata services", 2, 4, false);
+                operation.Report("Fetch missing metadata", "Querying metadata services", 2, 6, false);
                 await StartFetchMissingMetadataOperationAsync(false);
                 LogProcessProgress(log, "Fetch missing metadata completed.");
 
-                operation.Report("Create entry keys", "Generating keys from updated metadata", 3, 5, false);
+                operation.Report("Normalize page-tag", "Normalizing pages ranges", 3, 6, false);
+                RunNormalizePageTagOperation(entries.ToArray());
+                LogProcessProgress(log, "Normalize page-tag completed.");
+
+                operation.Report("Create entry keys", "Generating keys from updated metadata", 4, 6, false);
                 createEntryKeysToolStripMenuItem_Click(this, EventArgs.Empty);
                 LogProcessProgress(log, "Create entry keys completed.");
 
@@ -631,7 +633,7 @@ namespace ScientificReviews.Forms
                 }
                 else
                 {
-                    operation.Report("Auto-pair PDFs", "Matching records with PDFs", 4, 5, false);
+                    operation.Report("Auto-pair PDFs", "Matching records with PDFs", 5, 6, false);
                     await StartAutoPairOperationAsync(false);
                     LogProcessProgress(log, "Auto-pair PDFs completed.");
                 }
@@ -643,7 +645,7 @@ namespace ScientificReviews.Forms
                 }
                 else
                 {
-                    operation.Report("Update JCR", "Fetching missing journals from Clarivate", 5, 5, false);
+                    operation.Report("Update JCR", "Fetching missing journals from Clarivate", 6, 6, false);
                     await StartUpdateJcrOperationAsync(false);
                     LogProcessProgress(log, "Update JCR completed.");
                 }
@@ -741,7 +743,7 @@ namespace ScientificReviews.Forms
         {
             DialogResult response = MessageBox.Show(
                 this,
-                "Autofix will automatically modify record metadata and run multiple repair/update steps, including DOI normalization, metadata fetching, entry key generation, PDF auto-pairing, and JCR update when configured.\r\n\r\nThis operation is irreversible and may damage records.\r\n\r\nDo you want to continue?",
+                "Autofix will automatically modify record metadata and run multiple repair/update steps, including DOI normalization, metadata fetching, page-tag normalization, entry key generation, PDF auto-pairing, and JCR update when configured.\r\n\r\nThis operation is irreversible and may damage records.\r\n\r\nDo you want to continue?",
                 "Autofix",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
@@ -782,6 +784,20 @@ namespace ScientificReviews.Forms
             {
                 log.Dispose();
             }
+        }
+
+        private void RunNormalizePageTagOperation(IEnumerable<BibtexEntry> sourceEntries)
+        {
+            BibtexEntry[] targetEntries = sourceEntries as BibtexEntry[] ?? sourceEntries?.ToArray() ?? Array.Empty<BibtexEntry>();
+            if (targetEntries.Length == 0)
+            {
+                lblStatus.Text = "No records available for page-tag normalization.";
+                return;
+            }
+
+            BibtexUtils.UpdatePages(targetEntries.ToList());
+            RefreshGrid();
+            Changed();
         }
 
         private DoiNormalizationResult NormalizeDoisForMetadataFetch(IEnumerable<BibtexEntry> sourceEntries)
