@@ -606,82 +606,95 @@ namespace ScientificReviews.Forms
             List<string> skippedSteps = new List<string>();
             int totalSteps = GetPreprocessingStepCount(mode);
             int currentStep = 0;
-
-            try
+            using (CancellationTokenSource cancellation = new CancellationTokenSource())
             {
-                currentStep++;
-                operation.Report("Normalize DOI", "Preparing DOI values", currentStep, totalSteps, false);
-                RunNormalizeDoiOperation(entries.ToArray());
-                LogProcessProgress(log, "Normalize DOI completed.");
+                operation.RegisterCancellation(cancellation.Cancel);
 
-                if (mode == AutoPreprocessingMode.Deep)
+                try
                 {
                     currentStep++;
-                    operation.Report("Fetch missing metadata", "Querying metadata services", currentStep, totalSteps, false);
-                    await StartFetchMissingMetadataOperationAsync(false);
-                    LogProcessProgress(log, "Fetch missing metadata completed.");
-                }
+                    operation.Report("Normalize DOI", "Preparing DOI values", currentStep, totalSteps, false);
+                    cancellation.Token.ThrowIfCancellationRequested();
+                    RunNormalizeDoiOperation(entries.ToArray());
+                    LogProcessProgress(log, "Normalize DOI completed.");
 
-                currentStep++;
-                operation.Report("Normalize page-tag", "Normalizing pages ranges", currentStep, totalSteps, false);
-                RunNormalizePageTagOperation(entries.ToArray());
-                LogProcessProgress(log, "Normalize page-tag completed.");
-
-                currentStep++;
-                operation.Report("Create entry keys", "Generating keys from updated metadata", currentStep, totalSteps, false);
-                RunCreateEntryKeysOperation(entries.ToArray());
-                LogProcessProgress(log, "Create entry keys completed.");
-
-                currentStep++;
-                if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.PdfFolder))
-                {
-                    skippedSteps.Add("Auto-pair PDFs");
-                    operation.Report("Auto-pair PDFs", "Skipped: PDF folder is not set.", currentStep, totalSteps, false);
-                    LogProcessProgress(log, "Skipped Auto-pair PDFs", "PDF folder is not set.");
-                }
-                else
-                {
-                    operation.Report("Auto-pair PDFs", "Matching records with PDFs", currentStep, totalSteps, false);
-                    await StartAutoPairOperationAsync(startedAutomatically);
-                    LogProcessProgress(log, "Auto-pair PDFs completed.");
-                }
-
-                if (mode == AutoPreprocessingMode.Deep)
-                {
-                    currentStep++;
-                    if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.JcrApiKey))
+                    if (mode == AutoPreprocessingMode.Deep)
                     {
-                        skippedSteps.Add("Update JCR");
-                        operation.Report("Update JCR", "Skipped: JCR API key is not set.", currentStep, totalSteps, false);
-                        LogProcessProgress(log, "Skipped Update JCR", "JCR API key is not set.");
+                        currentStep++;
+                        operation.Report("Fetch missing metadata", "Querying metadata services", currentStep, totalSteps, false);
+                        await StartFetchMissingMetadataOperationAsync(false, cancellation.Token);
+                        LogProcessProgress(log, "Fetch missing metadata completed.");
+                    }
+
+                    currentStep++;
+                    operation.Report("Normalize page-tag", "Normalizing pages ranges", currentStep, totalSteps, false);
+                    cancellation.Token.ThrowIfCancellationRequested();
+                    RunNormalizePageTagOperation(entries.ToArray());
+                    LogProcessProgress(log, "Normalize page-tag completed.");
+
+                    currentStep++;
+                    operation.Report("Create entry keys", "Generating keys from updated metadata", currentStep, totalSteps, false);
+                    cancellation.Token.ThrowIfCancellationRequested();
+                    RunCreateEntryKeysOperation(entries.ToArray());
+                    LogProcessProgress(log, "Create entry keys completed.");
+
+                    currentStep++;
+                    if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.PdfFolder))
+                    {
+                        skippedSteps.Add("Auto-pair PDFs");
+                        operation.Report("Auto-pair PDFs", "Skipped: PDF folder is not set.", currentStep, totalSteps, false);
+                        LogProcessProgress(log, "Skipped Auto-pair PDFs", "PDF folder is not set.");
                     }
                     else
                     {
-                        operation.Report("Update JCR", "Fetching missing journals from Clarivate", currentStep, totalSteps, false);
-                        await StartUpdateJcrOperationAsync(startedAutomatically);
-                        LogProcessProgress(log, "Update JCR completed.");
+                        operation.Report("Auto-pair PDFs", "Matching records with PDFs", currentStep, totalSteps, false);
+                        await StartAutoPairOperationAsync(startedAutomatically, cancellation.Token);
+                        LogProcessProgress(log, "Auto-pair PDFs completed.");
                     }
+
+                    if (mode == AutoPreprocessingMode.Deep)
+                    {
+                        currentStep++;
+                        if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.JcrApiKey))
+                        {
+                            skippedSteps.Add("Update JCR");
+                            operation.Report("Update JCR", "Skipped: JCR API key is not set.", currentStep, totalSteps, false);
+                            LogProcessProgress(log, "Skipped Update JCR", "JCR API key is not set.");
+                        }
+                        else
+                        {
+                            operation.Report("Update JCR", "Fetching missing journals from Clarivate", currentStep, totalSteps, false);
+                            await StartUpdateJcrOperationAsync(startedAutomatically, cancellation.Token);
+                            LogProcessProgress(log, "Update JCR completed.");
+                        }
+                    }
+
+                    string details = skippedSteps.Count == 0
+                        ? $"All {operationName.ToLowerInvariant()} steps completed."
+                        : "Skipped: " + string.Join(", ", skippedSteps) + ".";
+
+                    operation.Complete($"{operationName} finished.", details);
+                    log.Complete(details);
+                    lblStatus.Text = skippedSteps.Count == 0
+                        ? $"{operationName} finished."
+                        : $"{operationName} finished. Skipped: {string.Join(", ", skippedSteps)}.";
                 }
-
-                string details = skippedSteps.Count == 0
-                    ? $"All {operationName.ToLowerInvariant()} steps completed."
-                    : "Skipped: " + string.Join(", ", skippedSteps) + ".";
-
-                operation.Complete($"{operationName} finished.", details);
-                log.Complete(details);
-                lblStatus.Text = skippedSteps.Count == 0
-                    ? $"{operationName} finished."
-                    : $"{operationName} finished. Skipped: {string.Join(", ", skippedSteps)}.";
-            }
-            catch (Exception ex)
-            {
-                operation.Fail(ex, "Failed");
-                lblStatus.Text = ex.Message;
-                log.Fail(ex, $"{operationName} failed.");
-            }
-            finally
-            {
-                log.Dispose();
+                catch (OperationCanceledException)
+                {
+                    operation.Cancel("Cancelled", $"{operationName} was stopped by user.");
+                    lblStatus.Text = $"{operationName} cancelled.";
+                    log.Complete($"{operationName} cancelled.");
+                }
+                catch (Exception ex)
+                {
+                    operation.Fail(ex, "Failed");
+                    lblStatus.Text = ex.Message;
+                    log.Fail(ex, $"{operationName} failed.");
+                }
+                finally
+                {
+                    log.Dispose();
+                }
             }
         }
 
@@ -711,7 +724,7 @@ namespace ScientificReviews.Forms
             }
         }
 
-        private async Task StartFetchMissingMetadataOperationAsync(bool normalizeDoiFirst)
+        private async Task StartFetchMissingMetadataOperationAsync(bool normalizeDoiFirst, CancellationToken externalCancellationToken = default(CancellationToken))
         {
             BibtexEntry[] targetEntries = entries.ToArray();
 
@@ -734,35 +747,45 @@ namespace ScientificReviews.Forms
                 return;
 
             ProcessLogScope log = BeginProcessLog("Fetch metadata", details);
-
-            try
+            using (CancellationTokenSource cancellation = CancellationTokenSource.CreateLinkedTokenSource(externalCancellationToken))
             {
-                lblStatus.Text = $"Fetching metadata using {GetConfiguredThreadCount()} thread(s)...";
-                MetadataUpdateResult result = await RunFetchMissingMetadataAsync(targetEntries, operation);
+                operation.RegisterCancellation(cancellation.Cancel);
 
-                RefreshGrid();
+                try
+                {
+                    lblStatus.Text = $"Fetching metadata using {GetConfiguredThreadCount()} thread(s)...";
+                    MetadataUpdateResult result = await RunFetchMissingMetadataAsync(targetEntries, operation, cancellation.Token);
 
-                if (result.UpdatedEntries > 0)
-                    Changed();
+                    RefreshGrid();
 
-                string summary = $"Updated {result.UpdatedEntries}, unresolved {result.UnresolvedEntries}, failed {result.FailedEntries}";
-                string detailMessage = $"Already complete: {result.AlreadyCompleteEntries}.";
-                operation.Complete(summary, detailMessage);
-                log.Complete($"{summary} {detailMessage}");
+                    if (result.UpdatedEntries > 0)
+                        Changed();
 
-                lblStatus.Text = result.UpdatedEntries > 0
-                    ? $"Metadata fetch finished. Updated {result.UpdatedEntries} record(s)."
-                    : "Metadata fetch finished. No missing metadata could be resolved.";
-            }
-            catch (Exception ex)
-            {
-                operation.Fail(ex, "Failed");
-                lblStatus.Text = ex.Message;
-                log.Fail(ex, "Metadata fetch failed.");
-            }
-            finally
-            {
-                log.Dispose();
+                    string summary = $"Updated {result.UpdatedEntries}, unresolved {result.UnresolvedEntries}, failed {result.FailedEntries}";
+                    string detailMessage = $"Already complete: {result.AlreadyCompleteEntries}.";
+                    operation.Complete(summary, detailMessage);
+                    log.Complete($"{summary} {detailMessage}");
+
+                    lblStatus.Text = result.UpdatedEntries > 0
+                        ? $"Metadata fetch finished. Updated {result.UpdatedEntries} record(s)."
+                        : "Metadata fetch finished. No missing metadata could be resolved.";
+                }
+                catch (OperationCanceledException)
+                {
+                    operation.Cancel("Cancelled", "Metadata fetch was stopped by user.");
+                    lblStatus.Text = "Metadata fetch cancelled.";
+                    log.Complete("Metadata fetch cancelled.");
+                }
+                catch (Exception ex)
+                {
+                    operation.Fail(ex, "Failed");
+                    lblStatus.Text = ex.Message;
+                    log.Fail(ex, "Metadata fetch failed.");
+                }
+                finally
+                {
+                    log.Dispose();
+                }
             }
         }
 
@@ -1028,7 +1051,7 @@ namespace ScientificReviews.Forms
             return summary;
         }
 
-        private async Task<MetadataUpdateResult> RunFetchMissingMetadataAsync(IEnumerable<BibtexEntry> targetEntries, StatusStripOperationHandle operation)
+        private async Task<MetadataUpdateResult> RunFetchMissingMetadataAsync(IEnumerable<BibtexEntry> targetEntries, StatusStripOperationHandle operation, CancellationToken cancellationToken)
         {
             BibtexEntry[] targetArray = targetEntries as BibtexEntry[] ?? targetEntries.ToArray();
             ProcessLogScope log = BeginProcessLog("Fetch metadata inner", $"Records: {targetArray.Length}");
@@ -1053,7 +1076,8 @@ namespace ScientificReviews.Forms
                         ThreadCount = GetConfiguredThreadCount(),
                         ScreenMode = Program.AppSettings.Data.MetadataScreenMode
                     },
-                    progress);
+                    progress,
+                    cancellationToken);
                 log.Complete("Metadata inner process completed.");
                 return result;
             }

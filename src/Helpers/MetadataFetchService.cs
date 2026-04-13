@@ -119,7 +119,8 @@ namespace ScientificReviews.Helpers
         public async Task<MetadataUpdateResult> PopulateMissingMetadataAsync(
             IEnumerable<BibtexEntry> sourceEntries,
             MetadataUpdateOptions options,
-            IProgress<MetadataUpdateProgress> progress = null)
+            IProgress<MetadataUpdateProgress> progress = null,
+            CancellationToken cancellationToken = default(CancellationToken))
         {
             if (sourceEntries == null)
                 throw new ArgumentNullException(nameof(sourceEntries));
@@ -166,13 +167,15 @@ namespace ScientificReviews.Helpers
 
             foreach (BibtexEntry entry in toProcess)
             {
-                await semaphore.WaitAsync().ConfigureAwait(false);
+                await semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
 
                 tasks.Add(Task.Run(async () =>
                 {
                     try
                     {
+                        cancellationToken.ThrowIfCancellationRequested();
                         MetadataPayload payload = await FetchMetadataAsync(entry, options).ConfigureAwait(false);
+                        cancellationToken.ThrowIfCancellationRequested();
                         bool updated = ApplyMetadata(entry, payload);
                         bool complete = HasAllRequiredMetadata(entry);
 
@@ -192,6 +195,10 @@ namespace ScientificReviews.Helpers
                             AppLog.Log($"Metadata result for '{GetRecordLabel(entry)}': updated.", AppLog.MessageType.Info);
                         else
                             AppLog.Log($"Metadata result for '{GetRecordLabel(entry)}': no new metadata found.", AppLog.MessageType.Exclamation);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        throw;
                     }
                     catch (Exception ex)
                     {
@@ -215,7 +222,7 @@ namespace ScientificReviews.Helpers
                         });
                         semaphore.Release();
                     }
-                }));
+                }, cancellationToken));
             }
 
             await Task.WhenAll(tasks).ConfigureAwait(false);

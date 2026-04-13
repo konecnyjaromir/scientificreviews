@@ -201,7 +201,7 @@ namespace ScientificReviews.Forms
             await StartAutoPairOperationAsync(false);
         }
 
-        private async Task StartAutoPairOperationAsync(bool startedAutomatically)
+        private async Task StartAutoPairOperationAsync(bool startedAutomatically, CancellationToken externalCancellationToken = default(CancellationToken))
         {
             StatusStripOperationHandle operation = StartTrackedOperation(
                 "auto-pair-pdfs",
@@ -212,41 +212,51 @@ namespace ScientificReviews.Forms
                 return;
 
             ProcessLogScope log = BeginProcessLog("Auto-pair PDFs", Program.AppSettings.Data.PdfFolder);
-
-            try
+            using (CancellationTokenSource cancellation = CancellationTokenSource.CreateLinkedTokenSource(externalCancellationToken))
             {
-                lblStatus.Text = $"Auto-pairing PDFs using {GetConfiguredThreadCount()} thread(s)...";
-                PdfAutoPairResult result = await RunAutoPairAsync(operation);
+                operation.RegisterCancellation(cancellation.Cancel);
 
-                RefreshGrid();
-                Changed();
-
-                if (result.NoPdfsFound)
+                try
                 {
-                    operation.Complete("No PDFs found.", Program.AppSettings.Data.PdfFolder);
-                    lblStatus.Text = "No PDFs found in Pdf Folder.";
-                    log.Complete("No PDFs found.");
-                    return;
-                }
+                    lblStatus.Text = $"Auto-pairing PDFs using {GetConfiguredThreadCount()} thread(s)...";
+                    PdfAutoPairResult result = await RunAutoPairAsync(operation, cancellation.Token);
 
-                string summary = $"Direct {result.DirectMatches}, smart {result.SmartMatches}, unmatched {result.Unmatched}";
-                operation.Complete(summary, Program.AppSettings.Data.PdfFolder);
-                lblStatus.Text = $"Auto-pair finished using {GetConfiguredThreadCount()} thread(s). Direct: {result.DirectMatches}, smart: {result.SmartMatches}, unmatched: {result.Unmatched}.";
-                log.Complete(summary);
-            }
-            catch (Exception ex)
-            {
-                operation.Fail(ex, "Failed");
-                lblStatus.Text = ex.Message;
-                log.Fail(ex, "Auto-pair failed.");
-            }
-            finally
-            {
-                log.Dispose();
+                    RefreshGrid();
+                    Changed();
+
+                    if (result.NoPdfsFound)
+                    {
+                        operation.Complete("No PDFs found.", Program.AppSettings.Data.PdfFolder);
+                        lblStatus.Text = "No PDFs found in Pdf Folder.";
+                        log.Complete("No PDFs found.");
+                        return;
+                    }
+
+                    string summary = $"Direct {result.DirectMatches}, smart {result.SmartMatches}, unmatched {result.Unmatched}";
+                    operation.Complete(summary, Program.AppSettings.Data.PdfFolder);
+                    lblStatus.Text = $"Auto-pair finished using {GetConfiguredThreadCount()} thread(s). Direct: {result.DirectMatches}, smart: {result.SmartMatches}, unmatched: {result.Unmatched}.";
+                    log.Complete(summary);
+                }
+                catch (OperationCanceledException)
+                {
+                    operation.Cancel("Cancelled", "Auto-pair was stopped by user.");
+                    lblStatus.Text = "Auto-pair cancelled.";
+                    log.Complete("Auto-pair cancelled.");
+                }
+                catch (Exception ex)
+                {
+                    operation.Fail(ex, "Failed");
+                    lblStatus.Text = ex.Message;
+                    log.Fail(ex, "Auto-pair failed.");
+                }
+                finally
+                {
+                    log.Dispose();
+                }
             }
         }
 
-        private async Task<PdfAutoPairResult> RunAutoPairAsync(StatusStripOperationHandle operation)
+        private async Task<PdfAutoPairResult> RunAutoPairAsync(StatusStripOperationHandle operation, CancellationToken cancellationToken)
         {
             ProcessLogScope log = BeginProcessLog("Auto-pair PDFs inner", Program.AppSettings.Data.PdfFolder);
             Progress<PdfAutoPairProgress> progress = new Progress<PdfAutoPairProgress>(update =>
@@ -262,7 +272,7 @@ namespace ScientificReviews.Forms
 
             try
             {
-                PdfAutoPairResult result = await _pdfMatchingService.AutoPairAsync(entries, CreatePdfMatchingOptions(), progress);
+                PdfAutoPairResult result = await _pdfMatchingService.AutoPairAsync(entries, CreatePdfMatchingOptions(), progress, cancellationToken);
                 log.Complete("Auto-pair inner process completed.");
                 return result;
             }

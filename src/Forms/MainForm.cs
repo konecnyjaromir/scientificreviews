@@ -150,11 +150,13 @@ namespace ScientificReviews.Forms
             };
         }
 
-        private StatusStripOperationHandle StartTrackedOperation(string key, string name, string details = null, bool silentIfAlreadyRunning = false)
+        private StatusStripOperationHandle StartTrackedOperation(string key, string name, string details = null, bool silentIfAlreadyRunning = false, Action cancelAction = null)
         {
             StatusStripOperationHandle operation = _operationManager.StartOperation(key, name, details);
             if (operation == null && !silentIfAlreadyRunning)
                 lblStatus.Text = $"{name} is already running.";
+
+            operation?.RegisterCancellation(cancelAction);
 
             return operation;
         }
@@ -400,7 +402,7 @@ namespace ScientificReviews.Forms
             await StartUpdateJcrOperationAsync(false);
         }
 
-        private async Task StartUpdateJcrOperationAsync(bool startedAutomatically)
+        private async Task StartUpdateJcrOperationAsync(bool startedAutomatically, CancellationToken externalCancellationToken = default(CancellationToken))
         {
             if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.JcrApiKey))
             {
@@ -418,40 +420,50 @@ namespace ScientificReviews.Forms
                 return;
 
             ProcessLogScope log = BeginProcessLog("Update JCR", "Fetching missing journals from Clarivate");
-
-            try
+            using (CancellationTokenSource cancellation = CancellationTokenSource.CreateLinkedTokenSource(externalCancellationToken))
             {
-                lblStatus.Text = "Updating database...";
-                JcrUpdateResult result = await RunUpdateJcrAsync(operation);
+                operation.RegisterCancellation(cancellation.Cancel);
 
-                string summary = result.MissingJournalCount == 0
-                    ? "No missing journals."
-                    : $"Added {result.AddedJournalCount}, missing {result.NotFoundJournalCount}";
+                try
+                {
+                    lblStatus.Text = "Updating database...";
+                    JcrUpdateResult result = await RunUpdateJcrAsync(operation, cancellation.Token);
 
-                operation.Complete(summary, "Click to see details.");
+                    string summary = result.MissingJournalCount == 0
+                        ? "No missing journals."
+                        : $"Added {result.AddedJournalCount}, missing {result.NotFoundJournalCount}";
 
-                if (result.MissingJournalCount == 0)
-                    lblStatus.Text = "Journal database is already up to date.";
-                else if (result.NotFoundJournalCount > 0)
-                    lblStatus.Text = $"Some journals were not found. Added {result.AddedJournalCount}/{result.MissingJournalCount}.";
-                else
-                    lblStatus.Text = "Journal database updated.";
+                    operation.Complete(summary, "Click to see details.");
 
-                log.Complete($"{summary}. Missing: {result.MissingJournalCount}, not found: {result.NotFoundJournalCount}.");
-            }
-            catch (Exception ex)
-            {
-                operation.Fail(ex, "Failed");
-                lblStatus.Text = ex.Message;
-                log.Fail(ex, "JCR update failed.");
-            }
-            finally
-            {
-                log.Dispose();
+                    if (result.MissingJournalCount == 0)
+                        lblStatus.Text = "Journal database is already up to date.";
+                    else if (result.NotFoundJournalCount > 0)
+                        lblStatus.Text = $"Some journals were not found. Added {result.AddedJournalCount}/{result.MissingJournalCount}.";
+                    else
+                        lblStatus.Text = "Journal database updated.";
+
+                    log.Complete($"{summary}. Missing: {result.MissingJournalCount}, not found: {result.NotFoundJournalCount}.");
+                }
+                catch (OperationCanceledException)
+                {
+                    operation.Cancel("Cancelled", "JCR update was stopped by user.");
+                    lblStatus.Text = "JCR update cancelled.";
+                    log.Complete("JCR update cancelled.");
+                }
+                catch (Exception ex)
+                {
+                    operation.Fail(ex, "Failed");
+                    lblStatus.Text = ex.Message;
+                    log.Fail(ex, "JCR update failed.");
+                }
+                finally
+                {
+                    log.Dispose();
+                }
             }
         }
 
-        private async Task<JcrUpdateResult> RunUpdateJcrAsync(StatusStripOperationHandle operation)
+        private async Task<JcrUpdateResult> RunUpdateJcrAsync(StatusStripOperationHandle operation, CancellationToken cancellationToken)
         {
             ProcessLogScope log = BeginProcessLog("Update JCR inner", "Progress tracking");
             Progress<JcrUpdateProgress> progress = new Progress<JcrUpdateProgress>(update =>
@@ -469,7 +481,8 @@ namespace ScientificReviews.Forms
                     DateTime.Now.Year - 1,
                     () => Program.JournalsDatabase.Save(),
                     message => AppLog.Log(message, AppLog.MessageType.Error),
-                    progress);
+                    progress,
+                    cancellationToken);
                 log.Complete("JCR inner process completed.");
                 return result;
             }
