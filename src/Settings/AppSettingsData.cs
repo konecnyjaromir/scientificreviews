@@ -16,6 +16,15 @@ namespace ScientificReviews
         OnlyMissingAndArxivDois
     }
 
+    public class LastExportSettingsData
+    {
+        public string Scope { get; set; } = "All";
+        public string Format { get; set; } = "Bib";
+        public string Mode { get; set; } = "Normal";
+        public string CsvSeparator { get; set; } = ",";
+        public string OutputFilePath { get; set; }
+    }
+
     public class AppSettingsData
     {
         private const string GENERAL_CAT = "0: General";
@@ -70,6 +79,19 @@ namespace ScientificReviews
         [Description("If true, Save overwrites the current BibTeX file without confirmation")]
         public bool SaveWithoutApprove { get; set; } = false;
 
+        [Browsable(true)]
+        [Category(GENERAL_CAT)]
+        [DisplayName("Standard columns")]
+        [Description("Columns used by Export Mode = As standard. Edit them the same way as custom columns.")]
+        [Editor(typeof(StringArrayEditor), typeof(UITypeEditor))]
+        public string[] StandardColumns { get; set; } = new[] { "title", "author", "year", "doi" };
+
+        [Browsable(true)]
+        [Category(GENERAL_CAT)]
+        [DisplayName("Default CSV separator")]
+        [Description("Default separator used by CSV export. Use ',', ';', 'TAB', or your own custom separator text.")]
+        public string DefaultCsvSeparator { get; set; } = ",";
+
 
         [Browsable(true)]
         [Category(BACKUP_CAT)]
@@ -112,6 +134,9 @@ namespace ScientificReviews
 
         [Browsable(false)]
         public string LastBibTex { get; set; }
+
+        [Browsable(false)]
+        public LastExportSettingsData LastExportSettings { get; set; } = new LastExportSettingsData();
 
     }
 }

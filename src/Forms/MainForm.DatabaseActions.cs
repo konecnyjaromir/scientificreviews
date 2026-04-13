@@ -7,6 +7,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -125,9 +126,14 @@ namespace ScientificReviews.Forms
             await SaveArchiveAsAsync();
         }
 
+        private async void exportToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            await ShowExportDialogAsync();
+        }
+
         private async void exportVisibleToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            await ExportDatabaseAsync(visibleEntries.ToArray());
+            await ShowExportDialogAsync(DatabaseExportScope.Visible, DatabaseExportFormat.Bib);
         }
 
         private async Task SaveCurrentArchiveAsync()
@@ -235,45 +241,263 @@ namespace ScientificReviews.Forms
             }
         }
 
-        private async Task ExportDatabaseAsync(BibtexEntry[] entriesToExport)
+        private async Task ShowExportDialogAsync(
+            DatabaseExportScope? defaultScope = null,
+            DatabaseExportFormat? defaultFormat = null,
+            DatabaseExportMode? defaultMode = null)
         {
-            ProcessLogScope log = BeginProcessLog("Export BibTeX", $"Records: {entriesToExport?.Length ?? 0}");
+            DatabaseExportOptions initialOptions = BuildInitialExportOptions(defaultScope, defaultFormat, defaultMode);
+
+            using (ExportDatabaseForm form = new ExportDatabaseForm(initialOptions, RunDatabaseExportAsync))
+            {
+                form.ShowDialog(this);
+            }
+
+            await Task.CompletedTask;
+        }
+
+        private DatabaseExportOptions BuildInitialExportOptions(
+            DatabaseExportScope? defaultScope,
+            DatabaseExportFormat? defaultFormat,
+            DatabaseExportMode? defaultMode)
+        {
+            LastExportSettingsData last = Program.AppSettings.Data.LastExportSettings ?? new LastExportSettingsData();
+
+            DatabaseExportOptions options = new DatabaseExportOptions
+            {
+                Scope = ParseExportScope(last.Scope, DatabaseExportScope.All),
+                Format = ParseExportFormat(last.Format, DatabaseExportFormat.Bib),
+                Mode = ParseExportMode(last.Mode, DatabaseExportMode.Normal),
+                CsvSeparator = NormalizeCsvSeparator(string.IsNullOrWhiteSpace(last.CsvSeparator) ? GetDefaultCsvSeparator() : last.CsvSeparator),
+                OutputFilePath = string.IsNullOrWhiteSpace(last.OutputFilePath)
+                    ? null
+                    : last.OutputFilePath
+            };
+
+            if (defaultScope.HasValue)
+                options.Scope = defaultScope.Value;
+            if (defaultFormat.HasValue)
+                options.Format = defaultFormat.Value;
+            if (defaultMode.HasValue)
+                options.Mode = defaultMode.Value;
+
+            if (string.IsNullOrWhiteSpace(options.CsvSeparator))
+                options.CsvSeparator = GetDefaultCsvSeparator();
+            if (string.IsNullOrWhiteSpace(options.OutputFilePath))
+                options.OutputFilePath = GetDefaultExportOutputPath(options.Format);
+
+            return options;
+        }
+
+        private void SaveLastExportSettings(DatabaseExportOptions options)
+        {
+            if (options == null)
+                return;
+
+            Program.AppSettings.Data.LastExportSettings = new LastExportSettingsData
+            {
+                Scope = options.Scope.ToString(),
+                Format = options.Format.ToString(),
+                Mode = options.Mode.ToString(),
+                CsvSeparator = NormalizeCsvSeparator(options.CsvSeparator),
+                OutputFilePath = options.OutputFilePath
+            };
+
+            Program.AppSettings.SaveSettings();
+        }
+
+        private DatabaseExportScope ParseExportScope(string value, DatabaseExportScope fallback)
+        {
+            DatabaseExportScope parsed;
+            return Enum.TryParse(value, true, out parsed) ? parsed : fallback;
+        }
+
+        private DatabaseExportFormat ParseExportFormat(string value, DatabaseExportFormat fallback)
+        {
+            DatabaseExportFormat parsed;
+            return Enum.TryParse(value, true, out parsed) ? parsed : fallback;
+        }
+
+        private DatabaseExportMode ParseExportMode(string value, DatabaseExportMode fallback)
+        {
+            DatabaseExportMode parsed;
+            return Enum.TryParse(value, true, out parsed) ? parsed : fallback;
+        }
+
+        private async Task<DatabaseExportRunResult> RunDatabaseExportAsync(
+            DatabaseExportOptions options,
+            IProgress<DatabaseExportProgress> progress,
+            CancellationToken cancellationToken)
+        {
+            if (options == null)
+                throw new ArgumentNullException(nameof(options));
+
+            BibtexEntry[] entriesToExport = ResolveEntriesForExportScope(options.Scope);
+            if (entriesToExport.Length == 0)
+                throw new InvalidOperationException(options.Scope == DatabaseExportScope.Selected
+                    ? "No records selected for export."
+                    : "No records available for export.");
+
+            string[] exportColumns = GetColumnsForExportMode(options.Mode, entriesToExport);
+            if (options.Mode == DatabaseExportMode.AsColumns && exportColumns.Length == 0)
+                throw new InvalidOperationException("No custom columns configured. Configure them in View -> Columns first.");
+
+            SaveLastExportSettings(options);
+
+            string processName = options.Format == DatabaseExportFormat.Csv ? "Export CSV" : "Export BibTeX";
+            ProcessLogScope log = BeginProcessLog(processName, $"Records: {entriesToExport.Length}, mode: {options.Mode}");
+            IProgress<DatabaseExportProgress> compositeProgress = new Progress<DatabaseExportProgress>(update =>
+            {
+                progress?.Report(update);
+                LogProcessProgress(log, update?.StatusText, null, update?.Completed, update?.Total);
+            });
+
             try
             {
-                SaveFileDialog saveFileDialog = new SaveFileDialog()
-                {
-                    CheckPathExists = true,
-                    Filter = "Bibtex database *.bib|*.bib",
-                    Title = "Export BibTeX"
-                };
-                if (saveFileDialog.ShowDialog(this) == DialogResult.OK)
-                {
-                    lblStatus.Text = "Exporting...";
-                    await Task.Run(() =>
+                lblStatus.Text = "Exporting...";
+                DatabaseExportRunResult result = await _databaseExportService.RunExportAsync(
+                    entriesToExport,
+                    new DatabaseExportOptions
                     {
-                        string fileName = saveFileDialog.FileName;
-                        BibtexExporter exporter = new BibtexExporter();
-                        string content = exporter.EntriesToString(entriesToExport);
-                        File.WriteAllText(fileName, content);
-                    });
-                    lblStatus.Text = "Export done.";
-                    log.Complete($"Exported {entriesToExport.Length} record(s) to {saveFileDialog.FileName}.");
-                }
-                else
-                {
-                    log.Step("Cancelled by user.");
-                    log.Complete("No file selected.");
-                }
+                        Scope = options.Scope,
+                        Format = options.Format,
+                        Mode = options.Mode,
+                        CsvSeparator = NormalizeCsvSeparator(options.CsvSeparator),
+                        OutputFilePath = options.OutputFilePath
+                    },
+                    exportColumns,
+                    compositeProgress,
+                    cancellationToken);
+
+                if (string.IsNullOrWhiteSpace(options.OutputFilePath) == false)
+                    Program.AppSettings.Data.LastDirectory = Path.GetDirectoryName(options.OutputFilePath);
+
+                Program.AppSettings.SaveSettings();
+
+                lblStatus.Text = result.Cancelled
+                    ? $"Export cancelled after {result.Completed}/{result.Total}."
+                    : "Export done.";
+
+                log.Complete(result.Cancelled
+                    ? $"Export cancelled after {result.Completed}/{result.Total}."
+                    : $"Exported {result.Completed} record(s) to {options.OutputFilePath}.");
+
+                return result;
             }
             catch (Exception ex)
             {
                 lblStatus.Text = ex.Message;
-                log.Fail(ex, "BibTeX export failed.");
+                log.Fail(ex, $"{processName} failed.");
+                throw;
             }
             finally
             {
                 log.Dispose();
             }
+        }
+
+        private string GetDefaultExportOutputPath(DatabaseExportFormat format)
+        {
+            string currentFile = Program.AppSettings.Data.LastBibTex;
+            string initialDirectory = Program.AppSettings.Data.LastDirectory;
+            string defaultFileName = "export";
+
+            if (string.IsNullOrWhiteSpace(currentFile) == false)
+            {
+                string currentDirectory = Path.GetDirectoryName(currentFile);
+                if (string.IsNullOrWhiteSpace(currentDirectory) == false)
+                    initialDirectory = currentDirectory;
+
+                defaultFileName = Path.GetFileNameWithoutExtension(currentFile);
+            }
+
+            if (string.IsNullOrWhiteSpace(initialDirectory))
+                return defaultFileName + (format == DatabaseExportFormat.Csv ? ".csv" : ".bib");
+
+            return Path.Combine(initialDirectory, defaultFileName + (format == DatabaseExportFormat.Csv ? ".csv" : ".bib"));
+        }
+
+        private BibtexEntry[] ResolveEntriesForExportScope(DatabaseExportScope scope)
+        {
+            switch (scope)
+            {
+                case DatabaseExportScope.Visible:
+                    return visibleEntries.ToArray();
+                case DatabaseExportScope.Selected:
+                    return GetSelectedOrdered();
+                default:
+                    return entries.ToArray();
+            }
+        }
+
+        private string[] GetColumnsForExportMode(DatabaseExportMode mode, IEnumerable<BibtexEntry> sourceEntries)
+        {
+            switch (mode)
+            {
+                case DatabaseExportMode.AsColumns:
+                    return SanitizeColumnList(Program.AppSettings.Data.Columns);
+                case DatabaseExportMode.AsStandard:
+                    return GetStandardColumns();
+                default:
+                    return GetOrderedTagKeys(sourceEntries).ToArray();
+            }
+        }
+
+        private string[] GetStandardColumns()
+        {
+            string[] standardColumns = SanitizeColumnList(Program.AppSettings.Data.StandardColumns);
+            return standardColumns.Length > 0
+                ? standardColumns
+                : new[] { "title", "author", "year", "doi" };
+        }
+
+        private BibtexEntry[] ProjectEntriesForBibtexExport(IEnumerable<BibtexEntry> sourceEntries, IEnumerable<string> orderedColumns)
+        {
+            List<BibtexEntry> projected = new List<BibtexEntry>();
+            foreach (BibtexEntry entry in sourceEntries ?? Array.Empty<BibtexEntry>())
+                projected.Add(CreateProjectedEntry(entry, orderedColumns));
+
+            return projected.ToArray();
+        }
+
+        private BibtexEntry CreateProjectedEntry(BibtexEntry entry, IEnumerable<string> orderedColumns)
+        {
+            List<BibtexTag> tags = new List<BibtexTag>();
+            HashSet<string> added = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string column in orderedColumns ?? Array.Empty<string>())
+            {
+                BibtexTag matchingTag = (entry?.Tags ?? Array.Empty<BibtexTag>())
+                    .FirstOrDefault(tag => tag != null && string.Equals(tag.Key, column, StringComparison.OrdinalIgnoreCase));
+
+                if (matchingTag == null || !added.Add(matchingTag.Key))
+                    continue;
+
+                tags.Add(new BibtexTag(matchingTag.Key, matchingTag.Value));
+            }
+
+            return new BibtexEntry
+            {
+                Key = entry?.Key,
+                Type = entry?.Type,
+                Tags = tags.ToArray()
+            };
+        }
+
+        private string GetDefaultCsvSeparator()
+        {
+            return NormalizeCsvSeparator(Program.AppSettings.Data.DefaultCsvSeparator);
+        }
+
+        private string NormalizeCsvSeparator(string separator)
+        {
+            if (string.IsNullOrWhiteSpace(separator))
+                return ",";
+
+            if (string.Equals(separator, "TAB", StringComparison.OrdinalIgnoreCase) || string.Equals(separator, "\\t", StringComparison.OrdinalIgnoreCase))
+                return "\t";
+
+            return separator;
         }
 
         private void exportDOIsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -848,40 +1072,9 @@ namespace ScientificReviews.Forms
             LoadData(entries.ToArray(), txtSearch.Text);
         }
 
-        private void exportAsTableToolStripMenuItem_Click(object sender, EventArgs e)
+        private async void exportAsTableToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            ProcessLogScope log = BeginProcessLog("Export CSV table", $"Records: {entries.Count}");
-            try
-            {
-                SaveFileDialog saveFileDialog = new SaveFileDialog()
-                {
-                    CheckPathExists = true,
-                    Filter = "Bibtex database *.csv|*.csv"
-                };
-                if (saveFileDialog.ShowDialog(this) == DialogResult.OK)
-                {
-                    string fileName = saveFileDialog.FileName;
-                    var table = BuildTable(entries.ToArray(), Program.AppSettings.Data.Columns);
-                    CsvExporter.ExportToCsv(table, fileName);
-                    log.Complete($"Exported table with {table.Rows.Count} row(s) to {fileName}.");
-                }
-                else
-                {
-                    log.Step("Cancelled by user.");
-                    log.Complete("No file selected.");
-                }
-
-                lblStatus.Text = "Export done.";
-            }
-            catch (Exception ex)
-            {
-                lblStatus.Text = ex.Message;
-                log.Fail(ex, "CSV export failed.");
-            }
-            finally
-            {
-                log.Dispose();
-            }
+            await ShowExportDialogAsync(DatabaseExportScope.All, DatabaseExportFormat.Csv);
         }
     }
 }

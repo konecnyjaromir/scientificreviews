@@ -60,6 +60,7 @@
   <ItemGroup>
     <Compile Include="Helpers\BibtexAutosaveManager.cs" />
     <Compile Include="Helpers\BibtexLoadService.cs" />
+    <Compile Include="Helpers\DatabaseExportService.cs" />
     <Compile Include="Helpers\BibtexTagService.cs" />
     <Compile Include="Helpers\JcrUpdateService.cs" />
     <Compile Include="Helpers\MetadataFetchService.cs" />
@@ -70,6 +71,10 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Forms\AboutForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\ExportDatabaseModels.cs" />
+    <Compile Include="Forms\ExportDatabaseForm.cs">
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Forms\EditColumnsForm.Designer.cs">
@@ -87,6 +92,9 @@
     </Compile>
     <Compile Include="Forms\InputGridForm.Designer.cs">
       <DependentUpon>InputGridForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\RenameTagForm.cs">
+      <SubType>Form</SubType>
     </Compile>
     <Compile Include="Forms\SettingsForm.cs">
       <SubType>Form</SubType>
@@ -145,9 +153,13 @@
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Settings\AppSettingsJson.cs" />
+    <Compile Include="Settings\Editors\StringArrayEditor.cs" />
     <Compile Include="Settings\Editors\PathEditor.cs" />
     <Compile Include="Settings\JournalsDatabase.cs" />
     <Compile Include="Settings\JsonDatabase.cs" />
+    <EmbeddedResource Include="Forms\ExportDatabaseForm.resx">
+      <DependentUpon>ExportDatabaseForm.cs</DependentUpon>
+    </EmbeddedResource>
     <EmbeddedResource Include="Forms\InputBoxForm.resx">
       <DependentUpon>InputBoxForm.cs</DependentUpon>
     </EmbeddedResource>
