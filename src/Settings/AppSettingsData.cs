@@ -9,6 +9,13 @@ using System.Threading.Tasks;
 
 namespace ScientificReviews
 {
+    public enum MetadataScreenMode
+    {
+        OnlyMissing,
+        All,
+        OnlyMissingAndArxivDois
+    }
+
     public class AppSettingsData
     {
         private const string GENERAL_CAT = "0: General";
@@ -50,6 +57,12 @@ namespace ScientificReviews
         [DisplayName("Metadata contact email")]
         [Description("Optional email used in metadata API User-Agent headers (recommended for Crossref polite pool)")]
         public string MetadataContactEmail { get; set; }
+
+        [Browsable(true)]
+        [Category(GENERAL_CAT)]
+        [DisplayName("Metadata Screen Mode")]
+        [Description("Select which records should be processed by metadata fetching")]
+        public MetadataScreenMode MetadataScreenMode { get; set; } = MetadataScreenMode.OnlyMissing;
 
         [Browsable(true)]
         [Category(GENERAL_CAT)]

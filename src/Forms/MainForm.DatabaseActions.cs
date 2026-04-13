@@ -674,7 +674,8 @@ namespace ScientificReviews.Forms
                     new MetadataUpdateOptions
                     {
                         ContactEmail = Program.AppSettings.Data.MetadataContactEmail,
-                        ThreadCount = GetConfiguredThreadCount()
+                        ThreadCount = GetConfiguredThreadCount(),
+                        ScreenMode = Program.AppSettings.Data.MetadataScreenMode
                     },
                     progress);
                 log.Complete("Metadata inner process completed.");
