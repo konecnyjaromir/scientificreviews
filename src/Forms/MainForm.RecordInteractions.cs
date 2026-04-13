@@ -365,8 +365,9 @@ namespace ScientificReviews.Forms
                 row.Selected = true;
             }
 
-            if (matchingRows[0].Cells.Count > 0)
-                dataGridView1.CurrentCell = matchingRows[0].Cells[0];
+            bindingSource1.Position = matchingRows[0].Index;
+
+            SelectEntry();
         }
 
         private void dataGridView1_SelectionChanged(object sender, EventArgs e)

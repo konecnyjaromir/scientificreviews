@@ -193,7 +193,7 @@ namespace ScientificReviews.Forms
 
         private async void exportSelectedToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            await ExportDatabaseAsync(GetSelected());
+            await ShowExportDialogAsync(DatabaseExportScope.Selected, DatabaseExportFormat.Bib);
         }
 
         private async void autoPairWithPdfsToolStripMenuItem_Click(object sender, EventArgs e)

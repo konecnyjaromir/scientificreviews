@@ -48,7 +48,9 @@ namespace ScientificReviews.Forms
         private readonly MetadataFetchService _metadataFetchService = new MetadataFetchService();
         private readonly JcrUpdateService _jcrUpdateService = new JcrUpdateService();
         private readonly PdfExportService _pdfExportService = new PdfExportService();
+        private readonly DatabaseExportService _databaseExportService = new DatabaseExportService();
         private readonly PdfMatchingService _pdfMatchingService = new PdfMatchingService();
+        private string _currentBibTexPath;
         private ContextMenuStrip _recordContextMenu;
         private ContextMenuStrip _gridBackgroundContextMenu;
         private ToolStripMenuItem _contextEditMenuItem;
@@ -142,18 +144,9 @@ namespace ScientificReviews.Forms
             table.Columns.Add("Entry Type", typeof(string));
 
             if (userColumns == null || userColumns.Length == 0)
-            {
-                HashSet<string> uniqueTags = new HashSet<string>();
-                foreach (BibtexEntry entry in entries)
-                {
-                    foreach (BibtexTag tag in entry.Tags)
-                    {
-                        uniqueTags.Add(tag.Key);
-                    }
-                }
+                userColumns = GetOrderedTagKeys(entries).ToArray();
 
-                userColumns = uniqueTags.ToArray();
-            }
+            userColumns = SanitizeColumnList(userColumns);
 
             foreach (string col in userColumns)
                 table.Columns.Add(col, typeof(string));
@@ -173,6 +166,43 @@ namespace ScientificReviews.Forms
             }
 
             return table;
+        }
+
+        private string[] SanitizeColumnList(IEnumerable<string> columns)
+        {
+            List<string> sanitized = new List<string>();
+            HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (string column in columns ?? Array.Empty<string>())
+            {
+                string value = (column ?? string.Empty).Trim();
+                if (value.Length == 0 || !seen.Add(value))
+                    continue;
+
+                sanitized.Add(value);
+            }
+
+            return sanitized.ToArray();
+        }
+
+        private IEnumerable<string> GetOrderedTagKeys(IEnumerable<BibtexEntry> sourceEntries)
+        {
+            HashSet<string> seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            List<string> orderedKeys = new List<string>();
+
+            foreach (BibtexEntry entry in sourceEntries ?? Array.Empty<BibtexEntry>())
+            {
+                foreach (BibtexTag tag in entry?.Tags ?? Array.Empty<BibtexTag>())
+                {
+                    string key = (tag?.Key ?? string.Empty).Trim();
+                    if (key.Length == 0 || !seen.Add(key))
+                        continue;
+
+                    orderedKeys.Add(key);
+                }
+            }
+
+            return orderedKeys;
         }
 
         private async void Changed()

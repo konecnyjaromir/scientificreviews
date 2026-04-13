@@ -11,10 +11,13 @@ namespace ScientificReviews.Helpers
 {
     public static class CsvExporter
     {
-        public static void ExportToCsv(DataTable table, string filePath, char separator = ';')
+        public static void ExportToCsv(DataTable table, string filePath, string separator = ",")
         {
             if (table == null)
                 throw new ArgumentNullException(nameof(table));
+
+            if (string.IsNullOrEmpty(separator))
+                throw new ArgumentException("CSV separator cannot be empty.", nameof(separator));
 
             // Případně vytvoří cílovou složku
             var dir = Path.GetDirectoryName(filePath);
@@ -61,7 +64,7 @@ namespace ScientificReviews.Helpers
             }
         }
 
-        private static string EscapeCsv(string input, char separator)
+        private static string EscapeCsv(string input, string separator)
         {
             if (input == null)
                 return string.Empty;
