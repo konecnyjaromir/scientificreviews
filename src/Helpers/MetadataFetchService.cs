@@ -1071,26 +1071,17 @@ namespace ScientificReviews.Helpers
                     return null;
 
                 string query = $"ti:\"{title}\"";
-                string url = $"https://export.arxiv.org/api/query?search_query={Uri.EscapeDataString(query)}&start=0&max_results=5";
+                string url = $"https://export.arxiv.org/api/query?search_query={Uri.EscapeDataString(query)}&sortBy=relevance&sortOrder=ascending";
                 XDocument xml = await GetXmlAsync(url, options).ConfigureAwait(false);
                 List<MetadataPayload> candidates = ParseArxivEntries(xml);
+                MetadataPayload firstCandidate = candidates.FirstOrDefault();
+                if (firstCandidate == null)
+                    return null;
 
-                MetadataPayload best = null;
-                double bestScore = 0;
-                foreach (MetadataPayload candidate in candidates)
-                {
-                    if (candidate == null || TitlesMatch(title, candidate.Title) == false || AuthorHintConflicts(authorHint, candidate.Author))
-                        continue;
+                if (TitlesMatch(title, firstCandidate.Title) == false || AuthorHintConflicts(authorHint, firstCandidate.Author))
+                    return null;
 
-                    double score = GetCandidateScore(title, authorHint, candidate);
-                    if (score > bestScore)
-                    {
-                        best = candidate;
-                        bestScore = score;
-                    }
-                }
-
-                return AddSource(best);
+                return AddSource(firstCandidate);
             }
 
             private async Task<MetadataPayload> FetchByArxivIdAsync(string arxivId, MetadataUpdateOptions options)
@@ -1116,7 +1107,7 @@ namespace ScientificReviews.Helpers
                     string doi = NormalizeProviderDoi(CleanValue(entry.Element(ArxivNamespace + "doi")?.Value));
                     string journal = CleanValue(entry.Element(ArxivNamespace + "journal_ref")?.Value);
                     string id = CleanValue(entry.Element(AtomNamespace + "id")?.Value);
-                    string eprint = NormalizeProviderArxivIdentifier(id);
+                    string eprint = StripArxivVersion(NormalizeProviderArxivIdentifier(id));
                     string author = JoinArxivAuthors(entry.Elements(AtomNamespace + "author"));
 
                     if (string.IsNullOrWhiteSpace(doi) && string.IsNullOrWhiteSpace(eprint) == false)
