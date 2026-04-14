@@ -107,7 +107,7 @@ namespace ScientificReviews
         [Category(METADATA_CAT)]
         [DisplayName("Metadata fetch scope")]
         [Description("Controls which records are processed by metadata fetching.")]
-        public MetadataScreenMode MetadataScreenMode { get; set; } = MetadataScreenMode.OnlyMissing;
+        public MetadataScreenMode MetadataScreenMode { get; set; } = MetadataScreenMode.All;
 
         [Browsable(true)]
         [Category(EXPORT_CAT)]

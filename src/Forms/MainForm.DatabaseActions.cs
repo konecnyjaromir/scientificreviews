@@ -553,7 +553,7 @@ namespace ScientificReviews.Forms
             if (ConfirmMetadataFetch() == false)
                 return;
 
-            await StartFetchMissingMetadataOperationAsync(true);
+            await StartFetchMissingMetadataOperationAsync(true, null);
         }
 
         private void normalizeDoiToolStripMenuItem_Click(object sender, EventArgs e)
@@ -622,7 +622,7 @@ namespace ScientificReviews.Forms
                     {
                         currentStep++;
                         operation.Report("Fetch missing metadata", "Querying metadata services", currentStep, totalSteps, false);
-                        await StartFetchMissingMetadataOperationAsync(false, cancellation.Token);
+                        await StartFetchMissingMetadataOperationAsync(false, MetadataScreenMode.All, cancellation.Token);
                         LogProcessProgress(log, "Fetch missing metadata completed.");
                     }
 
@@ -724,7 +724,10 @@ namespace ScientificReviews.Forms
             }
         }
 
-        private async Task StartFetchMissingMetadataOperationAsync(bool normalizeDoiFirst, CancellationToken externalCancellationToken = default(CancellationToken))
+        private async Task StartFetchMissingMetadataOperationAsync(
+            bool normalizeDoiFirst,
+            MetadataScreenMode? screenModeOverride = null,
+            CancellationToken externalCancellationToken = default(CancellationToken))
         {
             BibtexEntry[] targetEntries = entries.ToArray();
 
@@ -754,7 +757,7 @@ namespace ScientificReviews.Forms
                 try
                 {
                     lblStatus.Text = $"Fetching metadata using {GetConfiguredThreadCount()} thread(s)...";
-                    MetadataUpdateResult result = await RunFetchMissingMetadataAsync(targetEntries, operation, cancellation.Token);
+                    MetadataUpdateResult result = await RunFetchMissingMetadataAsync(targetEntries, operation, screenModeOverride, cancellation.Token);
 
                     RefreshGrid();
 
@@ -1051,7 +1054,11 @@ namespace ScientificReviews.Forms
             return summary;
         }
 
-        private async Task<MetadataUpdateResult> RunFetchMissingMetadataAsync(IEnumerable<BibtexEntry> targetEntries, StatusStripOperationHandle operation, CancellationToken cancellationToken)
+        private async Task<MetadataUpdateResult> RunFetchMissingMetadataAsync(
+            IEnumerable<BibtexEntry> targetEntries,
+            StatusStripOperationHandle operation,
+            MetadataScreenMode? screenModeOverride,
+            CancellationToken cancellationToken)
         {
             BibtexEntry[] targetArray = targetEntries as BibtexEntry[] ?? targetEntries.ToArray();
             ProcessLogScope log = BeginProcessLog("Fetch metadata inner", $"Records: {targetArray.Length}");
@@ -1074,7 +1081,7 @@ namespace ScientificReviews.Forms
                     {
                         ContactEmail = Program.AppSettings.Data.MetadataContactEmail,
                         ThreadCount = GetConfiguredThreadCount(),
-                        ScreenMode = Program.AppSettings.Data.MetadataScreenMode
+                        ScreenMode = screenModeOverride ?? Program.AppSettings.Data.MetadataScreenMode
                     },
                     progress,
                     cancellationToken);

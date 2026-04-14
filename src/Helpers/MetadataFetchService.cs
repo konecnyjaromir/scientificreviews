@@ -64,8 +64,7 @@ namespace ScientificReviews.Helpers
 
             if (string.IsNullOrWhiteSpace(Title))
                 Title = other.Title;
-            if (string.IsNullOrWhiteSpace(Doi))
-                Doi = other.Doi;
+            MergePreferredDoiAndEprint(other);
             if (string.IsNullOrWhiteSpace(Abstract))
                 Abstract = other.Abstract;
             if (string.IsNullOrWhiteSpace(Year))
@@ -84,6 +83,39 @@ namespace ScientificReviews.Helpers
             }
 
             return this;
+        }
+
+        private void MergePreferredDoiAndEprint(MetadataPayload other)
+        {
+            string currentDoi = CleanDoi(Doi);
+            string otherDoi = CleanDoi(other.Doi);
+            DoiValueKind currentKind = DoiNormalizationHelper.GetDoiValueKind(currentDoi);
+            DoiValueKind otherKind = DoiNormalizationHelper.GetDoiValueKind(otherDoi);
+
+            if (string.IsNullOrWhiteSpace(currentDoi))
+            {
+                Doi = other.Doi;
+            }
+            else if (currentKind == DoiValueKind.Arxiv && otherKind == DoiValueKind.Classic)
+            {
+                if (string.IsNullOrWhiteSpace(Eprint))
+                    Eprint = DoiNormalizationHelper.TryExtractArxivIdentifier(currentDoi);
+
+                Doi = other.Doi;
+            }
+
+            if (string.IsNullOrWhiteSpace(Eprint))
+            {
+                if (string.IsNullOrWhiteSpace(other.Eprint) == false)
+                    Eprint = other.Eprint;
+                else if (otherKind == DoiValueKind.Arxiv)
+                    Eprint = DoiNormalizationHelper.TryExtractArxivIdentifier(otherDoi);
+            }
+        }
+
+        private static string CleanDoi(string value)
+        {
+            return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
         }
     }
 
@@ -299,15 +331,63 @@ namespace ScientificReviews.Helpers
             if (entry == null || payload == null)
                 return false;
 
+            string existingDoi = CleanStoredDoi(BibtexTagService.GetTagValueIgnoreCase(entry, "doi"));
+            string existingArxivIdentifier = ExtractArxivIdentifierFromCanonicalDoi(existingDoi);
+            string preferredPayloadDoi = CleanStoredDoi(payload.Doi);
+            string preferredPayloadEprint = NormalizeProviderArxivIdentifier(payload.Eprint);
+
             bool updated = false;
+            updated |= ApplyPreferredDoi(entry, existingDoi, existingArxivIdentifier, preferredPayloadDoi);
             updated |= SetTagIfMissing(entry, "title", payload.Title);
-            updated |= SetTagIfMissing(entry, "doi", payload.Doi);
             updated |= SetTagIfMissing(entry, "abstract", payload.Abstract);
             updated |= SetTagIfMissing(entry, "year", payload.Year);
             updated |= SetTagIfMissing(entry, "author", payload.Author);
-            updated |= SetTagIfMissing(entry, "eprint", payload.Eprint);
+            updated |= ApplyPreferredEprint(entry, preferredPayloadEprint, existingArxivIdentifier, preferredPayloadDoi);
             updated |= SetTagIfMissing(entry, "journal", payload.Journal);
             return updated;
+        }
+
+        private static bool ApplyPreferredDoi(BibtexEntry entry, string existingDoi, string existingArxivIdentifier, string payloadDoi)
+        {
+            if (entry == null || string.IsNullOrWhiteSpace(payloadDoi))
+                return false;
+
+            DoiValueKind existingKind = GetStoredDoiKind(existingDoi);
+            DoiValueKind payloadKind = GetStoredDoiKind(payloadDoi);
+            if (payloadKind == DoiValueKind.Empty || payloadKind == DoiValueKind.Invalid)
+                return false;
+
+            if (existingKind == DoiValueKind.Empty || existingKind == DoiValueKind.Invalid)
+            {
+                BibtexTagService.SetSingleTagValue(entry, "doi", payloadDoi);
+                return true;
+            }
+
+            if (existingKind == DoiValueKind.Arxiv && payloadKind == DoiValueKind.Classic)
+            {
+                BibtexTagService.SetSingleTagValue(entry, "doi", payloadDoi);
+                if (string.IsNullOrWhiteSpace(existingArxivIdentifier) == false)
+                    BibtexTagService.SetSingleTagValue(entry, "eprint", existingArxivIdentifier);
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private static bool ApplyPreferredEprint(BibtexEntry entry, string payloadEprint, string existingArxivIdentifier, string payloadDoi)
+        {
+            if (entry == null)
+                return false;
+
+            string eprintToStore = string.IsNullOrWhiteSpace(payloadEprint)
+                ? existingArxivIdentifier
+                : payloadEprint;
+
+            if (string.IsNullOrWhiteSpace(eprintToStore) && GetStoredDoiKind(payloadDoi) == DoiValueKind.Arxiv)
+                eprintToStore = ExtractArxivIdentifierFromCanonicalDoi(payloadDoi);
+
+            return SetTagIfMissing(entry, "eprint", eprintToStore);
         }
 
         private static bool SetTagIfMissing(BibtexEntry entry, string key, string value)
@@ -421,7 +501,14 @@ namespace ScientificReviews.Helpers
             if (string.IsNullOrWhiteSpace(doiHint) || string.IsNullOrWhiteSpace(candidate.Doi))
                 return true;
 
-            return DoisMatch(doiHint, candidate.Doi);
+            if (DoisMatch(doiHint, candidate.Doi))
+                return true;
+
+            DoiValueKind requestedKind = GetStoredDoiKind(doiHint);
+            DoiValueKind candidateKind = GetStoredDoiKind(candidate.Doi);
+
+            return (requestedKind == DoiValueKind.Arxiv && candidateKind == DoiValueKind.Classic) ||
+                (requestedKind == DoiValueKind.Classic && candidateKind == DoiValueKind.Arxiv);
         }
 
         private static string CleanStoredDoi(string doi)

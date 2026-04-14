@@ -48,7 +48,7 @@ namespace ScientificReviews.Helpers
             if (string.IsNullOrWhiteSpace(prepared))
                 return DoiValueKind.Empty;
 
-            if (string.IsNullOrWhiteSpace(TryExtractArxivIdentifier(prepared)) == false)
+            if (IsCanonicalArxivDoiValue(prepared))
                 return DoiValueKind.Arxiv;
 
             return IsClassicDoiValue(prepared) ? DoiValueKind.Classic : DoiValueKind.Invalid;
@@ -112,6 +112,17 @@ namespace ScientificReviews.Helpers
                 return false;
 
             return Regex.IsMatch(value.Trim(), @"^10\.\d{4,9}/\S+$", RegexOptions.IgnoreCase);
+        }
+
+        public static bool IsCanonicalArxivDoiValue(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return false;
+
+            return Regex.IsMatch(
+                value.Trim(),
+                @"^10\.48550/arxiv\.(?:\d{4}\.\d{4,5}|[a-z\-]+(?:\.[a-z\-]+)?/\d{7})(v\d+)?$",
+                RegexOptions.IgnoreCase);
         }
 
         public static bool RequestedDoiMatchesCandidateDoi(string requestedDoi, string candidateDoi)

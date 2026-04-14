@@ -48,7 +48,7 @@ namespace ScientificReviews.Tests
         {
             AssertEqual(DoiValueKind.Empty, DoiNormalizationHelper.GetDoiValueKind(null));
             AssertEqual(DoiValueKind.Classic, DoiNormalizationHelper.GetDoiValueKind("10.1000/xyz"));
-            AssertEqual(DoiValueKind.Arxiv, DoiNormalizationHelper.GetDoiValueKind("2310.08864"));
+            AssertEqual(DoiValueKind.Invalid, DoiNormalizationHelper.GetDoiValueKind("2310.08864"));
             AssertEqual(DoiValueKind.Arxiv, DoiNormalizationHelper.GetDoiValueKind("10.48550/arXiv.2310.08864"));
             AssertEqual(DoiValueKind.Invalid, DoiNormalizationHelper.GetDoiValueKind("wrong"));
         }
@@ -63,13 +63,12 @@ namespace ScientificReviews.Tests
 
         public static void RequestedDoiMatchesCandidateDoi_MatchesEquivalentArxivForms()
         {
-            AssertTrue(DoiNormalizationHelper.RequestedDoiMatchesCandidateDoi("2310.08864", "10.48550/arXiv.2310.08864"));
-            AssertTrue(DoiNormalizationHelper.RequestedDoiMatchesCandidateDoi("2310.08864v2", "arXiv:2310.08864v2"));
+            AssertTrue(DoiNormalizationHelper.RequestedDoiMatchesCandidateDoi("10.48550/arXiv.2310.08864", "10.48550/arXiv.2310.08864"));
+            AssertTrue(DoiNormalizationHelper.RequestedDoiMatchesCandidateDoi("10.48550/arXiv.2310.08864v2", "https://doi.org/10.48550/arXiv.2310.08864v2"));
         }
 
         public static void RequestedDoiMatchesCandidateDoi_MatchesWhenRequestedValueIsArxivDoi()
         {
-            AssertTrue(DoiNormalizationHelper.RequestedDoiMatchesCandidateDoi("10.48550/arXiv.2310.08864", "2310.08864"));
             AssertTrue(DoiNormalizationHelper.RequestedDoiMatchesCandidateDoi("https://doi.org/10.48550/arXiv.2310.08864", "10.48550/arXiv.2310.08864"));
         }
 
@@ -82,6 +81,7 @@ namespace ScientificReviews.Tests
         {
             AssertFalse(DoiNormalizationHelper.RequestedDoiMatchesCandidateDoi("10.1000/xyz", "2310.08864"));
             AssertFalse(DoiNormalizationHelper.RequestedDoiMatchesCandidateDoi("wrong", "10.1000/xyz"));
+            AssertFalse(DoiNormalizationHelper.RequestedDoiMatchesCandidateDoi("2310.08864", "10.48550/arXiv.2310.08864"));
             AssertFalse(DoiNormalizationHelper.RequestedDoiMatchesCandidateDoi("2310.08864", null));
         }
 
