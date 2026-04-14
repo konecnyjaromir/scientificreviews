@@ -146,7 +146,8 @@ namespace ScientificReviews.Forms
                 PdfFolder = Program.AppSettings.Data.PdfFolder,
                 RecursiveSearch = Program.AppSettings.Data.RecursivePdfSearch,
                 AutoPairThresholdPercent = Program.AppSettings.Data.PdfAutoPairThresholdPercent,
-                ThreadCount = GetConfiguredThreadCount()
+                ThreadCount = GetConfiguredThreadCount(),
+                SourceMatchMode = Program.AppSettings.Data.PdfSourceMatchMode
             };
         }
 

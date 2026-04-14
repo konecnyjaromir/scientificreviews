@@ -18,6 +18,7 @@ namespace ScientificReviews.Helpers
         public bool RecursiveSearch { get; set; }
         public int AutoPairThresholdPercent { get; set; } = 95;
         public int ThreadCount { get; set; } = 4;
+        public PdfSourceMatchMode SourceMatchMode { get; set; } = PdfSourceMatchMode.TitleOnly;
     }
 
     public sealed class PdfAutoPairProgress
@@ -83,7 +84,7 @@ namespace ScientificReviews.Helpers
             if (files.Length == 0)
                 return null;
 
-            return FindDirectPdfMatch(entry, files);
+            return FindDirectPdfMatch(entry, files, options?.SourceMatchMode ?? PdfSourceMatchMode.TitleOnly);
         }
 
         public string FindStoredPdfFile(BibtexEntry entry, string pdfFolder)
@@ -108,31 +109,15 @@ namespace ScientificReviews.Helpers
             return File.Exists(candidatePath) ? candidatePath : null;
         }
 
-        public string FindDirectPdfMatch(BibtexEntry entry, IEnumerable<string> pdfFiles)
+        public string FindDirectPdfMatch(BibtexEntry entry, IEnumerable<string> pdfFiles, PdfSourceMatchMode sourceMatchMode)
         {
             var files = (pdfFiles ?? Enumerable.Empty<string>()).ToArray();
             if (files.Length == 0)
                 return null;
 
-            string key = (entry.Key ?? string.Empty).Trim();
-            if (string.IsNullOrWhiteSpace(key) == false)
+            foreach (PdfSourceMatchTarget target in GetMatchTargets(entry, sourceMatchMode))
             {
-                string keyMatch = files.FirstOrDefault(file =>
-                    Path.GetFileNameWithoutExtension(file)
-                        .IndexOf(key, StringComparison.OrdinalIgnoreCase) >= 0);
-
-                if (string.IsNullOrWhiteSpace(keyMatch) == false)
-                    return keyMatch;
-            }
-
-            string titleLower = GetNormalizedTitleForExactMatch(entry);
-            if (string.IsNullOrWhiteSpace(titleLower) == false)
-            {
-                string titleMatch = files.FirstOrDefault(file =>
-                    string.Equals(
-                        Path.GetFileNameWithoutExtension(file).Trim().ToLowerInvariant(),
-                        titleLower,
-                        StringComparison.Ordinal));
+                string titleMatch = files.FirstOrDefault(file => IsDirectMatch(file, target));
 
                 if (string.IsNullOrWhiteSpace(titleMatch) == false)
                     return titleMatch;
@@ -262,7 +247,7 @@ namespace ScientificReviews.Helpers
                     cancellationToken.ThrowIfCancellationRequested();
 
                     BibtexEntry entry = entriesToDirectMatch[index];
-                    string directMatch = FindDirectPdfMatch(entry, pdfFiles.Where(file => assignedFiles.Contains(file) == false));
+                    string directMatch = FindDirectPdfMatch(entry, pdfFiles.Where(file => assignedFiles.Contains(file) == false), options.SourceMatchMode);
                     if (string.IsNullOrWhiteSpace(directMatch) == false)
                     {
                         AssignPdfToEntry(entry, directMatch);
@@ -312,7 +297,7 @@ namespace ScientificReviews.Helpers
                 {
                     foreach (PdfArchiveItem pdf in remainingPdfs)
                     {
-                        double score = ComputeSimilarityScore(entry, pdf);
+                        double score = ComputeSimilarityScore(entry, pdf, options.SourceMatchMode);
                         if (score >= threshold)
                         {
                             candidates.Add(new PdfSimilarityCandidate
@@ -440,10 +425,21 @@ namespace ScientificReviews.Helpers
             return BibtexUtils.RemoveLatex(title).Trim().ToLowerInvariant();
         }
 
+        private string GetNormalizedKeyForExactMatch(BibtexEntry entry)
+        {
+            string key = (entry?.Key ?? string.Empty).Trim();
+            return string.IsNullOrWhiteSpace(key) ? null : key.ToLowerInvariant();
+        }
+
         private string GetStandardizedTitle(BibtexEntry entry)
         {
             string title = BibtexTagService.GetTagValueIgnoreCase(entry, "title");
             return StandardizeText(BibtexUtils.RemoveLatex(title ?? string.Empty));
+        }
+
+        private string GetStandardizedKey(BibtexEntry entry)
+        {
+            return StandardizeText((entry?.Key ?? string.Empty).Trim());
         }
 
         private PdfArchiveItem BuildPdfArchiveItem(string filePath)
@@ -544,21 +540,109 @@ namespace ScientificReviews.Helpers
             return (double)intersection / union;
         }
 
-        private double ComputeSimilarityScore(BibtexEntry entry, PdfArchiveItem pdf)
+        private double ComputeSimilarityScore(BibtexEntry entry, PdfArchiveItem pdf, PdfSourceMatchMode sourceMatchMode)
         {
-            string standardizedTitle = GetStandardizedTitle(entry);
-            if (string.IsNullOrWhiteSpace(standardizedTitle) || pdf == null || string.IsNullOrWhiteSpace(pdf.StandardizedName))
+            if (pdf == null || string.IsNullOrWhiteSpace(pdf.StandardizedName))
                 return 0d;
 
-            if (string.Equals(standardizedTitle, pdf.StandardizedName, StringComparison.Ordinal))
-                return 1d;
+            double bestScore = 0d;
+            foreach (PdfSourceMatchTarget target in GetMatchTargets(entry, sourceMatchMode))
+            {
+                string source = target.StandardizedValue;
+                if (string.IsNullOrWhiteSpace(source))
+                    continue;
 
-            Dictionary<string, int> titleTokens = Tokenize(standardizedTitle);
-            HashSet<string> titleKeywords = ExtractKeywords(standardizedTitle);
-            double cosine = ComputeCosineSimilarity(titleTokens, pdf.Tokens);
-            double keywordScore = ComputeKeywordScore(titleKeywords, pdf.Keywords);
+                if (string.Equals(source, pdf.StandardizedName, StringComparison.Ordinal))
+                    return 1d;
 
-            return Math.Min(1d, (cosine * 0.9d) + (keywordScore * 0.1d));
+                Dictionary<string, int> sourceTokens = Tokenize(source);
+                HashSet<string> sourceKeywords = ExtractKeywords(source);
+                double cosine = ComputeCosineSimilarity(sourceTokens, pdf.Tokens);
+                double keywordScore = ComputeKeywordScore(sourceKeywords, pdf.Keywords);
+                double score = Math.Min(1d, (cosine * 0.9d) + (keywordScore * 0.1d));
+                if (score > bestScore)
+                    bestScore = score;
+            }
+
+            return bestScore;
+        }
+
+        private bool IsDirectMatch(string filePath, PdfSourceMatchTarget target)
+        {
+            if (target == null || string.IsNullOrWhiteSpace(filePath))
+                return false;
+
+            string fileName = Path.GetFileNameWithoutExtension(filePath)?.Trim();
+            if (string.IsNullOrWhiteSpace(fileName))
+                return false;
+
+            if (target.MatchMode == PdfSourceDirectMatchMode.Contains)
+                return fileName.IndexOf(target.RawValue, StringComparison.OrdinalIgnoreCase) >= 0;
+
+            return string.Equals(fileName.ToLowerInvariant(), target.RawValue, StringComparison.Ordinal);
+        }
+
+        private IEnumerable<PdfSourceMatchTarget> GetMatchTargets(BibtexEntry entry, PdfSourceMatchMode sourceMatchMode)
+        {
+            switch (sourceMatchMode)
+            {
+                case PdfSourceMatchMode.KeyOnly:
+                    return GetKeyMatchTargets(entry);
+                case PdfSourceMatchMode.KeyOrTitle:
+                    return GetTitleMatchTargets(entry).Concat(GetKeyMatchTargets(entry));
+                case PdfSourceMatchMode.TitleOnly:
+                default:
+                    return GetTitleMatchTargets(entry);
+            }
+        }
+
+        private IEnumerable<PdfSourceMatchTarget> GetTitleMatchTargets(BibtexEntry entry)
+        {
+            string titleRaw = GetNormalizedTitleForExactMatch(entry);
+            string titleStandardized = GetStandardizedTitle(entry);
+            if (string.IsNullOrWhiteSpace(titleRaw) || string.IsNullOrWhiteSpace(titleStandardized))
+                return Enumerable.Empty<PdfSourceMatchTarget>();
+
+            return new[]
+            {
+                new PdfSourceMatchTarget
+                {
+                    RawValue = titleRaw,
+                    StandardizedValue = titleStandardized,
+                    MatchMode = PdfSourceDirectMatchMode.Exact
+                }
+            };
+        }
+
+        private IEnumerable<PdfSourceMatchTarget> GetKeyMatchTargets(BibtexEntry entry)
+        {
+            string keyRaw = GetNormalizedKeyForExactMatch(entry);
+            string keyStandardized = GetStandardizedKey(entry);
+            if (string.IsNullOrWhiteSpace(keyRaw) || string.IsNullOrWhiteSpace(keyStandardized))
+                return Enumerable.Empty<PdfSourceMatchTarget>();
+
+            return new[]
+            {
+                new PdfSourceMatchTarget
+                {
+                    RawValue = keyRaw,
+                    StandardizedValue = keyStandardized,
+                    MatchMode = PdfSourceDirectMatchMode.Contains
+                }
+            };
+        }
+
+        private sealed class PdfSourceMatchTarget
+        {
+            public string RawValue { get; set; }
+            public string StandardizedValue { get; set; }
+            public PdfSourceDirectMatchMode MatchMode { get; set; }
+        }
+
+        private enum PdfSourceDirectMatchMode
+        {
+            Exact,
+            Contains
         }
 
     }

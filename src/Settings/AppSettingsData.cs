@@ -18,6 +18,13 @@ namespace ScientificReviews
         Deep
     }
 
+    public enum PdfSourceMatchMode
+    {
+        TitleOnly,
+        KeyOnly,
+        KeyOrTitle
+    }
+
     public class LastExportSettingsData
     {
         public string Scope { get; set; } = "All";
@@ -43,7 +50,7 @@ namespace ScientificReviews
 
         [Browsable(true)]
         [Category(APPLICATION_CAT)]
-        [DisplayName("Allow unsafe save")]
+        [DisplayName("Allow unsafe saving")]
         [Description("If enabled, Save overwrites the currently opened BibTeX file without confirmation.")]
         public bool SaveWithoutApprove { get; set; } = false;
 
@@ -61,7 +68,7 @@ namespace ScientificReviews
 
         [Browsable(true)]
         [Category(PDF_CAT)]
-        [DisplayName("PDF folder")]
+        [DisplayName("PDF source folder")]
         [Description("Folder that contains source PDF files for pairing and PDF export.")]
         [Editor(typeof(PathEditor), typeof(UITypeEditor))]
         public string PdfFolder { get; set; }
@@ -77,6 +84,12 @@ namespace ScientificReviews
         [DisplayName("PDF auto-pair threshold (%)")]
         [Description("Similarity threshold used by Auto-pair with PDFs.")]
         public int PdfAutoPairThresholdPercent { get; set; } = 95;
+
+        [Browsable(true)]
+        [Category(PDF_CAT)]
+        [DisplayName("PDF source match mode")]
+        [Description("Controls whether PDF pairing matches filenames by title only, key only, or key/title together.")]
+        public PdfSourceMatchMode PdfSourceMatchMode { get; set; } = PdfSourceMatchMode.TitleOnly;
 
         [Browsable(true)]
         [Category(METADATA_CAT)]
