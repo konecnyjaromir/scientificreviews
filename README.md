@@ -1,7 +1,7 @@
 # Scientific Reviews
 ![GitHub Release](https://img.shields.io/github/v/release/konecnyjaromir/scientificreviews?link=https%3A%2F%2Fgithub.com%2Fkonecnyjaromir%2Fscientificreviews%2Freleases%2Ftag%2Fv1.0.1) ![GitHub Downloads (all assets, latest release)](https://img.shields.io/github/downloads/konecnyjaromir/scientificreviews/latest/total) ![Static Badge](https://img.shields.io/badge/_.NET-Windows-blue)
 
-Scientific Reviews is a Windows desktop tool for researchers who work with BibTeX archives, systematic reviews, bibliometric screening, and Journal Citation Reports (JCR) enrichment. It is designed for fast record cleanup, bulk operations, PDF pairing, and high-throughput screening directly from a grid-based GUI.
+Scientific Reviews is a Windows desktop tool for researchers who work with BibTeX archives, systematic reviews, bibliometric screening, metadata cleanup, PDF pairing, and JCR enrichment. It focuses on fast batch operations over large record sets while keeping the workflow accessible through a grid-based desktop UI.
 
 ## Key Features
 
@@ -12,16 +12,18 @@ Scientific Reviews is a Windows desktop tool for researchers who work with BibTe
 - Open a completely new application window from `Project -> New`
 - Show the currently opened BibTeX file in the main window title
 - Restore the latest autosave backup on startup when available
+- Autosave the current state during long-running operations
 
 ### Fast screening and editing
 
 - Full-table search across rendered BibTeX content
 - Multi-term filtering using comma-separated search terms
-- Record editing through property grid and tag editor
+- Record editing through the property grid and tag editor
 - Bulk tag add/edit for selected records
-- Remove a single tag or multiple tags from a record
+- Remove selected tags from all selected records
 - Generate standardized BibTeX keys from author + year
 - Duplicate, delete, and bulk-clean records directly from the grid
+- Double-click a record to open its paired PDF
 
 ### Clipboard and record transfer
 
@@ -30,22 +32,146 @@ Scientific Reviews is a Windows desktop tool for researchers who work with BibTe
 - Right-click context menu in the main grid with `Edit`, `Copy`, `Cut`, `Paste`, and `Duplicate`
 - Transfer records between different running application windows using the system clipboard
 
-### PDF pairing and full-text workflow
+## Metadata Mechanism
 
-- Open source PDF by double-clicking a record
-- If no PDF is paired, prompt for manual pairing using a PDF file picker
-- Store paired PDF information inside record tags:
+Metadata enrichment is designed as a multi-provider pipeline with fallback behavior. The application does not depend on a single source.
+
+- Primary providers:
+  - Crossref REST API
+  - Semantic Scholar Graph API
+  - arXiv API
+- Lookup strategy:
+  - first by `doi`
+  - fallback by `title`
+- Supported DOI kinds:
+  - standard publisher DOI
+  - arXiv DOI in canonical form `10.48550/arXiv.<id>`
+- Required metadata:
+  - `title`
+  - `author`
+  - `doi`
+  - `abstract`
+  - `year`
+- Optional metadata:
+  - `eprint`
+  - `journal`
+
+### Metadata normalization rules
+
+- `doi` is treated as the primary bibliographic identifier
+- Publisher or journal DOI has higher priority than arXiv DOI
+- `eprint` stores only the clean arXiv identifier, for example `2503.05231`
+- `Normalize DOI`:
+  - fixes DOI formatting
+  - converts old raw arXiv identifiers to canonical DOI form
+  - fills missing `doi` from `eprint` as `10.48550/arXiv.<eprint>`
+  - never overwrites a valid publisher DOI with arXiv data
+
+### Metadata fetch behavior
+
+- `Database -> Fetch missing metadata` shows a warning before changing records
+- The operation first runs DOI normalization, then starts metadata fetching
+- The application can process records according to `Metadata Screen Mode`:
+  - `Only missing`
+  - `All`
+  - `Only missing + arXive DOIs`
+- `Autofix` always runs metadata fetch with scope `All`, regardless of the current setting
+- When an arXiv-based record is matched with a published version:
+  - `doi` is upgraded to the publisher DOI
+  - the arXiv identifier is preserved in `eprint`
+- When a record has a publisher DOI and an arXiv version is found, the arXiv identifier is stored in `eprint`
+
+This gives the archive a bibliographically correct DOI while still preserving arXiv information for future PDF acquisition and open-access workflows.
+
+## Auto-Preprocessing and Autofix
+
+The application supports multi-step preprocessing pipelines for archive cleanup.
+
+- Fast preprocessing:
+  - Normalize DOI
+  - Normalize page tags
+  - Create entry keys
+  - Auto-pair PDFs
+- Deep preprocessing / `Autofix`:
+  - Normalize DOI
+  - Fetch metadata
+  - Normalize page tags
+  - Create entry keys
+  - Auto-pair PDFs
+  - Update JCR
+
+`Autofix` is a destructive workflow and shows a confirmation warning before execution because it can modify many records at once.
+
+## PDF Pair Mechanism
+
+Scientific Reviews can pair records with local PDFs and store the pairing inside BibTeX tags.
+
+- Paired PDF-related tags:
   - `has_pdf`
   - `pdf_file`
   - `path_to_pdf`
-- Automatic PDF pairing from `Pdf Folder` using these rules:
-  - stored `path_to_pdf` / `pdf_file` if still valid
-  - PDF file name contains BibTeX `key`
-  - exact match between record title and PDF file name
-  - similarity matching between standardized title and PDF name
-- Configurable similarity threshold for automatic pairing
-- Optional recursive PDF search
-- Recursive search ignores folders whose name starts and ends with `__`, for example `__DELETED__`
+- Double-click on a record opens the paired PDF
+- If no PDF is paired yet, the application can prompt for manual pairing
+
+### Automatic PDF pairing
+
+Auto-pair works against the configured `Pdf Folder` and can search recursively.
+
+- Recursive search can be enabled or disabled in settings
+- Folders named like `__DELETED__` are ignored during recursive scans
+- Stored `path_to_pdf` / `pdf_file` is reused when still valid
+- If no stored path works, the application searches by filename match and then by similarity score
+
+### PDF source match modes
+
+The source filename matching behavior is configurable through `PDF source match mode`.
+
+- `Title only`
+  - direct and fuzzy matching use record `title`
+- `Key only`
+  - direct and fuzzy matching use BibTeX `key`
+- `Key OR Title`
+  - direct and fuzzy matching accept either `key` or `title`
+
+Default mode is `Title only`.
+
+### Open using DOI
+
+- Records can be opened via DOI using [doi.org](https://doi.org)
+- If DOI open is not possible, the application falls back to a Google search
+
+## Export Features
+
+Scientific Reviews includes multiple export workflows.
+
+- Quick export actions:
+  - BibTeX
+  - CSV
+  - DOI list
+- Dedicated export form for BibTeX and CSV exports
+
+### Export form
+
+The export dialog lets you configure:
+
+- Scope:
+  - `Visible`
+  - `Selected`
+  - `All`
+- Format:
+  - `BibTeX (.bib)`
+  - `CSV (.csv)`
+- Export mode:
+  - `Normal (all tags)`
+  - `As columns`
+  - `As standard`
+- CSV separator:
+  - comma
+  - semicolon
+  - tab
+  - custom separator
+
+`As columns` uses the `Custom columns` setting. `As standard` uses the `Standard columns` setting.
 
 ### PDF export
 
@@ -60,60 +186,53 @@ Scientific Reviews is a Windows desktop tool for researchers who work with BibTe
   - `Custom` using placeholders like `<key>_<title>_<doi>`
 - Export runs asynchronously with progress bar and cancel button
 
-### JCR and metadata enrichment
+## JCR and Additional Cleanup
 
 - Update missing journals from Clarivate JCR API
 - Generate JCR-derived tags such as `jif`, `jif_<year>`, and `jif_Q`
 - Remove lower-ranked records, for example Q3 and Q4
-- Remove duplicate tags while preserving the newest value
-
-### Background operations and performance
-
-- Status-strip operation manager for long-running tasks
-- Parallel processing for expensive workflows such as:
-  - BibTeX loading
-  - JCR update
-  - PDF auto-pair
-  - PDF export
-- Configurable global `Threads` setting, default `4`
-- Indeterminate progress is used where total completion cannot be estimated in advance
-- Automatic follow-up operations after open/add:
-  - PDF auto-pair when `Pdf Folder` is configured
-  - JCR update when API key is configured
-
-### Data cleanup and export
-
 - Remove duplicate records by title or DOI
+- Remove duplicate tags while preserving the newest value
 - Remove records without DOI
 - Exclude records by title pattern
 - Exclude records using another BibTeX file
-- Update page tag formatting
-- Export as:
-  - BibTeX
-  - CSV
-  - DOI list
+- Normalize page ranges
+
+## Logging and Background Operations
+
+- Long-running tasks run through a status-strip operation manager
+- Process logging is written next to the executable into the `logs` folder
+- Log files are text `.log` files separated by date
+- Major workflows such as load, save, export, PDF auto-pair, metadata fetch, and JCR update are logged
+- Parallel processing is used for expensive workflows such as BibTeX loading, JCR update, PDF auto-pair, PDF export, and metadata fetch
+- Global `Threads` setting controls background worker count
 
 ## Settings
 
-The application includes a settings dialog with the most important workflow parameters:
+The settings dialog contains the main workflow switches and defaults, including:
 
 - `Pdf Folder`
 - `Recursive PDF search`
 - `PDF auto-pair threshold (%)`
+- `PDF source match mode`
 - `Threads`
+- `Metadata contact email`
+- `Metadata Screen Mode`
 - `JCR Api key`
 - backup settings
+- `Custom columns`
+- `Standard columns`
 
-These settings influence both UI behavior and background processing.
+These settings affect both the UI and long-running background processes.
 
 ## Typical Workflow
 
 1. Open a `.bib` file or folder as a new archive.
-2. Let the application automatically run PDF pairing and JCR update when configured.
-3. Search, screen, tag, duplicate, or remove records in the main grid.
-4. Open PDFs by double-click, or manually pair missing files.
-5. Run cleanup tools for duplicates, missing DOI records, page normalization, and tag cleanup.
-6. Export the final archive as BibTeX, CSV, DOI list, or export matched PDFs with the export dialog.
+2. Configure `Pdf Folder`, matching mode, and metadata/JCR settings.
+3. Run `Autofix` or individual tools such as `Normalize DOI`, `Fetch missing metadata`, `Auto-pair PDFs`, or `Update JCR`.
+4. Screen, edit, tag, and search records in the main grid.
+5. Open PDFs by double-click or via DOI.
+6. Export the final result as BibTeX, CSV, DOI list, or matched PDFs.
 
 ## System Requirements
 
