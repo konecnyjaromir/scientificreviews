@@ -21,9 +21,11 @@ Scientific Reviews is a Windows desktop tool for researchers who work with BibTe
 - Record editing through the property grid and tag editor
 - Bulk tag add/edit for selected records
 - Remove selected tags from all selected records
+- Rename selected tags in bulk or rename a single tag from the record panel
 - Generate standardized BibTeX keys from author + year
 - Duplicate, delete, and bulk-clean records directly from the grid
 - Double-click a record to open its paired PDF
+- Record menu and row context menu expose fast actions such as copy, duplicate, PDF rebind, and PDF unbind
 
 ### Clipboard and record transfer
 
@@ -87,6 +89,10 @@ This gives the archive a bibliographically correct DOI while still preserving ar
 
 The application supports multi-step preprocessing pipelines for archive cleanup.
 
+- `Auto-preprocessing mode` can be configured in settings:
+  - `Off`
+  - `Fast`
+  - `Deep`
 - Fast preprocessing:
   - Normalize DOI
   - Normalize page tags
@@ -112,15 +118,25 @@ Scientific Reviews can pair records with local PDFs and store the pairing inside
   - `path_to_pdf`
 - Double-click on a record opens the paired PDF
 - If no PDF is paired yet, the application can prompt for manual pairing
+- Manual PDF pairing updates the record in place and refreshes the grid while preserving the current sort and selection
+- `Record -> Rebind PDF` lets the user pick a new PDF for the current record
+- `Record -> Unbind PDF` removes `path_to_pdf` / `pdf_file` and sets `has_pdf = no`
+- The same `Rebind PDF` and `Unbind PDF` actions are also available from the row right-click menu
 
 ### Automatic PDF pairing
 
 Auto-pair works against the configured `Pdf Folder` and can search recursively.
 
-- Recursive search can be enabled or disabled in settings
+- Recursive search can be enabled or disabled in settings and is enabled by default
 - Folders named like `__DELETED__` are ignored during recursive scans
 - Stored `path_to_pdf` / `pdf_file` is reused when still valid
 - If no stored path works, the application searches by filename match and then by similarity score
+
+### Manual PDF attach behavior
+
+- Manual attach and rebind use a standard file picker pointed to the most relevant known PDF folder
+- Automatic opening of the selected PDF after manual attach can be controlled by the `Autoopening PDF when attach` setting
+- This automatic opening is enabled by default
 
 ### PDF source match modes
 
@@ -144,11 +160,8 @@ Default mode is `Title only`.
 
 Scientific Reviews includes multiple export workflows.
 
-- Quick export actions:
-  - BibTeX
-  - CSV
-  - DOI list
 - Dedicated export form for BibTeX and CSV exports
+- Separate dedicated export form for PDF export
 
 ### Export form
 
@@ -178,13 +191,16 @@ The export dialog lets you configure:
 - Dedicated `Export PDFs` dialog
 - Export all records or only selected records
 - Default output directory follows the currently opened BibTeX file location
-- Optional DOI injection into exported PDF metadata
+- Optional DOI and `eprint` injection into exported PDF metadata
 - Optional `Pack to folder` mode creates an `export` subfolder automatically
 - File naming modes:
   - `Key`
   - `Key_Title`
   - `Custom` using placeholders like `<key>_<title>_<doi>`
 - Export runs asynchronously with progress bar and cancel button
+- PDF metadata injection is implemented through the open-source iText library
+- Export performs source/destination validation before copying files
+- Detailed export logging records skipped records, prepared jobs, successful exports, and per-file errors
 
 ## JCR and Additional Cleanup
 
@@ -196,7 +212,7 @@ The export dialog lets you configure:
 - Remove records without DOI
 - Exclude records by title pattern
 - Exclude records using another BibTeX file
-- Normalize page ranges
+- Normalize page ranges through `Normalize page-tag`
 
 ## Logging and Background Operations
 
@@ -211,28 +227,33 @@ The export dialog lets you configure:
 
 The settings dialog contains the main workflow switches and defaults, including:
 
-- `Pdf Folder`
+- `PDF source folder`
 - `Recursive PDF search`
+- `Autoopening PDF when attach`
 - `PDF auto-pair threshold (%)`
 - `PDF source match mode`
-- `Threads`
+- `Worker threads`
+- `Auto-preprocessing mode`
 - `Metadata contact email`
-- `Metadata Screen Mode`
-- `JCR Api key`
-- backup settings
+- `Metadata fetch scope`
+- `JCR API key`
+- `Default CSV separator`
 - `Custom columns`
 - `Standard columns`
+- `Allow unsafe saving`
+- `Allow unsafe closing`
+- backup settings
 
 These settings affect both the UI and long-running background processes.
 
 ## Typical Workflow
 
 1. Open a `.bib` file or folder as a new archive.
-2. Configure `Pdf Folder`, matching mode, and metadata/JCR settings.
+2. Configure `PDF source folder`, matching mode, preprocessing level, and metadata/JCR settings.
 3. Run `Autofix` or individual tools such as `Normalize DOI`, `Fetch missing metadata`, `Auto-pair PDFs`, or `Update JCR`.
-4. Screen, edit, tag, and search records in the main grid.
+4. Screen, edit, tag, bind or rebind PDFs, and search records in the main grid.
 5. Open PDFs by double-click or via DOI.
-6. Export the final result as BibTeX, CSV, DOI list, or matched PDFs.
+6. Export the final result as BibTeX, CSV, or matched PDFs.
 
 ## System Requirements
 

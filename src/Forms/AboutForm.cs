@@ -88,6 +88,10 @@ namespace ScientificReviews.Forms
             acknowledgement.MaximumSize = new Size(500, 0);
             layout.Controls.Add(acknowledgement, 0, 3);
 
+            Label itextAcknowledgement = CreateTextLabel("This software uses the open-source iText library (AGPL licensed). Scientific Reviews is distributed as open-source freeware.");
+            itextAcknowledgement.MaximumSize = new Size(500, 0);
+            layout.Controls.Add(itextAcknowledgement, 0, 4);
+
             page.Controls.Add(layout);
             return page;
         }

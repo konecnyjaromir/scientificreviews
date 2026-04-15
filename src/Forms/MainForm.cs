@@ -2,6 +2,7 @@ using ScientificReviews.Bibtex;
 using ScientificReviews.Helpers;
 using ScientificReviews.Logs;
 using System;
+using System.ComponentModel;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
@@ -132,6 +133,8 @@ namespace ScientificReviews.Forms
         private ToolStripMenuItem _contextCutMenuItem;
         private ToolStripMenuItem _contextPasteMenuItem;
         private ToolStripMenuItem _contextDuplicateMenuItem;
+        private ToolStripMenuItem _contextRebindPdfMenuItem;
+        private ToolStripMenuItem _contextUnbindPdfMenuItem;
         private ToolStripMenuItem _contextRefreshMenuItem;
 
         private int GetConfiguredThreadCount()
@@ -374,7 +377,19 @@ namespace ScientificReviews.Forms
             if (selectedEntries.Length == 0 && bindingSource1.Current is DataRowView currentView && currentView.Row != null)
                 currentEntry = currentView.Row["Entry"] as BibtexEntry;
 
+            string sortColumnName = dataGridView1?.SortedColumn?.DataPropertyName;
+            if (string.IsNullOrWhiteSpace(sortColumnName))
+                sortColumnName = dataGridView1?.SortedColumn?.Name;
+
+            ListSortDirection? sortDirection =
+                dataGridView1?.SortOrder == SortOrder.Ascending
+                    ? ListSortDirection.Ascending
+                    : dataGridView1?.SortOrder == SortOrder.Descending
+                        ? ListSortDirection.Descending
+                        : (ListSortDirection?)null;
+
             LoadData(entries.ToArray(), txtSearch.Text);
+            ReapplyGridSort(sortColumnName, sortDirection);
 
             if (selectedEntries.Length > 0)
                 SelectEntriesInGrid(selectedEntries);
@@ -383,6 +398,23 @@ namespace ScientificReviews.Forms
 
             if (statusMessage != null)
                 lblStatus.Text = statusMessage;
+        }
+
+        private void ReapplyGridSort(string sortColumnName, ListSortDirection? sortDirection)
+        {
+            if (string.IsNullOrWhiteSpace(sortColumnName) || !sortDirection.HasValue || dataGridView1 == null)
+                return;
+
+            DataGridViewColumn sortColumn = dataGridView1.Columns
+                .Cast<DataGridViewColumn>()
+                .FirstOrDefault(column =>
+                    string.Equals(column.DataPropertyName, sortColumnName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(column.Name, sortColumnName, StringComparison.OrdinalIgnoreCase));
+
+            if (sortColumn == null || sortColumn.SortMode == DataGridViewColumnSortMode.NotSortable)
+                return;
+
+            dataGridView1.Sort(sortColumn, sortDirection.Value);
         }
 
         private void refreshToolStripMenuItem_Click(object sender, EventArgs e)

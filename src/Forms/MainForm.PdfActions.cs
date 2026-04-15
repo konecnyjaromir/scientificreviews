@@ -155,6 +155,57 @@ namespace ScientificReviews.Forms
             }
         }
 
+        private void rebindPdfToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            RebindPdfForCurrentEntry();
+        }
+
+        private void unbindPdfToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            UnbindPdfForCurrentEntry();
+        }
+
+        private void RebindPdfForCurrentEntry()
+        {
+            try
+            {
+                BibtexEntry entry = GetCurrentEntry();
+                if (entry == null)
+                {
+                    lblStatus.Text = "No current record selected.";
+                    return;
+                }
+
+                PromptManualPdfPair(entry, true);
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
+        private void UnbindPdfForCurrentEntry()
+        {
+            try
+            {
+                BibtexEntry entry = GetCurrentEntry();
+                if (entry == null)
+                {
+                    lblStatus.Text = "No current record selected.";
+                    return;
+                }
+
+                ClearPdfAssignment(entry);
+                RefreshGrid(new[] { entry });
+                Changed();
+                lblStatus.Text = "PDF unbound.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
         private BibtexEntry[] GetSelected()
         {
             if (dataGridView1.SelectedRows.Count == 0)
@@ -221,16 +272,20 @@ namespace ScientificReviews.Forms
                     lblStatus.Text = $"Auto-pairing PDFs using {GetConfiguredThreadCount()} thread(s)...";
                     PdfAutoPairResult result = await RunAutoPairAsync(operation, cancellation.Token);
 
-                    RefreshGrid();
-                    Changed();
-
                     if (result.NoPdfsFound)
                     {
-                        operation.Complete("No PDFs found.", Program.AppSettings.Data.PdfFolder);
-                        lblStatus.Text = "No PDFs found in Pdf Folder.";
-                        log.Complete("No PDFs found.");
+                        string details = result.RecommendRecursiveSearch
+                            ? "No PDFs were found. Consider enabling Recursive PDF search in Settings."
+                            : "No PDFs were found in the configured PDF source folder.";
+
+                        operation.Complete("No PDFs found.", details);
+                        lblStatus.Text = details;
+                        log.Complete(details);
                         return;
                     }
+
+                    RefreshGrid();
+                    Changed();
 
                     string summary = $"Direct {result.DirectMatches}, smart {result.SmartMatches}, unmatched {result.Unmatched}";
                     operation.Complete(summary, Program.AppSettings.Data.PdfFolder);
@@ -337,10 +392,14 @@ namespace ScientificReviews.Forms
 
                 lblStatus.Text = result.Cancelled
                     ? $"PDF export cancelled after {result.Completed}/{result.Total}."
-                    : $"Exported {result.Exported} PDF(s), skipped {result.Skipped}, DOI injected into {result.Injected}.";
+                    : result.Errors > 0
+                        ? $"PDF export finished with {result.Errors} error(s). Exported {result.Exported}, skipped {result.Skipped}, DOI injected into {result.Injected}."
+                        : $"Exported {result.Exported} PDF(s), skipped {result.Skipped}, DOI injected into {result.Injected}.";
 
                 if (result.Cancelled)
                     log.Fail($"PDF export cancelled after {result.Completed}/{result.Total}.");
+                else if (result.Errors > 0)
+                    log.Fail($"Exported {result.Exported}, skipped {result.Skipped}, errors {result.Errors}, DOI injected into {result.Injected}. Last error: {result.LastErrorMessage}");
                 else
                     log.Complete($"Exported {result.Exported}, skipped {result.Skipped}, DOI injected into {result.Injected}.");
 

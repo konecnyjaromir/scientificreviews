@@ -40,8 +40,10 @@ namespace ScientificReviews.Forms
         public int Completed { get; set; }
         public int Exported { get; set; }
         public int Skipped { get; set; }
+        public int Errors { get; set; }
         public int Injected { get; set; }
         public bool Cancelled { get; set; }
+        public string LastErrorMessage { get; set; }
     }
 
     public class ExportPdfsForm : Form
@@ -297,14 +299,14 @@ namespace ScientificReviews.Forms
             // _chkInjectDoi
             //
             _chkInjectDoi.AutoSize = true;
-            _chkInjectDoi.Checked = true;
-            _chkInjectDoi.CheckState = CheckState.Checked;
+            _chkInjectDoi.Checked = false;
+            _chkInjectDoi.CheckState = CheckState.Unchecked;
             _chkInjectDoi.Location = new Point(3, 1);
             _chkInjectDoi.Margin = new Padding(3, 1, 3, 1);
             _chkInjectDoi.Name = "_chkInjectDoi";
             _chkInjectDoi.Size = new Size(211, 20);
             _chkInjectDoi.TabIndex = 0;
-            _chkInjectDoi.Text = "Inject DOI into PDF metadata";
+            _chkInjectDoi.Text = "Inject DOI and eprint into PDF metadata";
             _chkInjectDoi.UseVisualStyleBackColor = true;
             //
             // _chkPackToFolder
@@ -686,18 +688,31 @@ namespace ScientificReviews.Forms
                     Injected = result.Injected,
                     StatusText = result.Cancelled
                         ? $"Export cancelled. Finished {result.Completed}/{result.Total}."
-                        : $"Export finished. Exported {result.Exported}, skipped {result.Skipped}, DOI injected into {result.Injected}."
+                        : result.Errors > 0
+                            ? $"Export finished with {result.Errors} error(s). Exported {result.Exported}, skipped {result.Skipped}."
+                            : $"Export finished. Exported {result.Exported}, skipped {result.Skipped}, DOI injected into {result.Injected}."
                 });
 
                 string message = result.Cancelled
-                    ? $"Export was cancelled.\n\nCompleted: {result.Completed}/{result.Total}\nExported: {result.Exported}\nSkipped: {result.Skipped}\nDOI injected: {result.Injected}"
-                    : $"Export finished.\n\nExported: {result.Exported}\nSkipped: {result.Skipped}\nDOI injected: {result.Injected}";
+                    ? $"Export was cancelled.\n\nCompleted: {result.Completed}/{result.Total}\nExported: {result.Exported}\nSkipped: {result.Skipped}\nErrors: {result.Errors}\nDOI injected: {result.Injected}"
+                    : result.Errors > 0
+                        ? $"Export finished with errors.\n\nExported: {result.Exported}\nSkipped: {result.Skipped}\nErrors: {result.Errors}\nDOI injected: {result.Injected}\n\nLast error:\n{result.LastErrorMessage}"
+                        : $"Export finished.\n\nExported: {result.Exported}\nSkipped: {result.Skipped}\nDOI injected: {result.Injected}";
 
-                MessageBox.Show(message, Program.APP_NAME, MessageBoxButtons.OK, MessageBoxIcon.Information);
+                MessageBox.Show(
+                    message,
+                    Program.APP_NAME,
+                    MessageBoxButtons.OK,
+                    result.Cancelled
+                        ? MessageBoxIcon.Warning
+                        : result.Errors > 0
+                            ? MessageBoxIcon.Warning
+                            : MessageBoxIcon.Information);
             }
             catch (Exception ex)
             {
-                MessageBox.Show(ex.Message, Program.APP_NAME, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                string errorMessage = ex.GetBaseException()?.Message ?? ex.Message;
+                MessageBox.Show(errorMessage, Program.APP_NAME, MessageBoxButtons.OK, MessageBoxIcon.Error);
                 UpdateProgress(new ExportPdfsProgress
                 {
                     StatusText = "Export failed."
