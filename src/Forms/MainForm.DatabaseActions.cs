@@ -20,6 +20,7 @@ namespace ScientificReviews.Forms
             public int ChangedEntries { get; set; }
             public int NormalizedEntries { get; set; }
             public int CopiedFromEprintEntries { get; set; }
+            public int EnrichedEprintEntries { get; set; }
             public int InvalidEntries { get; set; }
             public List<string> InvalidRecordKeys { get; } = new List<string>();
         }
@@ -996,6 +997,19 @@ namespace ScientificReviews.Forms
                 }
 
                 string finalDoi = BibtexTagService.GetTagValueIgnoreCase(entry, "doi");
+                string currentEprint = BibtexTagService.GetTagValueIgnoreCase(entry, "eprint");
+                string normalizedEprint = DoiNormalizationHelper.TryExtractArxivIdentifier(currentEprint);
+                if (string.IsNullOrWhiteSpace(normalizedEprint))
+                    normalizedEprint = DoiNormalizationHelper.TryExtractArxivIdentifier(finalDoi);
+
+                if (string.IsNullOrWhiteSpace(normalizedEprint) == false &&
+                    string.Equals(currentEprint?.Trim(), normalizedEprint, StringComparison.Ordinal) == false)
+                {
+                    BibtexTagService.SetSingleTagValue(entry, "eprint", normalizedEprint);
+                    result.EnrichedEprintEntries++;
+                    changed = true;
+                }
+
                 if (DoiNormalizationHelper.GetDoiValueKind(finalDoi) == DoiValueKind.Invalid)
                 {
                     result.InvalidEntries++;
@@ -1048,6 +1062,8 @@ namespace ScientificReviews.Forms
             string summary = $"DOI normalization updated {normalization.ChangedEntries} record(s).";
             if (normalization.CopiedFromEprintEntries > 0)
                 summary += $" Copied eprint to doi in {normalization.CopiedFromEprintEntries} record(s).";
+            if (normalization.EnrichedEprintEntries > 0)
+                summary += $" Filled or normalized eprint in {normalization.EnrichedEprintEntries} record(s).";
             if (normalization.InvalidEntries > 0)
                 summary += $" {normalization.InvalidEntries} record(s) still have invalid DOI.";
 

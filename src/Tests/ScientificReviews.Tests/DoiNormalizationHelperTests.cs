@@ -36,6 +36,7 @@ namespace ScientificReviews.Tests
             AssertEqual("2310.08864", DoiNormalizationHelper.TryExtractArxivIdentifier("10.48550/arXiv.2310.08864"));
             AssertEqual("2310.08864", DoiNormalizationHelper.TryExtractArxivIdentifier("https://doi.org/10.48550/arXiv.2310.08864"));
             AssertEqual("2310.08864", DoiNormalizationHelper.TryExtractArxivIdentifier("doi:10.48550/arXiv.2310.08864"));
+            AssertEqual("2204.01691", DoiNormalizationHelper.TryExtractArxivIdentifier("10.48550/arxiv.2204.01691"));
         }
 
         public static void TryExtractArxivIdentifier_ReturnsNullForClassicDoi()
