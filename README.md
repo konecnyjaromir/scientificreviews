@@ -191,13 +191,16 @@ The export dialog lets you configure:
 - Dedicated `Export PDFs` dialog
 - Export all records or only selected records
 - Default output directory follows the currently opened BibTeX file location
-- Optional DOI injection into exported PDF metadata
+- Optional DOI and `eprint` injection into exported PDF metadata
 - Optional `Pack to folder` mode creates an `export` subfolder automatically
 - File naming modes:
   - `Key`
   - `Key_Title`
   - `Custom` using placeholders like `<key>_<title>_<doi>`
 - Export runs asynchronously with progress bar and cancel button
+- PDF metadata injection is implemented through the open-source iText library
+- Export performs source/destination validation before copying files
+- Detailed export logging records skipped records, prepared jobs, successful exports, and per-file errors
 
 ## JCR and Additional Cleanup
 

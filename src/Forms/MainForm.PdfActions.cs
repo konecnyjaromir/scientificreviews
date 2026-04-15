@@ -392,10 +392,14 @@ namespace ScientificReviews.Forms
 
                 lblStatus.Text = result.Cancelled
                     ? $"PDF export cancelled after {result.Completed}/{result.Total}."
-                    : $"Exported {result.Exported} PDF(s), skipped {result.Skipped}, DOI injected into {result.Injected}.";
+                    : result.Errors > 0
+                        ? $"PDF export finished with {result.Errors} error(s). Exported {result.Exported}, skipped {result.Skipped}, DOI injected into {result.Injected}."
+                        : $"Exported {result.Exported} PDF(s), skipped {result.Skipped}, DOI injected into {result.Injected}.";
 
                 if (result.Cancelled)
                     log.Fail($"PDF export cancelled after {result.Completed}/{result.Total}.");
+                else if (result.Errors > 0)
+                    log.Fail($"Exported {result.Exported}, skipped {result.Skipped}, errors {result.Errors}, DOI injected into {result.Injected}. Last error: {result.LastErrorMessage}");
                 else
                     log.Complete($"Exported {result.Exported}, skipped {result.Skipped}, DOI injected into {result.Injected}.");
 

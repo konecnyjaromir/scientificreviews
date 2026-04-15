@@ -78,7 +78,7 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Replaced the old PDF export action with a dedicated `Export PDFs` dialog
 - Added export mode for all records or only selected records
 - Default export directory now follows the folder of the opened BibTeX file
-- Added optional DOI metadata injection into exported PDFs
+- Added optional DOI and `eprint` metadata injection into exported PDFs
 - Added `Pack to folder` option that creates an `export` subfolder automatically
 - Added export file naming modes:
   - `Key`
@@ -87,6 +87,11 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Export now runs asynchronously and in parallel
 - Added progress bar and cancel support to the export dialog
 - Updated the `Export PDFs` dialog to match the newer export-form GUI style
+- Switched PDF metadata injection to the iText library
+- Added export preflight validation for source PDFs and destination paths
+- Added detailed per-file PDF export logging
+- Metadata injection failures no longer discard already exported PDFs
+- PDF export now uses a dedicated temporary metadata workspace that is cleaned after export
 
 ### DOI and PDF Opening
 
@@ -213,3 +218,4 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Fixed text paste into search and editors so `Ctrl+V` no longer incorrectly pastes BibTeX records there
 - Improved settings organization with grouped categories, unified naming, and descriptions
 - Renamed `Update page tag format` to `Normalize page-tag`
+- Fixed legacy `Recursive PDF search` defaults in persisted settings through settings migration
