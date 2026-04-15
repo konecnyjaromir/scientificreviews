@@ -33,6 +33,12 @@ namespace ScientificReviews.Forms
             _contextDuplicateMenuItem.ShortcutKeyDisplayString = "Ctrl+D";
             _contextDuplicateMenuItem.Click += (sender, e) => DuplicateSelectedRecords();
 
+            _contextRebindPdfMenuItem = new ToolStripMenuItem("Rebind PDF");
+            _contextRebindPdfMenuItem.Click += (sender, e) => RebindPdfForCurrentEntry();
+
+            _contextUnbindPdfMenuItem = new ToolStripMenuItem("Unbind PDF");
+            _contextUnbindPdfMenuItem.Click += (sender, e) => UnbindPdfForCurrentEntry();
+
             _recordContextMenu = new ContextMenuStrip();
             _recordContextMenu.Items.AddRange(new ToolStripItem[]
             {
@@ -41,7 +47,10 @@ namespace ScientificReviews.Forms
                 _contextCopyMenuItem,
                 _contextCutMenuItem,
                 _contextPasteMenuItem,
-                _contextDuplicateMenuItem
+                _contextDuplicateMenuItem,
+                new ToolStripSeparator(),
+                _contextRebindPdfMenuItem,
+                _contextUnbindPdfMenuItem
             });
             _recordContextMenu.Opening += recordContextMenu_Opening;
 
@@ -61,6 +70,8 @@ namespace ScientificReviews.Forms
             _contextCutMenuItem.Enabled = hasSelection;
             _contextPasteMenuItem.Enabled = Clipboard.ContainsText() && string.IsNullOrWhiteSpace(Clipboard.GetText()) == false;
             _contextDuplicateMenuItem.Enabled = hasSelection;
+            _contextRebindPdfMenuItem.Enabled = GetCurrentEntry() != null;
+            _contextUnbindPdfMenuItem.Enabled = GetCurrentEntry() != null;
         }
 
         private void dataGridView1_CellMouseDown(object sender, DataGridViewCellMouseEventArgs e)
@@ -479,6 +490,8 @@ namespace ScientificReviews.Forms
             if (entry == null)
                 return false;
 
+            bool shouldOpenAfterPair = openAfterPair && Program.AppSettings.Data.AutoOpenPdfWhenAttach;
+
             using (OpenFileDialog openFileDialog = new OpenFileDialog())
             {
                 openFileDialog.CheckFileExists = true;
@@ -495,7 +508,7 @@ namespace ScientificReviews.Forms
                 Changed();
                 lblStatus.Text = "PDF paired manually.";
 
-                if (openAfterPair)
+                if (shouldOpenAfterPair)
                     OpenPdf(openFileDialog.FileName);
 
                 return true;

@@ -155,6 +155,57 @@ namespace ScientificReviews.Forms
             }
         }
 
+        private void rebindPdfToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            RebindPdfForCurrentEntry();
+        }
+
+        private void unbindPdfToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            UnbindPdfForCurrentEntry();
+        }
+
+        private void RebindPdfForCurrentEntry()
+        {
+            try
+            {
+                BibtexEntry entry = GetCurrentEntry();
+                if (entry == null)
+                {
+                    lblStatus.Text = "No current record selected.";
+                    return;
+                }
+
+                PromptManualPdfPair(entry, true);
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
+        private void UnbindPdfForCurrentEntry()
+        {
+            try
+            {
+                BibtexEntry entry = GetCurrentEntry();
+                if (entry == null)
+                {
+                    lblStatus.Text = "No current record selected.";
+                    return;
+                }
+
+                ClearPdfAssignment(entry);
+                RefreshGrid(new[] { entry });
+                Changed();
+                lblStatus.Text = "PDF unbound.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
         private BibtexEntry[] GetSelected()
         {
             if (dataGridView1.SelectedRows.Count == 0)

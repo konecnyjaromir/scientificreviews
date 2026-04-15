@@ -72,6 +72,9 @@
             this.removeTagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.renameCurrentTagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.removeTagsToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
+            this.toolStripSeparator10 = new System.Windows.Forms.ToolStripSeparator();
+            this.rebindPdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.unbindPdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.deleteSelectedToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.copyToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.copyRecordToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -439,6 +442,9 @@
             this.removeTagToolStripMenuItem,
             this.renameCurrentTagToolStripMenuItem,
             this.removeTagsToolStripMenuItem1,
+            this.toolStripSeparator10,
+            this.rebindPdfToolStripMenuItem,
+            this.unbindPdfToolStripMenuItem,
             this.deleteSelectedToolStripMenuItem});
             this.recordToolStripMenuItem.Name = "recordToolStripMenuItem";
             this.recordToolStripMenuItem.Size = new System.Drawing.Size(70, 24);
@@ -477,6 +483,25 @@
             this.removeTagsToolStripMenuItem1.Size = new System.Drawing.Size(210, 26);
             this.removeTagsToolStripMenuItem1.Text = "Remove tags";
             this.removeTagsToolStripMenuItem1.Click += new System.EventHandler(this.removeTagsToolStripMenuItem1_Click);
+            // 
+            // toolStripSeparator10
+            // 
+            this.toolStripSeparator10.Name = "toolStripSeparator10";
+            this.toolStripSeparator10.Size = new System.Drawing.Size(207, 6);
+            // 
+            // rebindPdfToolStripMenuItem
+            // 
+            this.rebindPdfToolStripMenuItem.Name = "rebindPdfToolStripMenuItem";
+            this.rebindPdfToolStripMenuItem.Size = new System.Drawing.Size(210, 26);
+            this.rebindPdfToolStripMenuItem.Text = "Rebind PDF";
+            this.rebindPdfToolStripMenuItem.Click += new System.EventHandler(this.rebindPdfToolStripMenuItem_Click);
+            // 
+            // unbindPdfToolStripMenuItem
+            // 
+            this.unbindPdfToolStripMenuItem.Name = "unbindPdfToolStripMenuItem";
+            this.unbindPdfToolStripMenuItem.Size = new System.Drawing.Size(210, 26);
+            this.unbindPdfToolStripMenuItem.Text = "Unbind PDF";
+            this.unbindPdfToolStripMenuItem.Click += new System.EventHandler(this.unbindPdfToolStripMenuItem_Click);
             // 
             // deleteSelectedToolStripMenuItem
             // 
@@ -1043,6 +1068,9 @@
         private System.Windows.Forms.ToolStripSeparator toolStripMenuItem1;
         private System.Windows.Forms.ToolStripButton btnRemoveTags;
         private System.Windows.Forms.ToolStripMenuItem removeTagToolStripMenuItem;
+        private System.Windows.Forms.ToolStripSeparator toolStripSeparator10;
+        private System.Windows.Forms.ToolStripMenuItem rebindPdfToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem unbindPdfToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem pdfToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem renameToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem checkPdfToolStripMenuItem;

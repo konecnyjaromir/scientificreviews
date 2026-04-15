@@ -81,6 +81,12 @@ namespace ScientificReviews
 
         [Browsable(true)]
         [Category(PDF_CAT)]
+        [DisplayName("Autoopening PDF when attach")]
+        [Description("If enabled, manually attaching or rebinding a PDF automatically opens the selected PDF file afterwards.")]
+        public bool AutoOpenPdfWhenAttach { get; set; } = true;
+
+        [Browsable(true)]
+        [Category(PDF_CAT)]
         [DisplayName("PDF auto-pair threshold (%)")]
         [Description("Similarity threshold used by Auto-pair with PDFs.")]
         public int PdfAutoPairThresholdPercent { get; set; } = 95;
