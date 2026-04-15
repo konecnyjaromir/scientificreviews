@@ -83,12 +83,41 @@ namespace ScientificReviews
             {
                 AppSettings = new AppSettingsJson<AppSettingsData>(settingsFile);
                 AppSettings.LoadSettings();
+                bool settingsChanged = false;
+
                 if (AppSettings.Data.Columns == null)
+                {
                     AppSettings.Data.Columns = new string[0];
+                    settingsChanged = true;
+                }
+
+                if (RunSettingsMigrations())
+                    settingsChanged = true;
+
+                if (settingsChanged)
+                    AppSettings.SaveSettings("Settings migration/default normalization");
             }
             catch(Exception)
             {              
             }
+        }
+
+        private static bool RunSettingsMigrations()
+        {
+            if (AppSettings?.Data == null)
+                return false;
+
+            bool changed = false;
+            AppSettingsData settings = AppSettings.Data;
+
+            if (settings.SettingsVersion < 1)
+            {
+                settings.RecursivePdfSearch = true;
+                settings.SettingsVersion = AppSettingsData.CURRENT_SETTINGS_VERSION;
+                changed = true;
+            }
+
+            return changed;
         }
 
 
