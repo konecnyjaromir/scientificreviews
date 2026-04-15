@@ -36,6 +36,7 @@ namespace ScientificReviews.Helpers
         public int SmartMatches { get; set; }
         public int Unmatched { get; set; }
         public bool NoPdfsFound { get; set; }
+        public bool RecommendRecursiveSearch { get; set; }
     }
 
     public sealed class PdfMatchingService
@@ -177,18 +178,13 @@ namespace ScientificReviews.Helpers
                 string[] pdfFiles = GetPdfFiles(options);
                 if (pdfFiles.Length == 0)
                 {
-                    foreach (BibtexEntry entry in entries)
-                    {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        ClearPdfAssignment(entry);
-                    }
-
                     return new PdfAutoPairResult
                     {
                         DirectMatches = 0,
                         SmartMatches = 0,
                         Unmatched = entries.Count,
-                        NoPdfsFound = true
+                        NoPdfsFound = true,
+                        RecommendRecursiveSearch = options.RecursiveSearch == false
                     };
                 }
 

@@ -272,16 +272,20 @@ namespace ScientificReviews.Forms
                     lblStatus.Text = $"Auto-pairing PDFs using {GetConfiguredThreadCount()} thread(s)...";
                     PdfAutoPairResult result = await RunAutoPairAsync(operation, cancellation.Token);
 
-                    RefreshGrid();
-                    Changed();
-
                     if (result.NoPdfsFound)
                     {
-                        operation.Complete("No PDFs found.", Program.AppSettings.Data.PdfFolder);
-                        lblStatus.Text = "No PDFs found in Pdf Folder.";
-                        log.Complete("No PDFs found.");
+                        string details = result.RecommendRecursiveSearch
+                            ? "No PDFs were found. Consider enabling Recursive PDF search in Settings."
+                            : "No PDFs were found in the configured PDF source folder.";
+
+                        operation.Complete("No PDFs found.", details);
+                        lblStatus.Text = details;
+                        log.Complete(details);
                         return;
                     }
+
+                    RefreshGrid();
+                    Changed();
 
                     string summary = $"Direct {result.DirectMatches}, smart {result.SmartMatches}, unmatched {result.Unmatched}";
                     operation.Complete(summary, Program.AppSettings.Data.PdfFolder);
