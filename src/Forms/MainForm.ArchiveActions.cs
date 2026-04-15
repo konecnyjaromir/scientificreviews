@@ -99,7 +99,7 @@ namespace ScientificReviews.Forms
                 SetDatabaseChanged(false);
         }
 
-        private async Task<bool> LoadBibTexFolderAsync(bool replaceExisting)
+        private async Task<bool> LoadBibTexFolderAsync(bool replaceExisting, bool runPostLoadPreprocessing = true)
         {
             using (FolderBrowserDialog folderDialog = new FolderBrowserDialog()
             {
@@ -150,7 +150,8 @@ namespace ScientificReviews.Forms
 
                         operation.Complete($"Loaded {loadedEntries.Count} record(s).", folderDialog.SelectedPath);
                         log.Complete($"Loaded {loadedEntries.Count} record(s).");
-                        StartAutomaticBackgroundOperationsAfterLoad();
+                        if (runPostLoadPreprocessing)
+                            StartAutomaticBackgroundOperationsAfterLoad();
                         return true;
                     }
                     catch (OperationCanceledException)
@@ -174,7 +175,7 @@ namespace ScientificReviews.Forms
             }
         }
 
-        private async Task<bool> LoadBibTexFileAsync(bool replaceExisting)
+        private async Task<bool> LoadBibTexFileAsync(bool replaceExisting, bool runPostLoadPreprocessing = true)
         {
             OpenFileDialog ofd = new OpenFileDialog()
             {
@@ -230,7 +231,8 @@ namespace ScientificReviews.Forms
 
                     operation.Complete($"Loaded {loadedEntries.Count} record(s).", fileName);
                     log.Complete($"Loaded {loadedEntries.Count} record(s).");
-                    StartAutomaticBackgroundOperationsAfterLoad();
+                    if (runPostLoadPreprocessing)
+                        StartAutomaticBackgroundOperationsAfterLoad();
                     return true;
                 }
                 catch (OperationCanceledException)
@@ -267,6 +269,20 @@ namespace ScientificReviews.Forms
             }
         }
 
+        private async void loadBibTexFolderRawToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                bool loaded = await LoadBibTexFolderAsync(false, false);
+                if (loaded)
+                    lblStatus.Text = "Added folder as raw.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
         private async void loadBibTexFileToolStripMenuItem_Click(object sender, EventArgs e)
         {
             try
@@ -274,6 +290,20 @@ namespace ScientificReviews.Forms
                 bool loaded = await LoadBibTexFileAsync(false);
                 if (loaded)
                     lblStatus.Text = "Loaded.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
+        private async void loadBibTexFileRawToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                bool loaded = await LoadBibTexFileAsync(false, false);
+                if (loaded)
+                    lblStatus.Text = "Added file as raw.";
             }
             catch (Exception ex)
             {
@@ -302,6 +332,34 @@ namespace ScientificReviews.Forms
                 bool loaded = await LoadBibTexFolderAsync(true);
                 if (loaded)
                     lblStatus.Text = "Loaded folder as a new archive.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
+        private async void loadReplaceBibTexFileRawToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                bool loaded = await LoadBibTexFileAsync(true, false);
+                if (loaded)
+                    lblStatus.Text = "Loaded file as a raw archive.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
+        private async void loadReplaceBibTexFolderRawToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                bool loaded = await LoadBibTexFolderAsync(true, false);
+                if (loaded)
+                    lblStatus.Text = "Loaded folder as a raw archive.";
             }
             catch (Exception ex)
             {
