@@ -11,6 +11,43 @@ namespace ScientificReviews.Forms
 {
     public partial class MainForm
     {
+        private readonly Stack<Guid> _reportScopeStack = new Stack<Guid>();
+
+        private sealed class ReportScopeContext : IDisposable
+        {
+            private readonly MainForm _owner;
+            private readonly OperationReportItem _report;
+            private bool _disposed;
+
+            public ReportScopeContext(MainForm owner, OperationReportItem report)
+            {
+                _owner = owner;
+                _report = report;
+            }
+
+            public void Complete(
+                string summary,
+                string details = null,
+                OperationReportSeverity severity = OperationReportSeverity.Info,
+                EntryChangeReport changeReport = null)
+            {
+                _report.Summary = summary?.Trim();
+                _report.Details = AppendChangeSummary(details, changeReport);
+                _report.Severity = severity;
+                ApplyChangeReport(_report, changeReport);
+                _owner._reportCenter.Update(_report);
+            }
+
+            public void Dispose()
+            {
+                if (_disposed)
+                    return;
+
+                _disposed = true;
+                _owner.PopReportScope(_report.Id);
+            }
+        }
+
         private void InitializeReportCenter()
         {
             _reportCenter.Changed += ReportCenter_Changed;
@@ -74,16 +111,36 @@ namespace ScientificReviews.Forms
         {
             OperationReportItem report = new OperationReportItem
             {
+                ParentId = GetCurrentReportParentId(),
                 Title = string.IsNullOrWhiteSpace(title) ? "Operation" : title.Trim(),
                 Summary = summary?.Trim(),
                 Details = AppendChangeSummary(details, changeReport),
                 Severity = severity
             };
 
-            foreach (OperationReportChange change in changeReport?.Changes ?? new List<OperationReportChange>())
-                report.Changes.Add(change);
+            ApplyChangeReport(report, changeReport);
 
             _reportCenter.Add(report);
+        }
+
+        private ReportScopeContext BeginReportScope(
+            string title,
+            string summary,
+            string details = null,
+            OperationReportSeverity severity = OperationReportSeverity.Info)
+        {
+            OperationReportItem report = new OperationReportItem
+            {
+                ParentId = GetCurrentReportParentId(),
+                Title = string.IsNullOrWhiteSpace(title) ? "Operation" : title.Trim(),
+                Summary = summary?.Trim(),
+                Details = details?.Trim(),
+                Severity = severity
+            };
+
+            _reportCenter.Add(report);
+            _reportScopeStack.Push(report.Id);
+            return new ReportScopeContext(this, report);
         }
 
         private static string AppendChangeSummary(string details, EntryChangeReport changeReport)
@@ -110,6 +167,37 @@ namespace ScientificReviews.Forms
             builder.AppendLine($"Added: {changeReport.AddedEntries}");
             builder.Append($"Total changed records: {changeReport.TotalChangedEntries}");
             return builder.ToString();
+        }
+
+        private Guid? GetCurrentReportParentId()
+        {
+            return _reportScopeStack.Count > 0
+                ? (Guid?)_reportScopeStack.Peek()
+                : null;
+        }
+
+        private void PopReportScope(Guid reportId)
+        {
+            if (_reportScopeStack.Count == 0)
+                return;
+
+            if (_reportScopeStack.Peek() == reportId)
+            {
+                _reportScopeStack.Pop();
+                return;
+            }
+
+            Stack<Guid> rebuilt = new Stack<Guid>(_reportScopeStack.Reverse().Where(id => id != reportId));
+            _reportScopeStack.Clear();
+            foreach (Guid id in rebuilt.Reverse())
+                _reportScopeStack.Push(id);
+        }
+
+        private static void ApplyChangeReport(OperationReportItem report, EntryChangeReport changeReport)
+        {
+            report.Changes.Clear();
+            foreach (OperationReportChange change in changeReport?.Changes ?? new List<OperationReportChange>())
+                report.Changes.Add(change);
         }
 
         private static string BuildReportList(IEnumerable<string> values, string header)

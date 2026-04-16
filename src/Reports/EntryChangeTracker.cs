@@ -56,9 +56,10 @@ namespace ScientificReviews.Reports
                     report.RemovedEntries++;
                     report.Changes.Add(new OperationReportChange
                     {
+                        Kind = OperationReportChangeKind.Removed,
                         RecordLabel = GetRecordLabel(state.Snapshot),
                         Summary = "Record removed",
-                        Details = BuildEntryDetails(state.Snapshot)
+                        Details = BuildEntryDetails(state.Snapshot, "-")
                     });
                     continue;
                 }
@@ -79,9 +80,10 @@ namespace ScientificReviews.Reports
                 report.AddedEntries++;
                 report.Changes.Add(new OperationReportChange
                 {
+                    Kind = OperationReportChangeKind.Added,
                     RecordLabel = GetRecordLabel(entry),
                     Summary = "Record added",
-                    Details = BuildEntryDetails(entry)
+                    Details = BuildEntryDetails(entry, "+")
                 });
             }
 
@@ -96,13 +98,15 @@ namespace ScientificReviews.Reports
             if (!string.Equals(before?.Key, after?.Key, StringComparison.Ordinal))
             {
                 touchedFields.Add("key");
-                detailLines.Add($"Key: {FormatTransition(before?.Key, after?.Key)}");
+                detailLines.Add($"- key: {FormatValue(before?.Key)}");
+                detailLines.Add($"+ key: {FormatValue(after?.Key)}");
             }
 
             if (!string.Equals(before?.Type, after?.Type, StringComparison.OrdinalIgnoreCase))
             {
                 touchedFields.Add("type");
-                detailLines.Add($"Type: {FormatTransition(before?.Type, after?.Type)}");
+                detailLines.Add($"- type: {FormatValue(before?.Type)}");
+                detailLines.Add($"+ type: {FormatValue(after?.Type)}");
             }
 
             Dictionary<string, string> beforeTags = ToTagDictionary(before);
@@ -120,21 +124,22 @@ namespace ScientificReviews.Reports
                 if (hasBefore && !hasAfter)
                 {
                     touchedFields.Add(key);
-                    detailLines.Add($"Removed tag {key}: {FormatValue(beforeValue)}");
+                    detailLines.Add($"- {key}: {FormatValue(beforeValue)}");
                     continue;
                 }
 
                 if (!hasBefore && hasAfter)
                 {
                     touchedFields.Add(key);
-                    detailLines.Add($"Added tag {key}: {FormatValue(afterValue)}");
+                    detailLines.Add($"+ {key}: {FormatValue(afterValue)}");
                     continue;
                 }
 
                 if (!string.Equals(beforeValue, afterValue, StringComparison.Ordinal))
                 {
                     touchedFields.Add(key);
-                    detailLines.Add($"Updated tag {key}: {FormatTransition(beforeValue, afterValue)}");
+                    detailLines.Add($"- {key}: {FormatValue(beforeValue)}");
+                    detailLines.Add($"+ {key}: {FormatValue(afterValue)}");
                 }
             }
 
@@ -147,6 +152,7 @@ namespace ScientificReviews.Reports
 
             return new OperationReportChange
             {
+                Kind = OperationReportChangeKind.Modified,
                 RecordLabel = GetRecordLabel(after) ?? GetRecordLabel(before),
                 Summary = summary,
                 Details = string.Join(Environment.NewLine, detailLines)
@@ -168,14 +174,14 @@ namespace ScientificReviews.Reports
             return dictionary;
         }
 
-        private static string BuildEntryDetails(BibtexEntry entry)
+        private static string BuildEntryDetails(BibtexEntry entry, string prefix)
         {
             StringBuilder builder = new StringBuilder();
-            builder.AppendLine($"Type: {entry?.Type ?? "<null>"}");
-            builder.AppendLine($"Key: {entry?.Key ?? "<null>"}");
+            builder.AppendLine($"{prefix} type: {entry?.Type ?? "<null>"}");
+            builder.AppendLine($"{prefix} key: {entry?.Key ?? "<null>"}");
 
             foreach (BibtexTag tag in entry?.Tags ?? Array.Empty<BibtexTag>())
-                builder.AppendLine($"{tag.Key}: {FormatValue(tag.Value)}");
+                builder.AppendLine($"{prefix} {tag.Key}: {FormatValue(tag.Value)}");
 
             return builder.ToString().TrimEnd();
         }
@@ -194,12 +200,6 @@ namespace ScientificReviews.Reports
 
             return "<unnamed record>";
         }
-
-        private static string FormatTransition(string before, string after)
-        {
-            return $"{FormatValue(before)} -> {FormatValue(after)}";
-        }
-
         private static string FormatValue(string value)
         {
             if (string.IsNullOrWhiteSpace(value))

@@ -11,8 +11,16 @@ namespace ScientificReviews.Reports
         Error
     }
 
+    public enum OperationReportChangeKind
+    {
+        Modified,
+        Added,
+        Removed
+    }
+
     public sealed class OperationReportChange
     {
+        public OperationReportChangeKind Kind { get; set; } = OperationReportChangeKind.Modified;
         public string RecordLabel { get; set; }
         public string Summary { get; set; }
         public string Details { get; set; }
@@ -21,6 +29,7 @@ namespace ScientificReviews.Reports
     public sealed class OperationReportItem
     {
         public Guid Id { get; set; } = Guid.NewGuid();
+        public Guid? ParentId { get; set; }
         public DateTime CreatedAt { get; set; } = DateTime.Now;
         public string Title { get; set; }
         public string Summary { get; set; }
@@ -57,6 +66,23 @@ namespace ScientificReviews.Reports
             OnChanged();
         }
 
+        public void Update(OperationReportItem report)
+        {
+            if (report == null)
+                return;
+
+            lock (_sync)
+            {
+                int index = _reports.FindIndex(item => item.Id == report.Id);
+                if (index >= 0)
+                    _reports[index] = report;
+                else
+                    _reports.Insert(0, report);
+            }
+
+            OnChanged();
+        }
+
         public List<OperationReportItem> GetSnapshot()
         {
             lock (_sync)
@@ -84,6 +110,30 @@ namespace ScientificReviews.Reports
                 OperationReportItem report = _reports.FirstOrDefault(item => item.Id == reportId);
                 if (report != null && !report.IsRead)
                 {
+                    report.IsRead = true;
+                    changed = true;
+                }
+            }
+
+            if (changed)
+                OnChanged();
+        }
+
+        public void MarkRead(Guid reportId, bool includeDescendants)
+        {
+            bool changed = false;
+
+            lock (_sync)
+            {
+                HashSet<Guid> idsToMark = new HashSet<Guid> { reportId };
+                if (includeDescendants)
+                    CollectDescendantIds(reportId, idsToMark);
+
+                foreach (OperationReportItem report in _reports)
+                {
+                    if (!idsToMark.Contains(report.Id) || report.IsRead)
+                        continue;
+
                     report.IsRead = true;
                     changed = true;
                 }
@@ -128,6 +178,7 @@ namespace ScientificReviews.Reports
             OperationReportItem clone = new OperationReportItem
             {
                 Id = source.Id,
+                ParentId = source.ParentId,
                 CreatedAt = source.CreatedAt,
                 Title = source.Title,
                 Summary = source.Summary,
@@ -140,6 +191,7 @@ namespace ScientificReviews.Reports
             {
                 clone.Changes.Add(new OperationReportChange
                 {
+                    Kind = change.Kind,
                     RecordLabel = change.RecordLabel,
                     Summary = change.Summary,
                     Details = change.Details
@@ -152,6 +204,17 @@ namespace ScientificReviews.Reports
         private void OnChanged()
         {
             Changed?.Invoke(this, EventArgs.Empty);
+        }
+
+        private void CollectDescendantIds(Guid parentId, HashSet<Guid> destination)
+        {
+            foreach (OperationReportItem child in _reports.Where(item => item.ParentId == parentId).ToList())
+            {
+                if (!destination.Add(child.Id))
+                    continue;
+
+                CollectDescendantIds(child.Id, destination);
+            }
         }
     }
 }

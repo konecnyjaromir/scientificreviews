@@ -620,7 +620,12 @@ namespace ScientificReviews.Forms
             List<string> skippedSteps = new List<string>();
             int totalSteps = GetPreprocessingStepCount(mode);
             int currentStep = 0;
+            EntryChangeSnapshot overallChangeSnapshot = CaptureEntryChanges(entries.ToArray());
             using (CancellationTokenSource cancellation = new CancellationTokenSource())
+            using (ReportScopeContext reportScope = BeginReportScope(
+                operationName,
+                $"{operationName} started.",
+                $"Records: {entries.Count}{Environment.NewLine}Mode: {mode}"))
             {
                 operation.RegisterCancellation(cancellation.Cancel);
 
@@ -698,31 +703,32 @@ namespace ScientificReviews.Forms
                     string details = skippedSteps.Count == 0
                         ? $"All {operationName.ToLowerInvariant()} steps completed."
                         : "Skipped: " + string.Join(", ", skippedSteps) + ".";
+                    EntryChangeReport overallChangeReport = BuildEntryChangeReport(overallChangeSnapshot);
 
                     operation.Complete($"{operationName} finished.", details);
                     log.Complete(details);
                     lblStatus.Text = skippedSteps.Count == 0
                         ? $"{operationName} finished."
                         : $"{operationName} finished. Skipped: {string.Join(", ", skippedSteps)}.";
-                    PublishReport(
-                        operationName,
+                    reportScope.Complete(
                         $"{operationName} finished.",
                         details,
-                        skippedSteps.Count == 0 ? OperationReportSeverity.Info : OperationReportSeverity.Warning);
+                        skippedSteps.Count == 0 ? OperationReportSeverity.Info : OperationReportSeverity.Warning,
+                        overallChangeReport);
                 }
                 catch (OperationCanceledException)
                 {
                     operation.Cancel("Cancelled", $"{operationName} was stopped by user.");
                     lblStatus.Text = $"{operationName} cancelled.";
                     log.Complete($"{operationName} cancelled.");
-                    PublishReport(operationName, $"{operationName} cancelled.", null, OperationReportSeverity.Warning);
+                    reportScope.Complete($"{operationName} cancelled.", null, OperationReportSeverity.Warning);
                 }
                 catch (Exception ex)
                 {
                     operation.Fail(ex, "Failed");
                     lblStatus.Text = ex.Message;
                     log.Fail(ex, $"{operationName} failed.");
-                    PublishReport(operationName, $"{operationName} failed.", ex.Message, OperationReportSeverity.Error);
+                    reportScope.Complete($"{operationName} failed.", ex.Message, OperationReportSeverity.Error);
                 }
                 finally
                 {
@@ -789,9 +795,6 @@ namespace ScientificReviews.Forms
                 return new MetadataUpdateResult();
             }
 
-            if (normalizeDoiFirst)
-                RunNormalizeDoiOperation(targetEntries);
-
             string details = $"Fetching metadata for records: {targetEntries.Length}";
 
             StatusStripOperationHandle operation = StartTrackedOperation(
@@ -802,17 +805,20 @@ namespace ScientificReviews.Forms
                 return null;
 
             ProcessLogScope log = BeginProcessLog(operationName, details);
-            EntryChangeSnapshot changeSnapshot = null;
+            EntryChangeSnapshot overallChangeSnapshot = CaptureEntryChanges(targetEntries);
             using (CancellationTokenSource cancellation = CancellationTokenSource.CreateLinkedTokenSource(externalCancellationToken))
+            using (ReportScopeContext reportScope = BeginReportScope(operationName, $"{operationName} started.", details))
             {
                 operation.RegisterCancellation(cancellation.Cancel);
 
                 try
                 {
+                    if (normalizeDoiFirst)
+                        RunNormalizeDoiOperation(targetEntries);
+
                     lblStatus.Text = $"Fetching metadata using {GetConfiguredThreadCount()} thread(s)...";
-                    changeSnapshot = CaptureEntryChanges(targetEntries);
                     MetadataUpdateResult result = await RunFetchMissingMetadataAsync(targetEntries, operation, screenModeOverride, optionOverrides, cancellation.Token);
-                    EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot);
+                    EntryChangeReport changeReport = BuildEntryChangeReport(overallChangeSnapshot);
 
                     RefreshGrid(targetEntries);
 
@@ -839,8 +845,7 @@ namespace ScientificReviews.Forms
                     if (string.IsNullOrWhiteSpace(failed) == false)
                         detailParts.Add(failed);
 
-                    PublishReport(
-                        operationName,
+                    reportScope.Complete(
                         summary,
                         string.Join(Environment.NewLine + Environment.NewLine, detailParts.Where(part => string.IsNullOrWhiteSpace(part) == false)),
                         result.FailedEntries > 0
@@ -856,7 +861,7 @@ namespace ScientificReviews.Forms
                     operation.Cancel("Cancelled", "Metadata fetch was stopped by user.");
                     lblStatus.Text = "Metadata fetch cancelled.";
                     log.Complete("Metadata fetch cancelled.");
-                    PublishReport(operationName, "Metadata fetch cancelled.", null, OperationReportSeverity.Warning);
+                    reportScope.Complete("Metadata fetch cancelled.", null, OperationReportSeverity.Warning);
                     return null;
                 }
                 catch (Exception ex)
@@ -864,7 +869,7 @@ namespace ScientificReviews.Forms
                     operation.Fail(ex, "Failed");
                     lblStatus.Text = ex.Message;
                     log.Fail(ex, "Metadata fetch failed.");
-                    PublishReport(operationName, "Metadata fetch failed.", ex.Message, OperationReportSeverity.Error);
+                    reportScope.Complete("Metadata fetch failed.", ex.Message, OperationReportSeverity.Error);
                     throw;
                 }
                 finally

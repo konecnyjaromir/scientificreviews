@@ -3,26 +3,31 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
-using System.Text;
 using System.Windows.Forms;
 
 namespace ScientificReviews.Forms
 {
     public sealed class ReportCenterForm : Form
     {
-        private const int LeftPanelMinimumWidth = 220;
-        private const int RightPanelMinimumWidth = 360;
-        private const int PreferredLeftPanelWidth = 280;
+        private const int LeftPanelMinimumWidth = 240;
+        private const int RightPanelMinimumWidth = 420;
+        private const int PreferredLeftPanelWidth = 300;
 
         private readonly OperationReportCenter _reportCenter;
         private bool _isRefreshing;
         private SplitContainer _splitContainer;
-        private ListBox _lstReports;
-        private TextBox _txtDetails;
+        private TreeView _treeReports;
+        private RichTextBox _rtbDetails;
         private Button _btnMarkRead;
         private Button _btnMarkAllRead;
         private Button _btnClear;
         private Button _btnClose;
+        private List<OperationReportItem> _snapshot = new List<OperationReportItem>();
+        private Font _treeBoldFont;
+        private Font _detailFont;
+        private Font _detailBoldFont;
+        private Font _titleFont;
+        private Font _sectionFont;
 
         public ReportCenterForm(OperationReportCenter reportCenter)
         {
@@ -35,8 +40,8 @@ namespace ScientificReviews.Forms
         private void InitializeComponent()
         {
             _splitContainer = new SplitContainer();
-            _lstReports = new ListBox();
-            _txtDetails = new TextBox();
+            _treeReports = new TreeView();
+            _rtbDetails = new RichTextBox();
             _btnMarkRead = new Button();
             _btnMarkAllRead = new Button();
             _btnClear = new Button();
@@ -48,18 +53,25 @@ namespace ScientificReviews.Forms
             _splitContainer.Dock = DockStyle.Fill;
             _splitContainer.Orientation = Orientation.Vertical;
 
-            _lstReports.Dock = DockStyle.Fill;
-            _lstReports.IntegralHeight = false;
-            _lstReports.SelectedIndexChanged += LstReports_SelectedIndexChanged;
+            _treeReports.Dock = DockStyle.Fill;
+            _treeReports.HideSelection = false;
+            _treeReports.AfterSelect += TreeReports_AfterSelect;
 
-            _txtDetails.Dock = DockStyle.Fill;
-            _txtDetails.Multiline = true;
-            _txtDetails.ReadOnly = true;
-            _txtDetails.ScrollBars = ScrollBars.Both;
-            _txtDetails.Font = new Font("Consolas", 9F);
+            _rtbDetails.Dock = DockStyle.Fill;
+            _rtbDetails.ReadOnly = true;
+            _rtbDetails.WordWrap = false;
+            _rtbDetails.DetectUrls = false;
+            _detailFont = new Font("Consolas", 9F, FontStyle.Regular);
+            _detailBoldFont = new Font("Consolas", 9F, FontStyle.Bold);
+            _titleFont = new Font("Consolas", 12F, FontStyle.Bold);
+            _sectionFont = new Font("Consolas", 10F, FontStyle.Bold);
+            _treeBoldFont = new Font(_treeReports.Font, FontStyle.Bold);
+            _rtbDetails.Font = _detailFont;
+            _rtbDetails.BackColor = Color.White;
+            _rtbDetails.BorderStyle = BorderStyle.None;
 
-            _splitContainer.Panel1.Controls.Add(_lstReports);
-            _splitContainer.Panel2.Controls.Add(_txtDetails);
+            _splitContainer.Panel1.Controls.Add(_treeReports);
+            _splitContainer.Panel2.Controls.Add(_rtbDetails);
 
             buttons.Dock = DockStyle.Bottom;
             buttons.FlowDirection = FlowDirection.RightToLeft;
@@ -90,15 +102,16 @@ namespace ScientificReviews.Forms
             AcceptButton = _btnClose;
             AutoScaleDimensions = new SizeF(8F, 16F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(920, 520);
+            ClientSize = new Size(1350, 620);
             Controls.Add(_splitContainer);
             Controls.Add(buttons);
             MinimizeBox = false;
-            MinimumSize = new Size(760, 420);
+            MinimumSize = new Size(1120, 480);
             Name = "ReportCenterForm";
             ShowIcon = false;
             StartPosition = FormStartPosition.CenterParent;
             Text = "Notifications and Reports";
+            FormClosed += ReportCenterForm_FormClosed;
             Shown += ReportCenterForm_Shown;
             SizeChanged += ReportCenterForm_SizeChanged;
 
@@ -110,6 +123,15 @@ namespace ScientificReviews.Forms
             UpdateSplitterDistanceSafe();
         }
 
+        private void ReportCenterForm_FormClosed(object sender, FormClosedEventArgs e)
+        {
+            _treeBoldFont?.Dispose();
+            _detailFont?.Dispose();
+            _detailBoldFont?.Dispose();
+            _titleFont?.Dispose();
+            _sectionFont?.Dispose();
+        }
+
         private void ReportCenterForm_SizeChanged(object sender, EventArgs e)
         {
             UpdateSplitterDistanceSafe();
@@ -118,72 +140,93 @@ namespace ScientificReviews.Forms
         private void LoadReports(Guid? selectedId = null)
         {
             _isRefreshing = true;
-            List<OperationReportItem> reports = _reportCenter.GetSnapshot();
-            Guid? effectiveSelection = selectedId;
-            if (!effectiveSelection.HasValue && _lstReports.SelectedItem is OperationReportItem current)
-                effectiveSelection = current.Id;
+            _snapshot = (_reportCenter.GetSnapshot() ?? new List<OperationReportItem>())
+                .Where(report => report != null)
+                .ToList();
+            Guid? effectiveSelection = selectedId ?? GetSelectedReportId();
 
-            _lstReports.BeginUpdate();
-            _lstReports.Items.Clear();
-            foreach (OperationReportItem report in reports)
-                _lstReports.Items.Add(report);
-            _lstReports.EndUpdate();
+            Dictionary<Guid, List<OperationReportItem>> childrenByParent = _snapshot
+                .Where(report => report.ParentId.HasValue)
+                .GroupBy(report => report.ParentId.Value)
+                .ToDictionary(
+                    group => group.Key,
+                    group => group.OrderBy(item => item.CreatedAt).ToList());
 
-            if (_lstReports.Items.Count == 0)
+            HashSet<Guid> knownIds = new HashSet<Guid>(_snapshot.Select(item => item.Id));
+            List<OperationReportItem> roots = _snapshot
+                .Where(report => !report.ParentId.HasValue || !knownIds.Contains(report.ParentId.Value))
+                .OrderByDescending(report => report.CreatedAt)
+                .ToList();
+
+            _treeReports.BeginUpdate();
+            _treeReports.Nodes.Clear();
+            foreach (OperationReportItem root in roots)
+                _treeReports.Nodes.Add(CreateReportNode(root, childrenByParent));
+            _treeReports.EndUpdate();
+
+            if (_treeReports.Nodes.Count == 0)
             {
-                _txtDetails.Text = "No reports available.";
+                _rtbDetails.Clear();
+                AppendPlainLine("No reports available.", SystemColors.ControlText);
                 _btnMarkRead.Enabled = false;
                 _isRefreshing = false;
                 return;
             }
 
-            int selectedIndex = 0;
-            if (effectiveSelection.HasValue)
-            {
-                for (int i = 0; i < _lstReports.Items.Count; i++)
-                {
-                    if (((OperationReportItem)_lstReports.Items[i]).Id == effectiveSelection.Value)
-                    {
-                        selectedIndex = i;
-                        break;
-                    }
-                }
-            }
+            TreeNode selectedNode = FindNodeByReportId(_treeReports.Nodes, effectiveSelection);
+            if (selectedNode == null)
+                selectedNode = _treeReports.Nodes[0];
 
-            _lstReports.SelectedIndex = selectedIndex;
-            OperationReportItem selectedReport = _lstReports.SelectedItem as OperationReportItem;
-            _txtDetails.Text = BuildDetailsText(selectedReport);
-            _btnMarkRead.Enabled = selectedReport != null && !selectedReport.IsRead;
+            _treeReports.SelectedNode = selectedNode;
+            selectedNode.EnsureVisible();
+            RenderSelectedReport();
             _isRefreshing = false;
         }
 
-        private void LstReports_SelectedIndexChanged(object sender, EventArgs e)
+        private TreeNode CreateReportNode(OperationReportItem report, Dictionary<Guid, List<OperationReportItem>> childrenByParent)
+        {
+            TreeNode node = new TreeNode(BuildNodeText(report))
+            {
+                Tag = report
+            };
+
+            node.NodeFont = report.IsRead
+                ? _treeReports.Font
+                : _treeBoldFont;
+            node.ForeColor = GetSeverityColor(report.Severity);
+
+            if (childrenByParent.TryGetValue(report.Id, out List<OperationReportItem> children))
+            {
+                foreach (OperationReportItem child in children)
+                    node.Nodes.Add(CreateReportNode(child, childrenByParent));
+            }
+
+            return node;
+        }
+
+        private void TreeReports_AfterSelect(object sender, TreeViewEventArgs e)
         {
             if (_isRefreshing)
                 return;
 
-            OperationReportItem report = _lstReports.SelectedItem as OperationReportItem;
+            OperationReportItem report = e.Node?.Tag as OperationReportItem;
             if (report == null)
             {
-                _txtDetails.Text = "No report selected.";
                 _btnMarkRead.Enabled = false;
                 return;
             }
 
-            _reportCenter.MarkRead(report.Id);
+            _reportCenter.MarkRead(report.Id, true);
             LoadReports(report.Id);
-            report = _lstReports.SelectedItem as OperationReportItem;
-            _txtDetails.Text = BuildDetailsText(report);
-            _btnMarkRead.Enabled = report != null && !report.IsRead;
         }
 
         private void BtnMarkRead_Click(object sender, EventArgs e)
         {
-            OperationReportItem report = _lstReports.SelectedItem as OperationReportItem;
+            OperationReportItem report = _treeReports.SelectedNode?.Tag as OperationReportItem;
             if (report == null)
                 return;
 
-            _reportCenter.MarkRead(report.Id);
+            _reportCenter.MarkRead(report.Id, true);
             LoadReports(report.Id);
         }
 
@@ -209,47 +252,311 @@ namespace ScientificReviews.Forms
             LoadReports();
         }
 
-        private static string BuildDetailsText(OperationReportItem report)
+        private void RenderSelectedReport()
         {
-            if (report == null)
-                return "No report selected.";
+            OperationReportItem report = _treeReports.SelectedNode?.Tag as OperationReportItem;
+            _rtbDetails.Clear();
 
-            StringBuilder builder = new StringBuilder();
-            builder.AppendLine(report.Title ?? "Report");
-            builder.AppendLine(new string('=', 72));
-            builder.AppendLine($"Created: {report.CreatedAt:G}");
-            builder.AppendLine($"Severity: {report.Severity}");
-            builder.AppendLine($"Status: {(report.IsRead ? "Read" : "Unread")}");
+            if (report == null)
+            {
+                AppendPlainLine("No report selected.", SystemColors.ControlText);
+                _btnMarkRead.Enabled = false;
+                return;
+            }
+
+            List<OperationReportItem> descendants = GetDescendants(report.Id) ?? new List<OperationReportItem>();
+            _btnMarkRead.Enabled = !report.IsRead || descendants.Any(item => !item.IsRead);
+
+            AppendTitle(report.Title ?? "Report");
+            AppendSeparator();
+            AppendMetaLine("Created", report.CreatedAt.ToString("G"));
+            AppendMetaLine("Severity", report.Severity.ToString());
+            AppendMetaLine("Status", report.IsRead ? "Read" : "Unread");
+            if (descendants.Count > 0)
+                AppendMetaLine("Child reports", descendants.Count.ToString());
 
             if (string.IsNullOrWhiteSpace(report.Summary) == false)
             {
-                builder.AppendLine();
-                builder.AppendLine("Summary");
-                builder.AppendLine(report.Summary.Trim());
+                AppendSectionHeader("Summary");
+                AppendParagraph(report.Summary.Trim());
             }
 
             if (string.IsNullOrWhiteSpace(report.Details) == false)
             {
-                builder.AppendLine();
-                builder.AppendLine("Details");
-                builder.AppendLine(report.Details.Trim());
+                AppendSectionHeader("Details");
+                AppendPlainBlock(report.Details.Trim(), SystemColors.ControlText);
+            }
+
+            if (descendants.Count > 0)
+            {
+                AppendSectionHeader("Pipeline");
+                AppendPipeline(descendants);
             }
 
             if (report.Changes.Count > 0)
             {
-                builder.AppendLine();
-                builder.AppendLine($"Changes ({report.Changes.Count})");
+                AppendSectionHeader(descendants.Count > 0
+                    ? $"Aggregated changes ({report.Changes.Count})"
+                    : $"Changes ({report.Changes.Count})");
+                AppendChanges(report.Changes);
+            }
 
-                foreach (OperationReportChange change in report.Changes)
+            List<OperationReportItem> changeChildren = descendants
+                .Where(item => item != null)
+                .Where(item => item.Changes.Count > 0)
+                .ToList();
+            if (changeChildren.Count > 0)
+            {
+                AppendSectionHeader("Subprocess changes");
+                foreach (OperationReportItem child in changeChildren)
                 {
-                    builder.AppendLine($"[{change.RecordLabel}] {change.Summary}");
-                    if (string.IsNullOrWhiteSpace(change.Details) == false)
-                        builder.AppendLine(change.Details.Trim());
-                    builder.AppendLine();
+                    AppendSubprocessHeader(child);
+                    AppendChanges(child.Changes);
                 }
             }
 
-            return builder.ToString().TrimEnd();
+            _rtbDetails.SelectionStart = 0;
+            _rtbDetails.SelectionLength = 0;
+        }
+
+        private List<OperationReportItem> GetDescendants(Guid rootId)
+        {
+            List<OperationReportItem> safeSnapshot = (_snapshot ?? new List<OperationReportItem>())
+                .Where(report => report != null)
+                .ToList();
+
+            Dictionary<Guid, List<OperationReportItem>> lookup = BuildChildrenLookup(safeSnapshot);
+
+            List<OperationReportItem> descendants = new List<OperationReportItem>();
+            CollectDescendants(rootId, lookup, descendants);
+            return descendants;
+        }
+
+        private static void CollectDescendants(
+            Guid parentId,
+            Dictionary<Guid, List<OperationReportItem>> lookup,
+            List<OperationReportItem> destination)
+        {
+            if (!lookup.TryGetValue(parentId, out List<OperationReportItem> children))
+                return;
+
+            foreach (OperationReportItem child in children.Where(item => item != null))
+            {
+                destination.Add(child);
+                CollectDescendants(child.Id, lookup, destination);
+            }
+        }
+
+        private void AppendPipeline(List<OperationReportItem> descendants)
+        {
+            Dictionary<Guid, List<OperationReportItem>> lookup = BuildChildrenLookup(
+                (_snapshot ?? new List<OperationReportItem>())
+                    .Where(report => report != null));
+
+            OperationReportItem selected = _treeReports.SelectedNode?.Tag as OperationReportItem;
+            if (selected == null)
+                return;
+
+            AppendPipelineRecursive(selected.Id, lookup, 0);
+            AppendBlankLine();
+        }
+
+        private void AppendPipelineRecursive(Guid parentId, Dictionary<Guid, List<OperationReportItem>> lookup, int depth)
+        {
+            if (!lookup.TryGetValue(parentId, out List<OperationReportItem> children))
+                return;
+
+            foreach (OperationReportItem child in children)
+            {
+                string indent = new string(' ', depth * 2);
+                string line = $"{indent}- {child.Title}: {child.Summary}";
+                AppendPlainLine(line.TrimEnd(' ', ':'), GetSeverityColor(child.Severity));
+                AppendPipelineRecursive(child.Id, lookup, depth + 1);
+            }
+        }
+
+        private static Dictionary<Guid, List<OperationReportItem>> BuildChildrenLookup(IEnumerable<OperationReportItem> reports)
+        {
+            return (reports ?? Enumerable.Empty<OperationReportItem>())
+                .Where(report => report != null && report.ParentId.HasValue)
+                .GroupBy(report => report.ParentId.Value)
+                .ToDictionary(group => group.Key, group => group.OrderBy(item => item.CreatedAt).ToList());
+        }
+
+        private void AppendChanges(IEnumerable<OperationReportChange> changes)
+        {
+            foreach (OperationReportChange change in changes)
+                AppendChangeBlock(change);
+        }
+
+        private void AppendChangeBlock(OperationReportChange change)
+        {
+            Color headerBackColor = GetBlockBackground(change.Kind);
+
+            AppendBlockLine(new string('=', 72), SystemColors.GrayText, Color.White, false);
+            AppendBlockLine(change.RecordLabel ?? "<unnamed record>", SystemColors.ControlText, headerBackColor, true);
+            AppendBlockLine(change.Summary ?? string.Empty, SystemColors.ControlText, headerBackColor, false);
+
+            string[] detailLines = (change.Details ?? string.Empty)
+                .Split(new[] { "\r\n", "\n" }, StringSplitOptions.None);
+
+            foreach (string rawLine in detailLines)
+            {
+                string line = rawLine ?? string.Empty;
+                Color color = GetDiffColor(line);
+                AppendBlockLine(line, color, headerBackColor, false);
+            }
+
+            AppendBlankLine();
+        }
+
+        private void AppendSubprocessHeader(OperationReportItem report)
+        {
+            AppendBlockLine(
+                $"{report.Title}  [{report.CreatedAt:HH:mm:ss}]  {report.Severity}",
+                GetSeverityColor(report.Severity),
+                Color.FromArgb(245, 245, 245),
+                true);
+
+            if (string.IsNullOrWhiteSpace(report.Summary) == false)
+                AppendBlockLine(report.Summary.Trim(), SystemColors.ControlText, Color.FromArgb(245, 245, 245), false);
+
+            AppendBlankLine();
+        }
+
+        private void AppendTitle(string text)
+        {
+            AppendStyledText(text + Environment.NewLine, SystemColors.ControlText, Color.White, _titleFont);
+        }
+
+        private void AppendSectionHeader(string text)
+        {
+            AppendBlankLine();
+            AppendStyledText(text + Environment.NewLine, Color.FromArgb(0, 86, 155), Color.White, _sectionFont);
+        }
+
+        private void AppendMetaLine(string label, string value)
+        {
+            AppendStyledText(label + ": ", SystemColors.ControlText, Color.White, _detailBoldFont);
+            AppendStyledText(value + Environment.NewLine, SystemColors.ControlText, Color.White, _detailFont);
+        }
+
+        private void AppendParagraph(string text)
+        {
+            AppendPlainBlock(text, SystemColors.ControlText);
+            AppendBlankLine();
+        }
+
+        private void AppendPlainBlock(string text, Color color)
+        {
+            foreach (string line in (text ?? string.Empty).Split(new[] { "\r\n", "\n" }, StringSplitOptions.None))
+                AppendPlainLine(line, color);
+        }
+
+        private void AppendPlainLine(string text, Color color)
+        {
+            AppendStyledText((text ?? string.Empty) + Environment.NewLine, color, Color.White, _detailFont);
+        }
+
+        private void AppendBlockLine(string text, Color foreColor, Color backColor, bool bold)
+        {
+            AppendStyledText((text ?? string.Empty) + Environment.NewLine, foreColor, backColor, bold ? _detailBoldFont : _detailFont);
+        }
+
+        private void AppendSeparator()
+        {
+            AppendPlainLine(new string('-', 72), SystemColors.GrayText);
+        }
+
+        private void AppendBlankLine()
+        {
+            AppendStyledText(Environment.NewLine, SystemColors.ControlText, Color.White, _detailFont);
+        }
+
+        private void AppendStyledText(string text, Color foreColor, Color backColor, Font font)
+        {
+            _rtbDetails.SelectionStart = _rtbDetails.TextLength;
+            _rtbDetails.SelectionLength = 0;
+            _rtbDetails.SelectionColor = foreColor;
+            _rtbDetails.SelectionBackColor = backColor;
+            _rtbDetails.SelectionFont = font;
+            _rtbDetails.AppendText(text);
+            _rtbDetails.SelectionColor = _rtbDetails.ForeColor;
+            _rtbDetails.SelectionBackColor = _rtbDetails.BackColor;
+            _rtbDetails.SelectionFont = _rtbDetails.Font;
+        }
+
+        private Guid? GetSelectedReportId()
+        {
+            return (_treeReports.SelectedNode?.Tag as OperationReportItem)?.Id;
+        }
+
+        private static TreeNode FindNodeByReportId(TreeNodeCollection nodes, Guid? reportId)
+        {
+            if (!reportId.HasValue)
+                return null;
+
+            foreach (TreeNode node in nodes)
+            {
+                OperationReportItem report = node.Tag as OperationReportItem;
+                if (report != null && report.Id == reportId.Value)
+                    return node;
+
+                TreeNode child = FindNodeByReportId(node.Nodes, reportId);
+                if (child != null)
+                    return child;
+            }
+
+            return null;
+        }
+
+        private static string BuildNodeText(OperationReportItem report)
+        {
+            string unreadPrefix = report.IsRead ? string.Empty : "[new] ";
+            string title = string.IsNullOrWhiteSpace(report.Title) ? "Report" : report.Title.Trim();
+            return $"{unreadPrefix}{report.CreatedAt:HH:mm:ss} {title}";
+        }
+
+        private static Color GetSeverityColor(OperationReportSeverity severity)
+        {
+            switch (severity)
+            {
+                case OperationReportSeverity.Error:
+                    return Color.FromArgb(176, 32, 37);
+                case OperationReportSeverity.Warning:
+                    return Color.FromArgb(156, 101, 0);
+                default:
+                    return Color.FromArgb(36, 78, 120);
+            }
+        }
+
+        private static Color GetBlockBackground(OperationReportChangeKind kind)
+        {
+            switch (kind)
+            {
+                case OperationReportChangeKind.Added:
+                    return Color.FromArgb(235, 247, 235);
+                case OperationReportChangeKind.Removed:
+                    return Color.FromArgb(252, 236, 236);
+                default:
+                    return Color.FromArgb(240, 244, 249);
+            }
+        }
+
+        private static Color GetDiffColor(string line)
+        {
+            if (string.IsNullOrWhiteSpace(line))
+                return SystemColors.ControlText;
+
+            string trimmed = line.TrimStart();
+            if (trimmed.StartsWith("+"))
+                return Color.FromArgb(31, 121, 31);
+            if (trimmed.StartsWith("-"))
+                return Color.FromArgb(176, 32, 37);
+            if (trimmed.StartsWith("~"))
+                return Color.FromArgb(36, 78, 120);
+
+            return SystemColors.ControlText;
         }
 
         private void UpdateSplitterDistanceSafe()
