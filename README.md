@@ -30,9 +30,44 @@ Scientific Reviews is a Windows desktop tool for researchers who work with BibTe
 ### Clipboard and record transfer
 
 - `Ctrl+C`, `Ctrl+X`, `Ctrl+V` support for whole BibTeX records
+- `Ctrl+Shift+V` support for raw paste without metadata fetch
 - Menu actions for Copy, Cut, and Paste records
 - Right-click context menu in the main grid with `Edit`, `Copy`, `Cut`, `Paste`, and `Duplicate`
 - Transfer records between different running application windows using the system clipboard
+
+### Paste Anything
+
+The main grid supports a smart clipboard parser called `Paste Anything`.
+
+- If the clipboard contains valid BibTeX text, the records are inserted directly
+- If the clipboard contains DOI-like text, the application creates `@misc` stub records
+- If the clipboard contains web links, the application creates `@online` stub records
+- If the clipboard contains plain title-like text, the application creates `@misc` stub records with `title`
+- DOI and arXiv links are canonicalized during paste, for example:
+  - `https://doi.org/...` becomes a DOI-based record
+  - `https://arxiv.org/abs/...` becomes a record with canonical arXiv DOI and `eprint`
+
+`Ctrl+V` uses the currently configured `Paste Anything mode`. `Ctrl+Shift+V` always performs raw parsing only, without post-paste metadata fetch.
+
+### Paste Anything modes
+
+The feature can be configured in settings.
+
+- `Enable Paste Anything`
+  - enables or disables smart parsing of non-BibTeX text in the grid
+- `Paste Anything mode`
+  - `Simple`
+    - parse and insert only
+  - `Auto`
+    - parse and then safely fetch missing metadata for the newly inserted records
+  - `Deep`
+    - parse and fetch metadata more aggressively, including DOI hints from supported web page metadata
+
+The smart paste logic is context-aware:
+
+- text fields keep normal system paste behavior
+- the main grid uses record paste behavior
+- BibTeX text is still accepted as the primary paste format and is not replaced by the smart parser
 
 ## Metadata Mechanism
 
@@ -42,9 +77,11 @@ Metadata enrichment is designed as a multi-provider pipeline with fallback behav
   - Crossref REST API
   - Semantic Scholar Graph API
   - arXiv API
+  - lightweight HTML / OpenGraph web metadata extraction
 - Lookup strategy:
   - first by `doi`
   - fallback by `title`
+  - final fallback by `url` for web-style `@online` records
 - Supported DOI kinds:
   - standard publisher DOI
   - arXiv DOI in canonical form `10.48550/arXiv.<id>`
@@ -73,6 +110,8 @@ Metadata enrichment is designed as a multi-provider pipeline with fallback behav
 
 - `Database -> Fetch missing metadata` shows a warning before changing records
 - The operation first runs DOI normalization, then starts metadata fetching
+- URL-based metadata lookup is available for `@online` style records and other records with a usable `url`
+- In `Deep` paste mode, web metadata lookup may also accept DOI hints from explicit metadata tags such as `citation_doi`
 - The application can process records according to `Metadata Screen Mode`:
   - `Only missing`
   - `All`
@@ -246,14 +285,20 @@ The settings dialog contains the main workflow switches and defaults, including:
 
 These settings affect both the UI and long-running background processes.
 
+Additional clipboard and metadata-related settings include:
+
+- `Enable Paste Anything`
+- `Paste Anything mode`
+
 ## Typical Workflow
 
 1. Open a `.bib` file or folder as a new archive.
-2. Configure `PDF source folder`, matching mode, preprocessing level, and metadata/JCR settings.
-3. Run `Autofix` or individual tools such as `Normalize DOI`, `Fetch missing metadata`, `Auto-pair PDFs`, or `Update JCR`.
-4. Screen, edit, tag, bind or rebind PDFs, and search records in the main grid.
-5. Open PDFs by double-click or via DOI.
-6. Export the final result as BibTeX, CSV, or matched PDFs.
+2. Configure `PDF source folder`, matching mode, preprocessing level, smart paste mode, and metadata/JCR settings.
+3. Import additional records by file, folder, or smart paste using `Ctrl+V` / `Ctrl+Shift+V`.
+4. Run `Autofix` or individual tools such as `Normalize DOI`, `Fetch missing metadata`, `Auto-pair PDFs`, or `Update JCR`.
+5. Screen, edit, tag, bind or rebind PDFs, and search records in the main grid.
+6. Open PDFs by double-click or via DOI.
+7. Export the final result as BibTeX, CSV, or matched PDFs.
 
 ## System Requirements
 

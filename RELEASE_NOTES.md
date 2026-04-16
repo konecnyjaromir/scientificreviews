@@ -28,6 +28,7 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 ### Record Editing and Clipboard
 
 - Added full-record clipboard support with `Ctrl+C`, `Ctrl+X`, and `Ctrl+V`
+- Added `Ctrl+Shift+V` for raw paste without post-paste metadata fetch
 - Added menu actions for `Copy`, `Cut`, and `Paste`
 - Added `Ctrl+D` shortcut and menu/context action for `Duplicate`
 - Added right-click context menu actions: `Edit`, `Copy`, `Cut`, `Paste`, `Duplicate`, `Rebind PDF`, and `Unbind PDF`
@@ -35,6 +36,19 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Clipboard shortcuts are now context-aware:
   - text fields use normal text copy/cut/paste
   - the grid uses record copy/cut/paste
+- Added `Paste Anything` smart parsing for grid paste:
+  - BibTeX text is inserted as records
+  - DOI-like text creates `@misc` stub records
+  - web links create `@online` stub records
+  - plain title-like text creates `@misc` title stubs
+- Added canonicalization during smart paste for DOI and arXiv links
+- Added `Enable Paste Anything` setting with default `True`
+- Added `Paste Anything mode` setting:
+  - `Simple`
+  - `Auto`
+  - `Deep`
+- In `Auto` and `Deep`, pasted records can immediately trigger metadata fetch for just the newly inserted items
+- Text-field paste behavior remains unchanged; smart paste only applies in the main grid context
 - Added `Ctrl+E` for `Allow edit`
 - Added `Ctrl+F` to focus the search box
 - Added `Ctrl+R` for grid refresh
@@ -97,7 +111,7 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 
 - `Open using DOI` now detects DOI format automatically
 - Standard DOI values such as `10.1145/3729343` open through `doi.org`
-- arXiv identifiers such as `2310.08864` open through `arxiv.org/pdf/...`
+- Canonical arXiv DOI values such as `10.48550/arXiv.2310.08864` also open through `doi.org`
 - Unsupported DOI-like values trigger a warning and then open through Google search
 
 ### Database Cleanup, Normalization, and Autofix
@@ -116,6 +130,7 @@ This development cycle focused on turning Scientific Reviews into a faster multi
   - Create entry keys
   - Auto-pair PDFs
   - Update JCR
+- `Normalize DOI` now preserves publisher DOI priority while also filling `eprint` when arXiv information is available
 
 ### Auto-Preprocessing
 
@@ -137,6 +152,16 @@ This development cycle focused on turning Scientific Reviews into a faster multi
   - Auto-pair PDFs
   - Update JCR
 - Automatic preprocessing now runs after opening BibTeX archives according to the selected mode
+
+### Metadata Enrichment
+
+- Metadata fetch now supports type-aware completeness rules:
+  - scholarly records require article metadata such as `title`, `author`, `doi`, `abstract`, and `year`
+  - `@online` records use web-oriented fields such as `title`, `url`, `urldate`, and `note`
+- Added lightweight web metadata extraction from HTML/OpenGraph metadata as a final fallback provider
+- URL lookup is now available after DOI/title matching when a record contains a usable `url`
+- `Deep` smart-paste mode may accept DOI hints from explicit web metadata tags such as `citation_doi`
+- Metadata fetch can now be targeted at a selected subset of records, which is used by smart paste enrichment
 
 ### Export and Output Workflows
 
