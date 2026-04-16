@@ -25,6 +25,13 @@ namespace ScientificReviews
         KeyOrTitle
     }
 
+    public enum PasteAnythingMode
+    {
+        Simple,
+        Auto,
+        Deep
+    }
+
     public class LastExportSettingsData
     {
         public string Scope { get; set; } = "All";
@@ -67,6 +74,18 @@ namespace ScientificReviews
         [DisplayName("Auto-preprocessing mode")]
         [Description("Selects which automatic preprocessing steps run after opening a BibTeX database: Off = none, Fast = local quick fixes and PDF pairing, Deep = all preprocessing including metadata fetch and JCR update.")]
         public AutoPreprocessingMode AutoPreprocessingMode { get; set; } = AutoPreprocessingMode.Fast;
+
+        [Browsable(true)]
+        [Category(APPLICATION_CAT)]
+        [DisplayName("Enable Paste Anything")]
+        [Description("If enabled, pasting non-BibTeX text into the record grid can create records from DOI, URL, or title-like text.")]
+        public bool EnablePasteAnything { get; set; } = true;
+
+        [Browsable(true)]
+        [Category(APPLICATION_CAT)]
+        [DisplayName("Paste Anything mode")]
+        [Description("Simple = parse only, Auto = parse and fetch metadata safely, Deep = fetch more aggressively including DOI hints from web metadata.")]
+        public PasteAnythingMode PasteAnythingMode { get; set; } = PasteAnythingMode.Auto;
 
         [Browsable(true)]
         [Category(PDF_CAT)]

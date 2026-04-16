@@ -124,6 +124,7 @@ namespace ScientificReviews.Forms
         private readonly PdfExportService _pdfExportService = new PdfExportService();
         private readonly DatabaseExportService _databaseExportService = new DatabaseExportService();
         private readonly PdfMatchingService _pdfMatchingService = new PdfMatchingService();
+        private readonly PasteAnythingService _pasteAnythingService = new PasteAnythingService();
         private string _currentBibTexPath;
         private bool DatabaseChanged { get; set; }
         private ContextMenuStrip _recordContextMenu;

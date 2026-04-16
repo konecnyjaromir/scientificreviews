@@ -26,6 +26,8 @@ namespace ScientificReviews.Helpers
         public string ContactEmail { get; set; }
         public int ThreadCount { get; set; } = 1;
         public MetadataScreenMode ScreenMode { get; set; } = MetadataScreenMode.OnlyMissing;
+        public bool AllowUrlLookup { get; set; } = true;
+        public bool AllowUrlDoiExtraction { get; set; }
     }
 
     public sealed class MetadataUpdateResult
@@ -44,6 +46,7 @@ namespace ScientificReviews.Helpers
         string Name { get; }
         Task<MetadataPayload> FetchByDoiAsync(string doi, string titleHint, string authorHint, MetadataUpdateOptions options);
         Task<MetadataPayload> FetchByTitleAsync(string title, string doiHint, string authorHint, MetadataUpdateOptions options);
+        Task<MetadataPayload> FetchByUrlAsync(string url, string doiHint, string titleHint, string authorHint, MetadataUpdateOptions options);
     }
 
     internal sealed class MetadataPayload
@@ -55,6 +58,9 @@ namespace ScientificReviews.Helpers
         public string Author { get; set; }
         public string Eprint { get; set; }
         public string Journal { get; set; }
+        public string Url { get; set; }
+        public string UrlDate { get; set; }
+        public string Note { get; set; }
         public List<string> Sources { get; } = new List<string>();
 
         public MetadataPayload MergeMissing(MetadataPayload other)
@@ -75,6 +81,12 @@ namespace ScientificReviews.Helpers
                 Eprint = other.Eprint;
             if (string.IsNullOrWhiteSpace(Journal))
                 Journal = other.Journal;
+            if (string.IsNullOrWhiteSpace(Url))
+                Url = other.Url;
+            if (string.IsNullOrWhiteSpace(UrlDate))
+                UrlDate = other.UrlDate;
+            if (string.IsNullOrWhiteSpace(Note))
+                Note = other.Note;
 
             foreach (string source in other.Sources)
             {
@@ -121,7 +133,8 @@ namespace ScientificReviews.Helpers
 
     public sealed class MetadataFetchService
     {
-        private static readonly string[] RequiredTags = { "title", "doi", "abstract", "year", "author" };
+        private static readonly string[] RequiredArticleTags = { "title", "doi", "abstract", "year", "author" };
+        private static readonly string[] RequiredOnlineTags = { "title", "url", "urldate", "note" };
         private readonly IMetadataProvider[] _providers;
 
         public MetadataFetchService()
@@ -130,7 +143,8 @@ namespace ScientificReviews.Helpers
             {
                 new CrossrefMetadataProvider(),
                 new SemanticScholarMetadataProvider(),
-                new ArxivMetadataProvider()
+                new ArxivMetadataProvider(),
+                new WebMetadataProvider()
             };
         }
 
@@ -139,7 +153,11 @@ namespace ScientificReviews.Helpers
             if (entry == null)
                 return false;
 
-            foreach (string tag in RequiredTags)
+            string[] requiredTags = IsOnlineEntry(entry)
+                ? RequiredOnlineTags
+                : RequiredArticleTags;
+
+            foreach (string tag in requiredTags)
             {
                 if (string.IsNullOrWhiteSpace(BibtexTagService.GetTagValueIgnoreCase(entry, tag)))
                     return false;
@@ -275,16 +293,39 @@ namespace ScientificReviews.Helpers
             string existingDoi = CleanStoredDoi(BibtexTagService.GetTagValueIgnoreCase(entry, "doi"));
             string existingTitle = PrepareTitleForQuery(BibtexTagService.GetTagValueIgnoreCase(entry, "title"));
             string existingAuthor = PrepareAuthorForQuery(BibtexTagService.GetTagValueIgnoreCase(entry, "author"));
+            string existingUrl = NormalizeUrl(BibtexTagService.GetTagValueIgnoreCase(entry, "url"));
             MetadataPayload aggregate = null;
 
             DoiValueKind doiKind = GetStoredDoiKind(existingDoi);
             if (doiKind == DoiValueKind.Classic || doiKind == DoiValueKind.Arxiv)
                 aggregate = await FetchUsingDoiAsync(existingDoi, existingTitle, existingAuthor, options).ConfigureAwait(false);
 
-            if ((aggregate == null || HasAllRequiredMetadata(aggregate) == false) && string.IsNullOrWhiteSpace(existingTitle) == false)
+            if ((aggregate == null || HasSufficientFetchedMetadata(entry, aggregate) == false) && string.IsNullOrWhiteSpace(existingTitle) == false)
             {
                 MetadataPayload titlePayload = await FetchUsingTitleAsync(existingTitle, existingDoi, existingAuthor, options).ConfigureAwait(false);
                 aggregate = aggregate == null ? titlePayload : aggregate.MergeMissing(titlePayload);
+            }
+
+            if (options.AllowUrlLookup &&
+                (aggregate == null || HasSufficientFetchedMetadata(entry, aggregate) == false) &&
+                string.IsNullOrWhiteSpace(existingUrl) == false)
+            {
+                MetadataPayload urlPayload = await FetchUsingUrlAsync(existingUrl, existingDoi, existingTitle, existingAuthor, options).ConfigureAwait(false);
+                aggregate = aggregate == null ? urlPayload : aggregate.MergeMissing(urlPayload);
+
+                string discoveredDoi = CleanStoredDoi(aggregate?.Doi);
+                DoiValueKind discoveredKind = GetStoredDoiKind(discoveredDoi);
+                if ((doiKind == DoiValueKind.Empty || doiKind == DoiValueKind.Invalid) &&
+                    (discoveredKind == DoiValueKind.Classic || discoveredKind == DoiValueKind.Arxiv) &&
+                    (aggregate == null || HasSufficientFetchedMetadata(entry, aggregate) == false))
+                {
+                    MetadataPayload discoveredDoiPayload = await FetchUsingDoiAsync(
+                        discoveredDoi,
+                        PrepareTitleForQuery(aggregate?.Title) ?? existingTitle,
+                        PrepareAuthorForQuery(aggregate?.Author) ?? existingAuthor,
+                        options).ConfigureAwait(false);
+                    aggregate = aggregate == null ? discoveredDoiPayload : aggregate.MergeMissing(discoveredDoiPayload);
+                }
             }
 
             return aggregate;
@@ -301,7 +342,7 @@ namespace ScientificReviews.Helpers
                     continue;
 
                 aggregate = aggregate == null ? candidate : aggregate.MergeMissing(candidate);
-                if (HasAllRequiredMetadata(aggregate))
+                if (HasAllRequiredArticleMetadata(aggregate))
                     break;
             }
 
@@ -319,7 +360,27 @@ namespace ScientificReviews.Helpers
                     continue;
 
                 aggregate = aggregate == null ? candidate : aggregate.MergeMissing(candidate);
-                if (HasAllRequiredMetadata(aggregate))
+                if (HasAllRequiredArticleMetadata(aggregate))
+                    break;
+            }
+
+            return aggregate;
+        }
+
+        private async Task<MetadataPayload> FetchUsingUrlAsync(string url, string doiHint, string titleHint, string authorHint, MetadataUpdateOptions options)
+        {
+            if (string.IsNullOrWhiteSpace(url))
+                return null;
+
+            MetadataPayload aggregate = null;
+            foreach (IMetadataProvider provider in _providers)
+            {
+                MetadataPayload candidate = await provider.FetchByUrlAsync(url, doiHint, titleHint, authorHint, options).ConfigureAwait(false);
+                if (candidate == null || IsAcceptableUrlCandidate(url, titleHint, authorHint, candidate) == false)
+                    continue;
+
+                aggregate = aggregate == null ? candidate : aggregate.MergeMissing(candidate);
+                if (string.IsNullOrWhiteSpace(aggregate?.Title) == false)
                     break;
             }
 
@@ -344,6 +405,9 @@ namespace ScientificReviews.Helpers
             updated |= SetTagIfMissing(entry, "author", payload.Author);
             updated |= ApplyPreferredEprint(entry, preferredPayloadEprint, existingArxivIdentifier, preferredPayloadDoi);
             updated |= SetTagIfMissing(entry, "journal", payload.Journal);
+            updated |= SetTagIfMissing(entry, "url", NormalizeUrl(payload.Url));
+            updated |= SetTagIfMissing(entry, "urldate", payload.UrlDate);
+            updated |= SetTagIfMissing(entry, "note", payload.Note);
             return updated;
         }
 
@@ -423,7 +487,7 @@ namespace ScientificReviews.Helpers
             return "<unnamed record>";
         }
 
-        private static bool HasAllRequiredMetadata(MetadataPayload payload)
+        private static bool HasAllRequiredArticleMetadata(MetadataPayload payload)
         {
             if (payload == null)
                 return false;
@@ -434,6 +498,17 @@ namespace ScientificReviews.Helpers
                 string.IsNullOrWhiteSpace(payload.Abstract) == false &&
                 string.IsNullOrWhiteSpace(payload.Year) == false &&
                 string.IsNullOrWhiteSpace(payload.Author) == false;
+        }
+
+        private static bool HasSufficientFetchedMetadata(BibtexEntry entry, MetadataPayload payload)
+        {
+            if (payload == null)
+                return false;
+
+            if (IsOnlineEntry(entry))
+                return string.IsNullOrWhiteSpace(payload.Title) == false;
+
+            return HasAllRequiredArticleMetadata(payload);
         }
 
         private static List<BibtexEntry> GetEntriesToProcess(IEnumerable<BibtexEntry> entries, MetadataScreenMode screenMode)
@@ -459,6 +534,12 @@ namespace ScientificReviews.Helpers
         {
             return entry != null &&
                 GetStoredDoiKind(BibtexTagService.GetTagValueIgnoreCase(entry, "doi")) == DoiValueKind.Arxiv;
+        }
+
+        private static bool IsOnlineEntry(BibtexEntry entry)
+        {
+            return entry != null &&
+                string.Equals((entry.Type ?? string.Empty).Trim(), "online", StringComparison.OrdinalIgnoreCase);
         }
 
         private IEnumerable<IMetadataProvider> GetProvidersForDoi(string doi)
@@ -511,9 +592,49 @@ namespace ScientificReviews.Helpers
                 (requestedKind == DoiValueKind.Classic && candidateKind == DoiValueKind.Arxiv);
         }
 
+        private static bool IsAcceptableUrlCandidate(string requestedUrl, string titleHint, string authorHint, MetadataPayload candidate)
+        {
+            if (candidate == null)
+                return false;
+
+            if (string.IsNullOrWhiteSpace(titleHint) == false && string.IsNullOrWhiteSpace(candidate.Title) == false)
+                return TitlesMatch(titleHint, candidate.Title) && !AuthorHintConflicts(authorHint, candidate.Author);
+
+            return string.IsNullOrWhiteSpace(candidate.Title) == false ||
+                string.IsNullOrWhiteSpace(candidate.Doi) == false ||
+                string.IsNullOrWhiteSpace(candidate.Author) == false;
+        }
+
         private static string CleanStoredDoi(string doi)
         {
             return CleanValue(doi);
+        }
+
+        private static string NormalizeUrl(string value)
+        {
+            string text = CleanValue(value);
+            if (string.IsNullOrWhiteSpace(text))
+                return null;
+
+            Uri uri;
+            if (Uri.TryCreate(text, UriKind.Absolute, out uri) == false)
+                return null;
+
+            if (!string.Equals(uri.Scheme, Uri.UriSchemeHttp, StringComparison.OrdinalIgnoreCase) &&
+                !string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase))
+                return null;
+
+            UriBuilder builder = new UriBuilder(uri)
+            {
+                Host = uri.Host.ToLowerInvariant(),
+                Scheme = uri.Scheme.ToLowerInvariant()
+            };
+
+            if ((builder.Scheme == Uri.UriSchemeHttp && builder.Port == 80) ||
+                (builder.Scheme == Uri.UriSchemeHttps && builder.Port == 443))
+                builder.Port = -1;
+
+            return builder.Uri.AbsoluteUri;
         }
 
         private static DoiValueKind GetStoredDoiKind(string doi)
@@ -811,6 +932,10 @@ namespace ScientificReviews.Helpers
 
             public abstract Task<MetadataPayload> FetchByDoiAsync(string doi, string titleHint, string authorHint, MetadataUpdateOptions options);
             public abstract Task<MetadataPayload> FetchByTitleAsync(string title, string doiHint, string authorHint, MetadataUpdateOptions options);
+            public virtual Task<MetadataPayload> FetchByUrlAsync(string url, string doiHint, string titleHint, string authorHint, MetadataUpdateOptions options)
+            {
+                return Task.FromResult<MetadataPayload>(null);
+            }
 
             protected HttpClient HttpClient
             {
@@ -846,6 +971,18 @@ namespace ScientificReviews.Helpers
                         return null;
 
                     return XDocument.Parse(content);
+                }
+            }
+
+            protected async Task<string> GetStringAsync(string url, MetadataUpdateOptions options)
+            {
+                using (HttpRequestMessage request = CreateRequest(url, options))
+                using (HttpResponseMessage response = await HttpClient.SendAsync(request).ConfigureAwait(false))
+                {
+                    if (response.IsSuccessStatusCode == false)
+                        return null;
+
+                    return await response.Content.ReadAsStringAsync().ConfigureAwait(false);
                 }
             }
 
@@ -1233,6 +1370,142 @@ namespace ScientificReviews.Helpers
                     .ToList();
 
                 return names.Count == 0 ? null : string.Join(" and ", names);
+            }
+        }
+
+        private sealed class WebMetadataProvider : MetadataProviderBase
+        {
+            public override string Name => "Web";
+
+            public override Task<MetadataPayload> FetchByDoiAsync(string doi, string titleHint, string authorHint, MetadataUpdateOptions options)
+            {
+                return Task.FromResult<MetadataPayload>(null);
+            }
+
+            public override Task<MetadataPayload> FetchByTitleAsync(string title, string doiHint, string authorHint, MetadataUpdateOptions options)
+            {
+                return Task.FromResult<MetadataPayload>(null);
+            }
+
+            public override async Task<MetadataPayload> FetchByUrlAsync(string url, string doiHint, string titleHint, string authorHint, MetadataUpdateOptions options)
+            {
+                string normalizedUrl = NormalizeUrl(url);
+                if (string.IsNullOrWhiteSpace(normalizedUrl))
+                    return null;
+
+                string html = await GetStringAsync(normalizedUrl, options).ConfigureAwait(false);
+                if (string.IsNullOrWhiteSpace(html))
+                    return null;
+
+                return AddSource(ParseHtml(normalizedUrl, html, options));
+            }
+
+            private static MetadataPayload ParseHtml(string requestedUrl, string html, MetadataUpdateOptions options)
+            {
+                string canonicalUrl = ExtractMetaContent(html, "property", "og:url")
+                    ?? ExtractLinkHref(html, "canonical")
+                    ?? requestedUrl;
+                string title = ExtractMetaContent(html, "property", "og:title")
+                    ?? ExtractMetaContent(html, "name", "twitter:title")
+                    ?? ExtractDocumentTitle(html);
+                string description = ExtractMetaContent(html, "property", "og:description")
+                    ?? ExtractMetaContent(html, "name", "description")
+                    ?? ExtractMetaContent(html, "name", "twitter:description");
+                string siteName = ExtractMetaContent(html, "property", "og:site_name")
+                    ?? ExtractMetaContent(html, "name", "application-name");
+                string author = ExtractMetaContent(html, "name", "author")
+                    ?? ExtractMetaContent(html, "property", "article:author")
+                    ?? ExtractMetaContent(html, "name", "citation_author")
+                    ?? ExtractMetaContent(html, "name", "dc.creator");
+                string published = ExtractMetaContent(html, "property", "article:published_time")
+                    ?? ExtractMetaContent(html, "name", "citation_publication_date")
+                    ?? ExtractMetaContent(html, "name", "dc.date")
+                    ?? ExtractMetaContent(html, "itemprop", "datePublished");
+                string year = ExtractYearFromDate(published);
+                string doi = options != null && options.AllowUrlDoiExtraction
+                    ? ExtractMetadataDoi(html)
+                    : null;
+
+                if (string.IsNullOrWhiteSpace(author) && string.IsNullOrWhiteSpace(siteName) == false)
+                    author = siteName;
+
+                if (string.IsNullOrWhiteSpace(doi) == false)
+                    doi = NormalizeProviderDoi(doi);
+
+                title = HtmlDecode(title);
+                description = HtmlDecode(description);
+                author = HtmlDecode(author);
+
+                if (string.IsNullOrWhiteSpace(title) &&
+                    string.IsNullOrWhiteSpace(description) &&
+                    string.IsNullOrWhiteSpace(author) &&
+                    string.IsNullOrWhiteSpace(doi))
+                    return null;
+
+                return new MetadataPayload
+                {
+                    Title = title,
+                    Abstract = description,
+                    Author = author,
+                    Year = year,
+                    Doi = doi,
+                    Url = NormalizeUrl(canonicalUrl) ?? requestedUrl,
+                    UrlDate = DateTime.Today.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+                    Note = "[online]"
+                };
+            }
+
+            private static string ExtractDocumentTitle(string html)
+            {
+                Match match = Regex.Match(html ?? string.Empty, @"<title\b[^>]*>(.*?)</title>", RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                return match.Success ? match.Groups[1].Value : null;
+            }
+
+            private static string ExtractLinkHref(string html, string relValue)
+            {
+                string pattern = @"<link\b(?=[^>]*\brel\s*=\s*[""']?" + Regex.Escape(relValue) + @"[""']?)(?=[^>]*\bhref\s*=\s*[""']?(?<href>[^""'>\s]+))[^>]*>";
+                Match match = Regex.Match(html ?? string.Empty, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                return match.Success ? match.Groups["href"].Value : null;
+            }
+
+            private static string ExtractMetaContent(string html, string attributeName, string attributeValue)
+            {
+                string pattern =
+                    @"<meta\b(?=[^>]*\b" + Regex.Escape(attributeName) + @"\s*=\s*[""']?" + Regex.Escape(attributeValue) + @"[""']?)(?=[^>]*\bcontent\s*=\s*[""']?(?<content>[^""'>]+))[^>]*>";
+                Match match = Regex.Match(html ?? string.Empty, pattern, RegexOptions.IgnoreCase | RegexOptions.Singleline);
+                return match.Success ? match.Groups["content"].Value : null;
+            }
+
+            private static string ExtractMetadataDoi(string html)
+            {
+                string[] candidates = new[]
+                {
+                    ExtractMetaContent(html, "name", "citation_doi"),
+                    ExtractMetaContent(html, "name", "dc.identifier"),
+                    ExtractMetaContent(html, "name", "dc.identifier.doi"),
+                    ExtractMetaContent(html, "name", "prism.doi"),
+                    ExtractMetaContent(html, "name", "doi"),
+                    ExtractMetaContent(html, "property", "citation_doi")
+                };
+
+                List<string> normalized = candidates
+                    .Select(DoiNormalizationHelper.PrepareDoiForLookup)
+                    .Where(value => DoiNormalizationHelper.GetDoiValueKind(value) == DoiValueKind.Classic || DoiNormalizationHelper.GetDoiValueKind(value) == DoiValueKind.Arxiv)
+                    .Select(DoiNormalizationHelper.NormalizeDoiValue)
+                    .Where(value => string.IsNullOrWhiteSpace(value) == false)
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                return normalized.Count == 1 ? normalized[0] : null;
+            }
+
+            private static string HtmlDecode(string value)
+            {
+                if (string.IsNullOrWhiteSpace(value))
+                    return null;
+
+                string decoded = System.Net.WebUtility.HtmlDecode(value);
+                return CleanValue(decoded);
             }
         }
 

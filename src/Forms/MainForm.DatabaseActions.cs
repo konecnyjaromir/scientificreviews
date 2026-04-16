@@ -730,12 +730,31 @@ namespace ScientificReviews.Forms
             MetadataScreenMode? screenModeOverride = null,
             CancellationToken externalCancellationToken = default(CancellationToken))
         {
-            BibtexEntry[] targetEntries = entries.ToArray();
+            await StartFetchMetadataOperationAsync(
+                entries.ToArray(),
+                normalizeDoiFirst,
+                "fetch-metadata",
+                "Fetch metadata",
+                screenModeOverride,
+                null,
+                externalCancellationToken);
+        }
+
+        private async Task<MetadataUpdateResult> StartFetchMetadataOperationAsync(
+            IEnumerable<BibtexEntry> sourceEntries,
+            bool normalizeDoiFirst,
+            string operationKey,
+            string operationName,
+            MetadataScreenMode? screenModeOverride = null,
+            MetadataUpdateOptions optionOverrides = null,
+            CancellationToken externalCancellationToken = default(CancellationToken))
+        {
+            BibtexEntry[] targetEntries = sourceEntries as BibtexEntry[] ?? sourceEntries?.Where(entry => entry != null).ToArray() ?? Array.Empty<BibtexEntry>();
 
             if (targetEntries.Length == 0)
             {
                 lblStatus.Text = "No records available for metadata fetch.";
-                return;
+                return new MetadataUpdateResult();
             }
 
             if (normalizeDoiFirst)
@@ -744,13 +763,13 @@ namespace ScientificReviews.Forms
             string details = $"Fetching metadata for records: {targetEntries.Length}";
 
             StatusStripOperationHandle operation = StartTrackedOperation(
-                "fetch-metadata",
-                "Fetch metadata",
+                operationKey,
+                operationName,
                 details);
             if (operation == null)
-                return;
+                return null;
 
-            ProcessLogScope log = BeginProcessLog("Fetch metadata", details);
+            ProcessLogScope log = BeginProcessLog(operationName, details);
             using (CancellationTokenSource cancellation = CancellationTokenSource.CreateLinkedTokenSource(externalCancellationToken))
             {
                 operation.RegisterCancellation(cancellation.Cancel);
@@ -758,9 +777,9 @@ namespace ScientificReviews.Forms
                 try
                 {
                     lblStatus.Text = $"Fetching metadata using {GetConfiguredThreadCount()} thread(s)...";
-                    MetadataUpdateResult result = await RunFetchMissingMetadataAsync(targetEntries, operation, screenModeOverride, cancellation.Token);
+                    MetadataUpdateResult result = await RunFetchMissingMetadataAsync(targetEntries, operation, screenModeOverride, optionOverrides, cancellation.Token);
 
-                    RefreshGrid();
+                    RefreshGrid(targetEntries);
 
                     if (result.UpdatedEntries > 0)
                         Changed();
@@ -773,18 +792,21 @@ namespace ScientificReviews.Forms
                     lblStatus.Text = result.UpdatedEntries > 0
                         ? $"Metadata fetch finished. Updated {result.UpdatedEntries} record(s)."
                         : "Metadata fetch finished. No missing metadata could be resolved.";
+                    return result;
                 }
                 catch (OperationCanceledException)
                 {
                     operation.Cancel("Cancelled", "Metadata fetch was stopped by user.");
                     lblStatus.Text = "Metadata fetch cancelled.";
                     log.Complete("Metadata fetch cancelled.");
+                    return null;
                 }
                 catch (Exception ex)
                 {
                     operation.Fail(ex, "Failed");
                     lblStatus.Text = ex.Message;
                     log.Fail(ex, "Metadata fetch failed.");
+                    throw;
                 }
                 finally
                 {
@@ -1074,6 +1096,7 @@ namespace ScientificReviews.Forms
             IEnumerable<BibtexEntry> targetEntries,
             StatusStripOperationHandle operation,
             MetadataScreenMode? screenModeOverride,
+            MetadataUpdateOptions optionOverrides,
             CancellationToken cancellationToken)
         {
             BibtexEntry[] targetArray = targetEntries as BibtexEntry[] ?? targetEntries.ToArray();
@@ -1091,14 +1114,22 @@ namespace ScientificReviews.Forms
 
             try
             {
+                MetadataUpdateOptions options = new MetadataUpdateOptions
+                {
+                    ContactEmail = Program.AppSettings.Data.MetadataContactEmail,
+                    ThreadCount = GetConfiguredThreadCount(),
+                    ScreenMode = screenModeOverride ?? Program.AppSettings.Data.MetadataScreenMode
+                };
+
+                if (optionOverrides != null)
+                {
+                    options.AllowUrlLookup = optionOverrides.AllowUrlLookup;
+                    options.AllowUrlDoiExtraction = optionOverrides.AllowUrlDoiExtraction;
+                }
+
                 MetadataUpdateResult result = await _metadataFetchService.PopulateMissingMetadataAsync(
                     targetArray,
-                    new MetadataUpdateOptions
-                    {
-                        ContactEmail = Program.AppSettings.Data.MetadataContactEmail,
-                        ThreadCount = GetConfiguredThreadCount(),
-                        ScreenMode = screenModeOverride ?? Program.AppSettings.Data.MetadataScreenMode
-                    },
+                    options,
                     progress,
                     cancellationToken);
                 log.Complete("Metadata inner process completed.");

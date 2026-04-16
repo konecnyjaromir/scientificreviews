@@ -269,36 +269,47 @@ namespace ScientificReviews.Forms
             CutSelectedRecordsToClipboard();
         }
 
-        private void PasteRecordsFromClipboard()
+        private async void PasteRecordsFromClipboard()
         {
             try
             {
                 if (Clipboard.ContainsText() == false)
                 {
-                    lblStatus.Text = "Clipboard does not contain BibTeX records.";
+                    lblStatus.Text = "Clipboard does not contain text.";
                     return;
                 }
 
                 string clipboardText = Clipboard.GetText();
                 if (string.IsNullOrWhiteSpace(clipboardText))
                 {
-                    lblStatus.Text = "Clipboard does not contain BibTeX records.";
+                    lblStatus.Text = "Clipboard does not contain text.";
                     return;
                 }
 
-                BibtexParser parser = new BibtexParser();
-                BibtexEntry[] pastedEntries = parser.ParseFile(clipboardText);
-                if (pastedEntries == null || pastedEntries.Length == 0)
+                PasteAnythingParseResult parseResult = TryParseClipboardRecords(clipboardText);
+                if (parseResult == null || parseResult.Entries == null || parseResult.Entries.Length == 0)
                 {
-                    lblStatus.Text = "Clipboard does not contain valid BibTeX records.";
+                    lblStatus.Text = Program.AppSettings.Data.EnablePasteAnything
+                        ? "Clipboard does not contain valid BibTeX, DOI, URL, or title data."
+                        : "Clipboard does not contain valid BibTeX records.";
                     return;
                 }
 
-                entries.AddRange(pastedEntries);
-                LoadData(entries.ToArray(), txtSearch.Text);
-                SelectEntriesInGrid(pastedEntries);
+                entries.AddRange(parseResult.Entries);
+                RefreshGrid(parseResult.Entries);
                 Changed();
-                lblStatus.Text = $"Pasted {pastedEntries.Length} record(s).";
+
+                MetadataUpdateResult metadataResult = null;
+                if (ShouldAutoFetchForPastedEntries(parseResult))
+                    metadataResult = await StartFetchMetadataOperationAsync(
+                        parseResult.Entries,
+                        true,
+                        "fetch-pasted-metadata",
+                        "Fetch pasted metadata",
+                        MetadataScreenMode.All,
+                        GetPasteMetadataOptions());
+
+                lblStatus.Text = BuildPasteStatusMessage(parseResult, metadataResult);
             }
             catch (Exception ex)
             {
@@ -309,6 +320,85 @@ namespace ScientificReviews.Forms
         private void btnPasteRecord_Click(object sender, EventArgs e)
         {
             PasteRecordsFromClipboard();
+        }
+
+        private PasteAnythingParseResult TryParseClipboardRecords(string clipboardText)
+        {
+            BibtexParser parser = new BibtexParser();
+            try
+            {
+                BibtexEntry[] pastedEntries = parser.ParseFile(clipboardText);
+                if (pastedEntries != null && pastedEntries.Length > 0)
+                {
+                    return new PasteAnythingParseResult
+                    {
+                        Entries = pastedEntries,
+                        EntryKinds = Enumerable.Repeat(PasteAnythingEntryKind.Bibtex, pastedEntries.Length).ToArray(),
+                        ParsedAsBibtex = true
+                    };
+                }
+            }
+            catch
+            {
+            }
+
+            if (Program.AppSettings.Data.EnablePasteAnything == false)
+                return null;
+
+            return _pasteAnythingService.Parse(clipboardText);
+        }
+
+        private bool ShouldAutoFetchForPastedEntries(PasteAnythingParseResult parseResult)
+        {
+            if (parseResult == null || parseResult.Entries == null || parseResult.Entries.Length == 0)
+                return false;
+
+            return Program.AppSettings.Data.EnablePasteAnything &&
+                Program.AppSettings.Data.PasteAnythingMode != PasteAnythingMode.Simple;
+        }
+
+        private MetadataUpdateOptions GetPasteMetadataOptions()
+        {
+            return new MetadataUpdateOptions
+            {
+                AllowUrlLookup = true,
+                AllowUrlDoiExtraction = Program.AppSettings.Data.PasteAnythingMode == PasteAnythingMode.Deep
+            };
+        }
+
+        private string BuildPasteStatusMessage(PasteAnythingParseResult parseResult, MetadataUpdateResult metadataResult)
+        {
+            if (parseResult == null)
+                return "Paste finished.";
+
+            if (parseResult.ParsedAsBibtex)
+            {
+                string bibtexSummary = $"Pasted {parseResult.Entries.Length} BibTeX record(s).";
+                if (metadataResult != null)
+                    bibtexSummary += $" Metadata updated {metadataResult.UpdatedEntries} record(s).";
+
+                return bibtexSummary;
+            }
+
+            List<string> parts = new List<string>();
+            if (parseResult.DoiEntries > 0)
+                parts.Add($"{parseResult.DoiEntries} DOI");
+            if (parseResult.UrlEntries > 0)
+                parts.Add($"{parseResult.UrlEntries} URL");
+            if (parseResult.TitleEntries > 0)
+                parts.Add($"{parseResult.TitleEntries} title");
+
+            string summary = parts.Count == 0
+                ? $"Pasted {parseResult.Entries.Length} record(s)."
+                : $"Pasted {parseResult.Entries.Length} record(s): {string.Join(", ", parts)}.";
+
+            if (parseResult.SkippedItems > 0)
+                summary += $" Skipped {parseResult.SkippedItems} item(s).";
+
+            if (metadataResult != null)
+                summary += $" Metadata updated {metadataResult.UpdatedEntries} record(s).";
+
+            return summary;
         }
 
         private void duplicateRecordToolStripMenuItem_Click(object sender, EventArgs e)

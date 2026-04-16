@@ -21,6 +21,11 @@ namespace ScientificReviews.Tests
             RunTest(nameof(DoiNormalizationHelperTests.RequestedDoiMatchesCandidateDoi_MatchesWhenRequestedValueIsArxivDoi), DoiNormalizationHelperTests.RequestedDoiMatchesCandidateDoi_MatchesWhenRequestedValueIsArxivDoi, failures);
             RunTest(nameof(DoiNormalizationHelperTests.RequestedDoiMatchesCandidateDoi_MatchesClassicDoiCaseInsensitively), DoiNormalizationHelperTests.RequestedDoiMatchesCandidateDoi_MatchesClassicDoiCaseInsensitively, failures);
             RunTest(nameof(DoiNormalizationHelperTests.RequestedDoiMatchesCandidateDoi_RejectsDifferentKindsAndInvalidValues), DoiNormalizationHelperTests.RequestedDoiMatchesCandidateDoi_RejectsDifferentKindsAndInvalidValues, failures);
+            RunTest(nameof(PasteAnythingServiceTests.Parse_ReturnsBibtexEntriesWhenClipboardContainsBibtex), PasteAnythingServiceTests.Parse_ReturnsBibtexEntriesWhenClipboardContainsBibtex, failures);
+            RunTest(nameof(PasteAnythingServiceTests.Parse_CreatesMiscEntryForClassicDoi), PasteAnythingServiceTests.Parse_CreatesMiscEntryForClassicDoi, failures);
+            RunTest(nameof(PasteAnythingServiceTests.Parse_CreatesMiscEntryForArxivUrlAndEprint), PasteAnythingServiceTests.Parse_CreatesMiscEntryForArxivUrlAndEprint, failures);
+            RunTest(nameof(PasteAnythingServiceTests.Parse_CreatesOnlineEntryForWebUrl), PasteAnythingServiceTests.Parse_CreatesOnlineEntryForWebUrl, failures);
+            RunTest(nameof(PasteAnythingServiceTests.Parse_CreatesMiscEntryForTitleFallback), PasteAnythingServiceTests.Parse_CreatesMiscEntryForTitleFallback, failures);
 
             if (failures.Count == 0)
             {
