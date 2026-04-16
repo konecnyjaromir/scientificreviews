@@ -158,6 +158,14 @@ namespace ScientificReviews.Forms
                 return;
             }
 
+            if (e.Control && e.Shift && e.KeyCode == Keys.V)
+            {
+                PasteRecordsFromClipboard(true);
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                return;
+            }
+
             if (e.Control && e.KeyCode == Keys.V)
             {
                 PasteRecordsFromClipboard();
@@ -269,7 +277,7 @@ namespace ScientificReviews.Forms
             CutSelectedRecordsToClipboard();
         }
 
-        private async void PasteRecordsFromClipboard()
+        private async void PasteRecordsFromClipboard(bool rawOnly = false)
         {
             try
             {
@@ -300,7 +308,7 @@ namespace ScientificReviews.Forms
                 Changed();
 
                 MetadataUpdateResult metadataResult = null;
-                if (ShouldAutoFetchForPastedEntries(parseResult))
+                if (!rawOnly && ShouldAutoFetchForPastedEntries(parseResult))
                     metadataResult = await StartFetchMetadataOperationAsync(
                         parseResult.Entries,
                         true,

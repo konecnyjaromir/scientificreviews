@@ -56,7 +56,8 @@ namespace ScientificReviews.Forms
         {
             if (keyData != (Keys.Control | Keys.C) &&
                 keyData != (Keys.Control | Keys.X) &&
-                keyData != (Keys.Control | Keys.V))
+                keyData != (Keys.Control | Keys.V) &&
+                keyData != (Keys.Control | Keys.Shift | Keys.V))
                 return false;
 
             if (TryHandleTextClipboardShortcut(keyData))
@@ -69,6 +70,8 @@ namespace ScientificReviews.Forms
                 CopySelectedRecordsToClipboard();
             else if (keyData == (Keys.Control | Keys.X))
                 CutSelectedRecordsToClipboard();
+            else if (keyData == (Keys.Control | Keys.Shift | Keys.V))
+                PasteRecordsFromClipboard(true);
             else
                 PasteRecordsFromClipboard();
 
@@ -88,7 +91,12 @@ namespace ScientificReviews.Forms
                 ? WM_COPY
                 : keyData == (Keys.Control | Keys.X)
                     ? WM_CUT
-                    : WM_PASTE;
+                    : keyData == (Keys.Control | Keys.V) || keyData == (Keys.Control | Keys.Shift | Keys.V)
+                        ? WM_PASTE
+                        : 0;
+
+            if (message == 0)
+                return false;
 
             SendMessage(focusedHandle, message, IntPtr.Zero, IntPtr.Zero);
             return true;
