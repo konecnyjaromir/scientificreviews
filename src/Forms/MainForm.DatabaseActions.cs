@@ -519,8 +519,7 @@ namespace ScientificReviews.Forms
 
         private void removeDuplicitiesToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            entries = BibtexUtils.RemoveDuplicateEntriesByTag(entries, "title");
-            LoadData(entries.ToArray());
+            RunRemoveDuplicateEntriesByTagOperation("title");
         }
 
         private void removeWithoutDOIToolStripMenuItem_Click(object sender, EventArgs e)
@@ -539,9 +538,7 @@ namespace ScientificReviews.Forms
 
         private void removeDuplicitiesByDOIToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            entries = BibtexUtils.RemoveDuplicateEntriesByTag(entries, "doi");
-            LoadData(entries.ToArray());
-            Changed();
+            RunRemoveDuplicateEntriesByTagOperation("doi");
         }
 
         private void normalizePageTagToolStripMenuItem_Click(object sender, EventArgs e)
@@ -625,6 +622,18 @@ namespace ScientificReviews.Forms
                         operation.Report("Fetch missing metadata", "Querying metadata services", currentStep, totalSteps, false);
                         await StartFetchMissingMetadataOperationAsync(false, MetadataScreenMode.All, cancellation.Token);
                         LogProcessProgress(log, "Fetch missing metadata completed.");
+
+                        currentStep++;
+                        operation.Report("Remove duplicates by title", "Removing records with duplicate titles", currentStep, totalSteps, false);
+                        cancellation.Token.ThrowIfCancellationRequested();
+                        RunRemoveDuplicateEntriesByTagOperation("title");
+                        LogProcessProgress(log, "Remove duplicates by title completed.");
+
+                        currentStep++;
+                        operation.Report("Remove duplicates by DOI", "Removing records with duplicate DOI values", currentStep, totalSteps, false);
+                        cancellation.Token.ThrowIfCancellationRequested();
+                        RunRemoveDuplicateEntriesByTagOperation("doi");
+                        LogProcessProgress(log, "Remove duplicates by DOI completed.");
                     }
 
                     currentStep++;
@@ -704,7 +713,7 @@ namespace ScientificReviews.Forms
             switch (mode)
             {
                 case AutoPreprocessingMode.Deep:
-                    return 6;
+                    return 8;
                 case AutoPreprocessingMode.Fast:
                     return 4;
                 default:
@@ -717,7 +726,7 @@ namespace ScientificReviews.Forms
             switch (mode)
             {
                 case AutoPreprocessingMode.Deep:
-                    return "Normalize DOI -> Fetch metadata -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs -> Update JCR";
+                    return "Normalize DOI -> Fetch metadata -> Remove duplicates by title -> Remove duplicates by DOI -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs -> Update JCR";
                 case AutoPreprocessingMode.Fast:
                     return "Normalize DOI -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs";
                 default:
@@ -831,7 +840,7 @@ namespace ScientificReviews.Forms
         {
             DialogResult response = MessageBox.Show(
                 this,
-                "Autofix will automatically modify record metadata and run multiple repair/update steps, including DOI normalization, metadata fetching, page-tag normalization, entry key generation, PDF auto-pairing, and JCR update when configured.\r\n\r\nThis operation is irreversible and may damage records.\r\n\r\nDo you want to continue?",
+                "Autofix will automatically modify record metadata and run multiple repair/update steps, including DOI normalization, metadata fetching, duplicate removal by title and DOI, page-tag normalization, entry key generation, PDF auto-pairing, and JCR update when configured.\r\n\r\nThis operation is irreversible and may damage records.\r\n\r\nDo you want to continue?",
                 "Autofix",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
@@ -943,6 +952,45 @@ namespace ScientificReviews.Forms
             {
                 lblStatus.Text = ex.Message;
                 log.Fail(ex, "Page-tag normalization failed.");
+            }
+            finally
+            {
+                log.Dispose();
+            }
+        }
+
+        private void RunRemoveDuplicateEntriesByTagOperation(string tagName)
+        {
+            string normalizedTagName = (tagName ?? string.Empty).Trim().ToLowerInvariant();
+            if (string.IsNullOrWhiteSpace(normalizedTagName))
+            {
+                lblStatus.Text = "Duplicate removal tag is not set.";
+                return;
+            }
+
+            ProcessLogScope log = BeginProcessLog($"Remove duplicates by {normalizedTagName}", $"Records: {entries.Count}");
+            try
+            {
+                int originalCount = entries.Count;
+                entries = BibtexUtils.RemoveDuplicateEntriesByTag(entries, normalizedTagName);
+                int removedCount = Math.Max(0, originalCount - entries.Count);
+
+                RefreshGrid();
+
+                string summary = removedCount > 0
+                    ? $"Removed {removedCount} duplicate record(s) by {normalizedTagName}."
+                    : $"No duplicate records found by {normalizedTagName}.";
+
+                if (removedCount > 0)
+                    Changed();
+
+                lblStatus.Text = summary;
+                log.Complete(summary);
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+                log.Fail(ex, $"Duplicate removal by {normalizedTagName} failed.");
             }
             finally
             {
