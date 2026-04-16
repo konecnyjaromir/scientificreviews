@@ -1,6 +1,7 @@
 using ScientificReviews.Bibtex;
 using ScientificReviews.Helpers;
 using ScientificReviews.Logs;
+using ScientificReviews.Reports;
 using System;
 using System.Collections.Generic;
 using System.Data;
@@ -263,6 +264,7 @@ namespace ScientificReviews.Forms
                 return;
 
             ProcessLogScope log = BeginProcessLog("Auto-pair PDFs", Program.AppSettings.Data.PdfFolder);
+            EntryChangeSnapshot changeSnapshot = null;
             using (CancellationTokenSource cancellation = CancellationTokenSource.CreateLinkedTokenSource(externalCancellationToken))
             {
                 operation.RegisterCancellation(cancellation.Cancel);
@@ -270,7 +272,9 @@ namespace ScientificReviews.Forms
                 try
                 {
                     lblStatus.Text = $"Auto-pairing PDFs using {GetConfiguredThreadCount()} thread(s)...";
+                    changeSnapshot = CaptureEntryChanges(entries.ToArray());
                     PdfAutoPairResult result = await RunAutoPairAsync(operation, cancellation.Token);
+                    EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot);
 
                     if (result.NoPdfsFound)
                     {
@@ -281,6 +285,7 @@ namespace ScientificReviews.Forms
                         operation.Complete("No PDFs found.", details);
                         lblStatus.Text = details;
                         log.Complete(details);
+                        PublishReport("Auto-pair PDFs", "No PDFs found.", details, OperationReportSeverity.Warning, changeReport);
                         return;
                     }
 
@@ -291,18 +296,26 @@ namespace ScientificReviews.Forms
                     operation.Complete(summary, Program.AppSettings.Data.PdfFolder);
                     lblStatus.Text = $"Auto-pair finished using {GetConfiguredThreadCount()} thread(s). Direct: {result.DirectMatches}, smart: {result.SmartMatches}, unmatched: {result.Unmatched}.";
                     log.Complete(summary);
+                    PublishReport(
+                        "Auto-pair PDFs",
+                        summary,
+                        $"PDF folder: {Program.AppSettings.Data.PdfFolder}",
+                        result.Unmatched > 0 ? OperationReportSeverity.Warning : OperationReportSeverity.Info,
+                        changeReport);
                 }
                 catch (OperationCanceledException)
                 {
                     operation.Cancel("Cancelled", "Auto-pair was stopped by user.");
                     lblStatus.Text = "Auto-pair cancelled.";
                     log.Complete("Auto-pair cancelled.");
+                    PublishReport("Auto-pair PDFs", "Auto-pair cancelled.", null, OperationReportSeverity.Warning);
                 }
                 catch (Exception ex)
                 {
                     operation.Fail(ex, "Failed");
                     lblStatus.Text = ex.Message;
                     log.Fail(ex, "Auto-pair failed.");
+                    PublishReport("Auto-pair PDFs", "Auto-pair failed.", ex.Message, OperationReportSeverity.Error);
                 }
                 finally
                 {
@@ -403,11 +416,29 @@ namespace ScientificReviews.Forms
                 else
                     log.Complete($"Exported {result.Exported}, skipped {result.Skipped}, DOI injected into {result.Injected}.");
 
+                PublishReport(
+                    "Export PDFs",
+                    result.Cancelled
+                        ? $"PDF export cancelled after {result.Completed}/{result.Total}."
+                        : result.Errors > 0
+                            ? $"PDF export finished with {result.Errors} error(s)."
+                            : $"Exported {result.Exported} PDF(s).",
+                    $"Output: {options.OutputDirectory}{Environment.NewLine}Exported: {result.Exported}{Environment.NewLine}Skipped: {result.Skipped}{Environment.NewLine}DOI injected: {result.Injected}" +
+                    (result.Errors > 0 && string.IsNullOrWhiteSpace(result.LastErrorMessage) == false
+                        ? Environment.NewLine + "Last error: " + result.LastErrorMessage
+                        : string.Empty),
+                    result.Cancelled
+                        ? OperationReportSeverity.Warning
+                        : result.Errors > 0
+                            ? OperationReportSeverity.Warning
+                            : OperationReportSeverity.Info);
+
                 return result;
             }
             catch (Exception ex)
             {
                 log.Fail(ex, "PDF export failed.");
+                PublishReport("Export PDFs", "PDF export failed.", ex.Message, OperationReportSeverity.Error);
                 throw;
             }
             finally

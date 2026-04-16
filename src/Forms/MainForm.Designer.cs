@@ -111,6 +111,7 @@
             this.toolStripStatusLabel1 = new System.Windows.Forms.ToolStripStatusLabel();
             this.lblSelected = new System.Windows.Forms.ToolStripStatusLabel();
             this.lblInfo = new System.Windows.Forms.ToolStripStatusLabel();
+            this.lblReports = new System.Windows.Forms.ToolStripStatusLabel();
             this.dataGridView1 = new System.Windows.Forms.DataGridView();
             this.splitter1 = new System.Windows.Forms.Splitter();
             this.propertyGrid1 = new System.Windows.Forms.PropertyGrid();
@@ -754,7 +755,8 @@
             this.lblStatus,
             this.toolStripStatusLabel1,
             this.lblSelected,
-            this.lblInfo});
+            this.lblInfo,
+            this.lblReports});
             this.statusStrip1.Location = new System.Drawing.Point(0, 1029);
             this.statusStrip1.Name = "statusStrip1";
             this.statusStrip1.Padding = new System.Windows.Forms.Padding(1, 0, 19, 0);
@@ -785,6 +787,14 @@
             this.lblInfo.Name = "lblInfo";
             this.lblInfo.Size = new System.Drawing.Size(15, 20);
             this.lblInfo.Text = "-";
+            // 
+            // lblReports
+            // 
+            this.lblReports.IsLink = true;
+            this.lblReports.Name = "lblReports";
+            this.lblReports.Size = new System.Drawing.Size(93, 20);
+            this.lblReports.Text = "Notifications";
+            this.lblReports.Click += new System.EventHandler(this.lblReports_Click);
             // 
             // dataGridView1
             // 
@@ -1085,6 +1095,7 @@
         private System.Windows.Forms.Splitter splitter1;
         private System.Windows.Forms.ToolStripStatusLabel toolStripStatusLabel1;
         private System.Windows.Forms.ToolStripStatusLabel lblInfo;
+        private System.Windows.Forms.ToolStripStatusLabel lblReports;
         private System.Windows.Forms.ToolStripMenuItem removeDuplicitiesToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem removeWithoutDOIToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem removeDuplicitiesByDOIToolStripMenuItem;

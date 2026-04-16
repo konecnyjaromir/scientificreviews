@@ -1,6 +1,7 @@
 using ScientificReviews.Bibtex;
 using ScientificReviews.Helpers;
 using ScientificReviews.Logs;
+using ScientificReviews.Reports;
 using System;
 using System.ComponentModel;
 using System.Collections.Generic;
@@ -30,6 +31,7 @@ namespace ScientificReviews.Forms
         {
             InitializeComponent();
             _operationManager = new StatusStripOperationManager(statusStrip1, toolStripStatusLabel1, this);
+            InitializeReportCenter();
             UpdateWindowTitle();
             InitializeRecordContextMenu();
             dataGridView1.CellMouseDoubleClick += dataGridView1_CellMouseDoubleClick;
@@ -133,6 +135,7 @@ namespace ScientificReviews.Forms
         private readonly DatabaseExportService _databaseExportService = new DatabaseExportService();
         private readonly PdfMatchingService _pdfMatchingService = new PdfMatchingService();
         private readonly PasteAnythingService _pasteAnythingService = new PasteAnythingService();
+        private readonly OperationReportCenter _reportCenter = new OperationReportCenter();
         private string _currentBibTexPath;
         private bool DatabaseChanged { get; set; }
         private ContextMenuStrip _recordContextMenu;
@@ -462,6 +465,7 @@ namespace ScientificReviews.Forms
                 return;
 
             ProcessLogScope log = BeginProcessLog("Update JCR", "Fetching missing journals from Clarivate");
+            EntryChangeSnapshot changeSnapshot = null;
             using (CancellationTokenSource cancellation = CancellationTokenSource.CreateLinkedTokenSource(externalCancellationToken))
             {
                 operation.RegisterCancellation(cancellation.Cancel);
@@ -469,7 +473,9 @@ namespace ScientificReviews.Forms
                 try
                 {
                     lblStatus.Text = "Updating database...";
+                    changeSnapshot = CaptureEntryChanges(entries.ToArray());
                     JcrUpdateResult result = await RunUpdateJcrAsync(operation, cancellation.Token);
+                    EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot);
 
                     string summary = result.MissingJournalCount == 0
                         ? "No missing journals."
@@ -485,18 +491,28 @@ namespace ScientificReviews.Forms
                         lblStatus.Text = "Journal database updated.";
 
                     log.Complete($"{summary}. Missing: {result.MissingJournalCount}, not found: {result.NotFoundJournalCount}.");
+                    string notFound = BuildReportList(result.NotFoundJournals, "Journals not found");
+                    PublishReport(
+                        "Update JCR",
+                        summary,
+                        $"Missing journals: {result.MissingJournalCount}{Environment.NewLine}Not found: {result.NotFoundJournalCount}" +
+                        (string.IsNullOrWhiteSpace(notFound) ? string.Empty : Environment.NewLine + Environment.NewLine + notFound),
+                        result.NotFoundJournalCount > 0 ? OperationReportSeverity.Warning : OperationReportSeverity.Info,
+                        changeReport);
                 }
                 catch (OperationCanceledException)
                 {
                     operation.Cancel("Cancelled", "JCR update was stopped by user.");
                     lblStatus.Text = "JCR update cancelled.";
                     log.Complete("JCR update cancelled.");
+                    PublishReport("Update JCR", "JCR update cancelled.", null, OperationReportSeverity.Warning);
                 }
                 catch (Exception ex)
                 {
                     operation.Fail(ex, "Failed");
                     lblStatus.Text = ex.Message;
                     log.Fail(ex, "JCR update failed.");
+                    PublishReport("Update JCR", "JCR update failed.", ex.Message, OperationReportSeverity.Error);
                 }
                 finally
                 {

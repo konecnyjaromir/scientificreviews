@@ -2,6 +2,7 @@ using ScientificReviews.Bibtex;
 using ScientificReviews.Helpers;
 using ScientificReviews.JCR.Dto;
 using ScientificReviews.Logs;
+using ScientificReviews.Reports;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
@@ -209,11 +210,17 @@ namespace ScientificReviews.Forms
 
                 lblStatus.Text = successMessage;
                 log.Complete($"Saved {entriesToSave?.Length ?? 0} record(s) to {fileName}.");
+                PublishReport(
+                    processName,
+                    successMessage,
+                    $"File: {fileName}{Environment.NewLine}Records: {entriesToSave?.Length ?? 0}",
+                    OperationReportSeverity.Info);
             }
             catch (Exception ex)
             {
                 lblStatus.Text = ex.Message;
                 log.Fail(ex, $"{processName} failed.");
+                PublishReport(processName, $"{processName} failed.", ex.Message, OperationReportSeverity.Error);
             }
             finally
             {
@@ -362,12 +369,21 @@ namespace ScientificReviews.Forms
                     ? $"Export cancelled after {result.Completed}/{result.Total}."
                     : $"Exported {result.Completed} record(s) to {options.OutputFilePath}.");
 
+                PublishReport(
+                    processName,
+                    result.Cancelled
+                        ? $"Export cancelled after {result.Completed}/{result.Total}."
+                        : $"Exported {result.Completed} record(s).",
+                    $"File: {options.OutputFilePath}{Environment.NewLine}Format: {options.Format}{Environment.NewLine}Scope: {options.Scope}{Environment.NewLine}Mode: {options.Mode}",
+                    result.Cancelled ? OperationReportSeverity.Warning : OperationReportSeverity.Info);
+
                 return result;
             }
             catch (Exception ex)
             {
                 lblStatus.Text = ex.Message;
                 log.Fail(ex, $"{processName} failed.");
+                PublishReport(processName, $"{processName} failed.", ex.Message, OperationReportSeverity.Error);
                 throw;
             }
             finally
@@ -688,18 +704,25 @@ namespace ScientificReviews.Forms
                     lblStatus.Text = skippedSteps.Count == 0
                         ? $"{operationName} finished."
                         : $"{operationName} finished. Skipped: {string.Join(", ", skippedSteps)}.";
+                    PublishReport(
+                        operationName,
+                        $"{operationName} finished.",
+                        details,
+                        skippedSteps.Count == 0 ? OperationReportSeverity.Info : OperationReportSeverity.Warning);
                 }
                 catch (OperationCanceledException)
                 {
                     operation.Cancel("Cancelled", $"{operationName} was stopped by user.");
                     lblStatus.Text = $"{operationName} cancelled.";
                     log.Complete($"{operationName} cancelled.");
+                    PublishReport(operationName, $"{operationName} cancelled.", null, OperationReportSeverity.Warning);
                 }
                 catch (Exception ex)
                 {
                     operation.Fail(ex, "Failed");
                     lblStatus.Text = ex.Message;
                     log.Fail(ex, $"{operationName} failed.");
+                    PublishReport(operationName, $"{operationName} failed.", ex.Message, OperationReportSeverity.Error);
                 }
                 finally
                 {
@@ -779,6 +802,7 @@ namespace ScientificReviews.Forms
                 return null;
 
             ProcessLogScope log = BeginProcessLog(operationName, details);
+            EntryChangeSnapshot changeSnapshot = null;
             using (CancellationTokenSource cancellation = CancellationTokenSource.CreateLinkedTokenSource(externalCancellationToken))
             {
                 operation.RegisterCancellation(cancellation.Cancel);
@@ -786,7 +810,9 @@ namespace ScientificReviews.Forms
                 try
                 {
                     lblStatus.Text = $"Fetching metadata using {GetConfiguredThreadCount()} thread(s)...";
+                    changeSnapshot = CaptureEntryChanges(targetEntries);
                     MetadataUpdateResult result = await RunFetchMissingMetadataAsync(targetEntries, operation, screenModeOverride, optionOverrides, cancellation.Token);
+                    EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot);
 
                     RefreshGrid(targetEntries);
 
@@ -801,6 +827,28 @@ namespace ScientificReviews.Forms
                     lblStatus.Text = result.UpdatedEntries > 0
                         ? $"Metadata fetch finished. Updated {result.UpdatedEntries} record(s)."
                         : "Metadata fetch finished. No missing metadata could be resolved.";
+
+                    List<string> detailParts = new List<string>
+                    {
+                        detailMessage
+                    };
+                    string unresolved = BuildReportList(result.UnresolvedRecordKeys, "Unresolved records");
+                    string failed = BuildReportList(result.FailedRecordKeys, "Failed records");
+                    if (string.IsNullOrWhiteSpace(unresolved) == false)
+                        detailParts.Add(unresolved);
+                    if (string.IsNullOrWhiteSpace(failed) == false)
+                        detailParts.Add(failed);
+
+                    PublishReport(
+                        operationName,
+                        summary,
+                        string.Join(Environment.NewLine + Environment.NewLine, detailParts.Where(part => string.IsNullOrWhiteSpace(part) == false)),
+                        result.FailedEntries > 0
+                            ? OperationReportSeverity.Error
+                            : result.UnresolvedEntries > 0
+                                ? OperationReportSeverity.Warning
+                                : OperationReportSeverity.Info,
+                        changeReport);
                     return result;
                 }
                 catch (OperationCanceledException)
@@ -808,6 +856,7 @@ namespace ScientificReviews.Forms
                     operation.Cancel("Cancelled", "Metadata fetch was stopped by user.");
                     lblStatus.Text = "Metadata fetch cancelled.";
                     log.Complete("Metadata fetch cancelled.");
+                    PublishReport(operationName, "Metadata fetch cancelled.", null, OperationReportSeverity.Warning);
                     return null;
                 }
                 catch (Exception ex)
@@ -815,6 +864,7 @@ namespace ScientificReviews.Forms
                     operation.Fail(ex, "Failed");
                     lblStatus.Text = ex.Message;
                     log.Fail(ex, "Metadata fetch failed.");
+                    PublishReport(operationName, "Metadata fetch failed.", ex.Message, OperationReportSeverity.Error);
                     throw;
                 }
                 finally
@@ -860,7 +910,9 @@ namespace ScientificReviews.Forms
             ProcessLogScope log = BeginProcessLog("Create entry keys", $"Records: {targetEntries.Length}");
             try
             {
+                EntryChangeSnapshot changeSnapshot = CaptureEntryChanges(targetEntries);
                 int changedEntries = CreateEntryKeys(targetEntries);
+                EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot);
                 if (changedEntries > 0)
                 {
                     RefreshGrid();
@@ -874,11 +926,13 @@ namespace ScientificReviews.Forms
                 log.Complete(summary);
                 AppLog.Log(summary, AppLog.MessageType.Info);
                 lblStatus.Text = summary;
+                PublishReport("Create entry keys", summary, null, OperationReportSeverity.Info, changeReport);
             }
             catch (Exception ex)
             {
                 lblStatus.Text = ex.Message;
                 log.Fail(ex, "Entry key generation failed.");
+                PublishReport("Create entry keys", "Entry key generation failed.", ex.Message, OperationReportSeverity.Error);
             }
             finally
             {
@@ -898,7 +952,9 @@ namespace ScientificReviews.Forms
             ProcessLogScope log = BeginProcessLog("Normalize DOI", $"Records: {targetEntries.Length}");
             try
             {
+                EntryChangeSnapshot changeSnapshot = CaptureEntryChanges(targetEntries);
                 DoiNormalizationResult normalization = NormalizeDoisForMetadataFetch(targetEntries);
+                EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot);
                 if (normalization.ChangedEntries > 0)
                 {
                     RefreshGrid();
@@ -909,11 +965,19 @@ namespace ScientificReviews.Forms
                 log.Complete(summary);
                 AppLog.Log(summary, AppLog.MessageType.Info);
                 lblStatus.Text = summary;
+                string invalidRecords = BuildReportList(normalization.InvalidRecordKeys, "Records with invalid DOI after normalization");
+                PublishReport(
+                    "Normalize DOI",
+                    summary,
+                    invalidRecords,
+                    normalization.InvalidEntries > 0 ? OperationReportSeverity.Warning : OperationReportSeverity.Info,
+                    changeReport);
             }
             catch (Exception ex)
             {
                 lblStatus.Text = ex.Message;
                 log.Fail(ex, "DOI normalization failed.");
+                PublishReport("Normalize DOI", "DOI normalization failed.", ex.Message, OperationReportSeverity.Error);
             }
             finally
             {
@@ -933,7 +997,9 @@ namespace ScientificReviews.Forms
             ProcessLogScope log = BeginProcessLog("Normalize page-tag", $"Records: {targetEntries.Length}");
             try
             {
+                EntryChangeSnapshot changeSnapshot = CaptureEntryChanges(targetEntries);
                 int changedEntries = BibtexUtils.UpdatePages(targetEntries.ToList());
+                EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot);
                 if (changedEntries > 0)
                 {
                     RefreshGrid();
@@ -947,11 +1013,13 @@ namespace ScientificReviews.Forms
                 log.Complete(summary);
                 AppLog.Log(summary, AppLog.MessageType.Info);
                 lblStatus.Text = summary;
+                PublishReport("Normalize page-tag", summary, null, OperationReportSeverity.Info, changeReport);
             }
             catch (Exception ex)
             {
                 lblStatus.Text = ex.Message;
                 log.Fail(ex, "Page-tag normalization failed.");
+                PublishReport("Normalize page-tag", "Page-tag normalization failed.", ex.Message, OperationReportSeverity.Error);
             }
             finally
             {
@@ -971,8 +1039,10 @@ namespace ScientificReviews.Forms
             ProcessLogScope log = BeginProcessLog($"Remove duplicates by {normalizedTagName}", $"Records: {entries.Count}");
             try
             {
+                EntryChangeSnapshot changeSnapshot = CaptureEntryChanges(entries.ToArray());
                 int originalCount = entries.Count;
                 entries = BibtexUtils.RemoveDuplicateEntriesByTag(entries, normalizedTagName);
+                EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot);
                 int removedCount = Math.Max(0, originalCount - entries.Count);
 
                 RefreshGrid();
@@ -986,11 +1056,22 @@ namespace ScientificReviews.Forms
 
                 lblStatus.Text = summary;
                 log.Complete(summary);
+                PublishReport(
+                    $"Remove duplicates by {normalizedTagName}",
+                    summary,
+                    null,
+                    removedCount > 0 ? OperationReportSeverity.Warning : OperationReportSeverity.Info,
+                    changeReport);
             }
             catch (Exception ex)
             {
                 lblStatus.Text = ex.Message;
                 log.Fail(ex, $"Duplicate removal by {normalizedTagName} failed.");
+                PublishReport(
+                    $"Remove duplicates by {normalizedTagName}",
+                    $"Duplicate removal by {normalizedTagName} failed.",
+                    ex.Message,
+                    OperationReportSeverity.Error);
             }
             finally
             {
