@@ -234,16 +234,27 @@ namespace ScientificReviews.Forms
 
         private async Task SaveBibtexToFileAsync(BibtexEntry[] entriesToSave, string fileName, string processName, string successMessage, bool updateCurrentFile)
         {
+            StatusStripOperationHandle operation = StartTrackedOperation(
+                "save-bibtex",
+                processName + " (blocking)",
+                fileName);
+            if (operation == null)
+                return;
+
             ProcessLogScope log = BeginProcessLog(processName, fileName);
             try
             {
-                lblStatus.Text = "Saving...";
-                await Task.Run(() =>
+                using (BeginBlockingUiScope())
                 {
-                    BibtexExporter exporter = new BibtexExporter();
-                    string content = exporter.EntriesToString(entriesToSave ?? Array.Empty<BibtexEntry>());
-                    File.WriteAllText(fileName, content);
-                });
+                    operation.Report("Saving...", fileName, 0, 1, false);
+                    lblStatus.Text = "Saving... (blocking)";
+                    await Task.Run(() =>
+                    {
+                        BibtexExporter exporter = new BibtexExporter();
+                        string content = exporter.EntriesToString(entriesToSave ?? Array.Empty<BibtexEntry>());
+                        File.WriteAllText(fileName, content);
+                    });
+                }
 
                 if (updateCurrentFile)
                 {
@@ -253,6 +264,7 @@ namespace ScientificReviews.Forms
                     Program.AppSettings.SaveSettings();
                 }
 
+                operation.Complete($"Saved {entriesToSave?.Length ?? 0} record(s).", fileName);
                 lblStatus.Text = successMessage;
                 log.Complete($"Saved {entriesToSave?.Length ?? 0} record(s) to {fileName}.");
                 PublishReport(
@@ -263,6 +275,7 @@ namespace ScientificReviews.Forms
             }
             catch (Exception ex)
             {
+                operation.Fail(ex, "Failed");
                 lblStatus.Text = ex.Message;
                 log.Fail(ex, $"{processName} failed.");
                 PublishReport(processName, $"{processName} failed.", ex.Message, OperationReportSeverity.Error);
@@ -377,55 +390,78 @@ namespace ScientificReviews.Forms
             SaveLastExportSettings(options);
 
             string processName = options.Format == DatabaseExportFormat.Csv ? "Export CSV" : "Export BibTeX";
+            StatusStripOperationHandle operation = StartTrackedOperation(
+                "export-database",
+                processName + " (blocking)",
+                options.OutputFilePath);
+            if (operation == null)
+                throw new InvalidOperationException($"{processName} is already running.");
+
             ProcessLogScope log = BeginProcessLog(processName, $"Records: {entriesToExport.Length}, mode: {options.Mode}");
             IProgress<DatabaseExportProgress> compositeProgress = new Progress<DatabaseExportProgress>(update =>
             {
                 progress?.Report(update);
+                operation.Report(
+                    update?.StatusText,
+                    options.OutputFilePath,
+                    update?.Completed,
+                    update?.Total,
+                    update == null || update.Total <= 0);
                 LogProcessProgress(log, update?.StatusText, null, update?.Completed, update?.Total);
             });
 
             try
             {
-                lblStatus.Text = "Exporting...";
-                DatabaseExportRunResult result = await _databaseExportService.RunExportAsync(
-                    entriesToExport,
-                    new DatabaseExportOptions
-                    {
-                        Scope = options.Scope,
-                        Format = options.Format,
-                        Mode = options.Mode,
-                        CsvSeparator = NormalizeCsvSeparator(options.CsvSeparator),
-                        OutputFilePath = options.OutputFilePath
-                    },
-                    exportColumns,
-                    compositeProgress,
-                    cancellationToken);
+                using (BeginBlockingUiScope())
+                {
+                    operation.Report("Exporting...", options.OutputFilePath, 0, entriesToExport.Length, false);
+                    lblStatus.Text = "Exporting... (blocking)";
+                    DatabaseExportRunResult result = await _databaseExportService.RunExportAsync(
+                        entriesToExport,
+                        new DatabaseExportOptions
+                        {
+                            Scope = options.Scope,
+                            Format = options.Format,
+                            Mode = options.Mode,
+                            CsvSeparator = NormalizeCsvSeparator(options.CsvSeparator),
+                            OutputFilePath = options.OutputFilePath
+                        },
+                        exportColumns,
+                        compositeProgress,
+                        cancellationToken);
 
-                if (string.IsNullOrWhiteSpace(options.OutputFilePath) == false)
-                    Program.AppSettings.Data.LastDirectory = Path.GetDirectoryName(options.OutputFilePath);
+                    if (string.IsNullOrWhiteSpace(options.OutputFilePath) == false)
+                        Program.AppSettings.Data.LastDirectory = Path.GetDirectoryName(options.OutputFilePath);
 
-                Program.AppSettings.SaveSettings();
+                    Program.AppSettings.SaveSettings();
 
-                lblStatus.Text = result.Cancelled
-                    ? $"Export cancelled after {result.Completed}/{result.Total}."
-                    : "Export done.";
+                    if (result.Cancelled)
+                        operation.Cancel("Cancelled", $"Stopped after {result.Completed}/{result.Total} record(s).");
+                    else
+                        operation.Complete($"Exported {result.Completed} record(s).", options.OutputFilePath);
 
-                log.Complete(result.Cancelled
-                    ? $"Export cancelled after {result.Completed}/{result.Total}."
-                    : $"Exported {result.Completed} record(s) to {options.OutputFilePath}.");
-
-                PublishReport(
-                    processName,
-                    result.Cancelled
+                    lblStatus.Text = result.Cancelled
                         ? $"Export cancelled after {result.Completed}/{result.Total}."
-                        : $"Exported {result.Completed} record(s).",
-                    $"File: {options.OutputFilePath}{Environment.NewLine}Format: {options.Format}{Environment.NewLine}Scope: {options.Scope}{Environment.NewLine}Mode: {options.Mode}",
-                    result.Cancelled ? OperationReportSeverity.Warning : OperationReportSeverity.Info);
+                        : "Export done.";
 
-                return result;
+                    log.Complete(result.Cancelled
+                        ? $"Export cancelled after {result.Completed}/{result.Total}."
+                        : $"Exported {result.Completed} record(s) to {options.OutputFilePath}.");
+
+                    PublishReport(
+                        processName,
+                        result.Cancelled
+                            ? $"Export cancelled after {result.Completed}/{result.Total}."
+                            : $"Exported {result.Completed} record(s).",
+                        $"File: {options.OutputFilePath}{Environment.NewLine}Format: {options.Format}{Environment.NewLine}Scope: {options.Scope}{Environment.NewLine}Mode: {options.Mode}",
+                        result.Cancelled ? OperationReportSeverity.Warning : OperationReportSeverity.Info);
+
+                    return result;
+                }
             }
             catch (Exception ex)
             {
+                operation.Fail(ex, "Failed");
                 lblStatus.Text = ex.Message;
                 log.Fail(ex, $"{processName} failed.");
                 PublishReport(processName, $"{processName} failed.", ex.Message, OperationReportSeverity.Error);

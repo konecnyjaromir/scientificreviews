@@ -413,58 +413,83 @@ namespace ScientificReviews.Forms
             if (toExport.Length == 0)
                 throw new InvalidOperationException("No records selected for export.");
 
+            StatusStripOperationHandle operation = StartTrackedOperation(
+                "export-pdfs",
+                "Export PDFs (blocking)",
+                options.OutputDirectory);
+            if (operation == null)
+                throw new InvalidOperationException("Export PDFs is already running.");
+
             ProcessLogScope log = BeginProcessLog("Export PDFs", $"{toExport.Length} record(s) -> {options.OutputDirectory}");
             IProgress<ExportPdfsProgress> compositeProgress = new Progress<ExportPdfsProgress>(update =>
             {
                 progress?.Report(update);
+                operation.Report(
+                    update?.StatusText,
+                    options.OutputDirectory,
+                    update?.Completed,
+                    update?.Total,
+                    update == null || update.Total <= 0);
                 LogProcessProgress(log, update?.StatusText, null, update?.Completed, update?.Total);
             });
 
-            lblStatus.Text = $"Exporting PDFs using {GetConfiguredThreadCount()} thread(s)...";
             try
             {
-                ExportPdfsRunResult result = await _pdfExportService.RunExportAsync(
-                    toExport,
-                    options,
-                    _pdfMatchingService,
-                    CreatePdfMatchingOptions(),
-                    compositeProgress,
-                    cancellationToken);
+                using (BeginBlockingUiScope())
+                {
+                    operation.Report("Preparing export...", options.OutputDirectory, 0, toExport.Length, false);
+                    lblStatus.Text = $"Exporting PDFs using {GetConfiguredThreadCount()} thread(s)... (blocking)";
+                    ExportPdfsRunResult result = await _pdfExportService.RunExportAsync(
+                        toExport,
+                        options,
+                        _pdfMatchingService,
+                        CreatePdfMatchingOptions(),
+                        compositeProgress,
+                        cancellationToken);
 
-                lblStatus.Text = result.Cancelled
-                    ? $"PDF export cancelled after {result.Completed}/{result.Total}."
-                    : result.Errors > 0
-                        ? $"PDF export finished with {result.Errors} error(s). Exported {result.Exported}, skipped {result.Skipped}, DOI injected into {result.Injected}."
-                        : $"Exported {result.Exported} PDF(s), skipped {result.Skipped}, DOI injected into {result.Injected}.";
+                    if (result.Cancelled)
+                        operation.Cancel("Cancelled", $"Stopped after {result.Completed}/{result.Total} record(s).");
+                    else if (result.Errors > 0)
+                        operation.Complete($"Finished with {result.Errors} error(s).", options.OutputDirectory);
+                    else
+                        operation.Complete($"Exported {result.Exported} PDF(s).", options.OutputDirectory);
 
-                if (result.Cancelled)
-                    log.Fail($"PDF export cancelled after {result.Completed}/{result.Total}.");
-                else if (result.Errors > 0)
-                    log.Fail($"Exported {result.Exported}, skipped {result.Skipped}, errors {result.Errors}, DOI injected into {result.Injected}. Last error: {result.LastErrorMessage}");
-                else
-                    log.Complete($"Exported {result.Exported}, skipped {result.Skipped}, DOI injected into {result.Injected}.");
-
-                PublishReport(
-                    "Export PDFs",
-                    result.Cancelled
+                    lblStatus.Text = result.Cancelled
                         ? $"PDF export cancelled after {result.Completed}/{result.Total}."
                         : result.Errors > 0
-                            ? $"PDF export finished with {result.Errors} error(s)."
-                            : $"Exported {result.Exported} PDF(s).",
-                    $"Output: {options.OutputDirectory}{Environment.NewLine}Exported: {result.Exported}{Environment.NewLine}Skipped: {result.Skipped}{Environment.NewLine}DOI injected: {result.Injected}" +
-                    (result.Errors > 0 && string.IsNullOrWhiteSpace(result.LastErrorMessage) == false
-                        ? Environment.NewLine + "Last error: " + result.LastErrorMessage
-                        : string.Empty),
-                    result.Cancelled
-                        ? OperationReportSeverity.Warning
-                        : result.Errors > 0
-                            ? OperationReportSeverity.Warning
-                            : OperationReportSeverity.Info);
+                            ? $"PDF export finished with {result.Errors} error(s). Exported {result.Exported}, skipped {result.Skipped}, DOI injected into {result.Injected}."
+                            : $"Exported {result.Exported} PDF(s), skipped {result.Skipped}, DOI injected into {result.Injected}.";
 
-                return result;
+                    if (result.Cancelled)
+                        log.Fail($"PDF export cancelled after {result.Completed}/{result.Total}.");
+                    else if (result.Errors > 0)
+                        log.Fail($"Exported {result.Exported}, skipped {result.Skipped}, errors {result.Errors}, DOI injected into {result.Injected}. Last error: {result.LastErrorMessage}");
+                    else
+                        log.Complete($"Exported {result.Exported}, skipped {result.Skipped}, DOI injected into {result.Injected}.");
+
+                    PublishReport(
+                        "Export PDFs",
+                        result.Cancelled
+                            ? $"PDF export cancelled after {result.Completed}/{result.Total}."
+                            : result.Errors > 0
+                                ? $"PDF export finished with {result.Errors} error(s)."
+                                : $"Exported {result.Exported} PDF(s).",
+                        $"Output: {options.OutputDirectory}{Environment.NewLine}Exported: {result.Exported}{Environment.NewLine}Skipped: {result.Skipped}{Environment.NewLine}DOI injected: {result.Injected}" +
+                        (result.Errors > 0 && string.IsNullOrWhiteSpace(result.LastErrorMessage) == false
+                            ? Environment.NewLine + "Last error: " + result.LastErrorMessage
+                            : string.Empty),
+                        result.Cancelled
+                            ? OperationReportSeverity.Warning
+                            : result.Errors > 0
+                                ? OperationReportSeverity.Warning
+                                : OperationReportSeverity.Info);
+
+                    return result;
+                }
             }
             catch (Exception ex)
             {
+                operation.Fail(ex, "Failed");
                 log.Fail(ex, "PDF export failed.");
                 PublishReport("Export PDFs", "PDF export failed.", ex.Message, OperationReportSeverity.Error);
                 throw;

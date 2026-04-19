@@ -20,6 +20,7 @@ namespace ScientificReviews.Forms
         private const int WM_CUT = 0x0300;
         private const int WM_COPY = 0x0301;
         private const int WM_PASTE = 0x0302;
+        private int _blockingOperationCount;
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetFocus();
@@ -42,8 +43,13 @@ namespace ScientificReviews.Forms
             dataGridView1.MouseDown += dataGridView1_MouseDown;
         }
 
+        private bool IsBlockingUiActive => _blockingOperationCount > 0;
+
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
+            if (IsBlockingUiActive)
+                return true;
+
             if (keyData == (Keys.Control | Keys.F))
             {
                 txtSearch.Focus();
@@ -55,6 +61,56 @@ namespace ScientificReviews.Forms
                 return true;
 
             return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        private IDisposable BeginBlockingUiScope()
+        {
+            _blockingOperationCount++;
+            if (_blockingOperationCount == 1)
+                SetMainInteractionEnabled(false);
+
+            return new BlockingUiScope(this);
+        }
+
+        private void EndBlockingUiScope()
+        {
+            if (_blockingOperationCount <= 0)
+                return;
+
+            _blockingOperationCount--;
+            if (_blockingOperationCount == 0)
+                SetMainInteractionEnabled(true);
+        }
+
+        private void SetMainInteractionEnabled(bool enabled)
+        {
+            menuStrip1.Enabled = enabled;
+            toolStrip1.Enabled = enabled;
+            toolStrip2.Enabled = enabled;
+            dataGridView1.Enabled = enabled;
+            panel1.Enabled = enabled;
+            splitter1.Enabled = enabled;
+            splitter2.Enabled = enabled;
+            UseWaitCursor = !enabled;
+        }
+
+        private sealed class BlockingUiScope : IDisposable
+        {
+            private MainForm _owner;
+
+            public BlockingUiScope(MainForm owner)
+            {
+                _owner = owner;
+            }
+
+            public void Dispose()
+            {
+                if (_owner == null)
+                    return;
+
+                _owner.EndBlockingUiScope();
+                _owner = null;
+            }
         }
 
         private bool HandleClipboardShortcut(Keys keyData)
@@ -349,6 +405,13 @@ namespace ScientificReviews.Forms
 
         private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
+            if (IsBlockingUiActive)
+            {
+                lblStatus.Text = "A blocking operation is still running.";
+                e.Cancel = true;
+                return;
+            }
+
             if (DatabaseChanged && !Program.AppSettings.Data.UnsafeClosing)
             {
                 DialogResult result = MessageBox.Show(
