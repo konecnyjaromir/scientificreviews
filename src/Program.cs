@@ -122,6 +122,12 @@ namespace ScientificReviews
                 changed = true;
             }
 
+            if (settings.SettingsVersion < 3)
+            {
+                settings.OpenAddMode = OpenAddMode.Normal;
+                changed = true;
+            }
+
             if (settings.SettingsVersion != AppSettingsData.CURRENT_SETTINGS_VERSION)
             {
                 settings.SettingsVersion = AppSettingsData.CURRENT_SETTINGS_VERSION;

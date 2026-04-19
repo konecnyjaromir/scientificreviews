@@ -8,6 +8,8 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 
 - Added `Project -> Open file` and `Open folder` to open a new archive after optional confirmation and clearing the current one
 - Kept `Add file` and `Add folder` for incremental import into the current archive
+- Added `Project -> Raw Mode` as a shared toggle for raw file/folder import without post-load preprocessing
+- `Open file`, `Open folder`, `Add file`, and `Add folder` now reuse the existing raw import behavior when `Raw Mode` is enabled instead of exposing separate raw-only menu actions
 - Added `Project -> New` to launch a separate application window
 - Main window title now shows the active BibTeX file name from the current session
 - Opening a new empty project no longer shows the previous file name in the window title

@@ -35,10 +35,7 @@
             this.loadReplaceBibTexFileToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.loadReplaceBibTexFolderToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator11 = new System.Windows.Forms.ToolStripSeparator();
-            this.loadReplaceBibTexFileRawToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.loadBibTexFileRawToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.loadReplaceBibTexFolderRawToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.loadBibTexFolderRawToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.rawModeToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator12 = new System.Windows.Forms.ToolStripSeparator();
             this.newToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.clearToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -170,10 +167,7 @@
             this.loadReplaceBibTexFileToolStripMenuItem,
             this.loadReplaceBibTexFolderToolStripMenuItem,
             this.toolStripSeparator11,
-            this.loadReplaceBibTexFileRawToolStripMenuItem,
-            this.loadBibTexFileRawToolStripMenuItem,
-            this.loadReplaceBibTexFolderRawToolStripMenuItem,
-            this.loadBibTexFolderRawToolStripMenuItem,
+            this.rawModeToolStripMenuItem,
             this.toolStripSeparator12,
             this.newToolStripMenuItem,
             this.clearToolStripMenuItem,
@@ -213,33 +207,13 @@
             this.toolStripSeparator11.Name = "toolStripSeparator11";
             this.toolStripSeparator11.Size = new System.Drawing.Size(262, 6);
             // 
-            // loadReplaceBibTexFileRawToolStripMenuItem
+            // rawModeToolStripMenuItem
             // 
-            this.loadReplaceBibTexFileRawToolStripMenuItem.Name = "loadReplaceBibTexFileRawToolStripMenuItem";
-            this.loadReplaceBibTexFileRawToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
-            this.loadReplaceBibTexFileRawToolStripMenuItem.Text = "Open file - as raw";
-            this.loadReplaceBibTexFileRawToolStripMenuItem.Click += new System.EventHandler(this.loadReplaceBibTexFileRawToolStripMenuItem_Click);
-            // 
-            // loadBibTexFileRawToolStripMenuItem
-            // 
-            this.loadBibTexFileRawToolStripMenuItem.Name = "loadBibTexFileRawToolStripMenuItem";
-            this.loadBibTexFileRawToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
-            this.loadBibTexFileRawToolStripMenuItem.Text = "Add file - as raw";
-            this.loadBibTexFileRawToolStripMenuItem.Click += new System.EventHandler(this.loadBibTexFileRawToolStripMenuItem_Click);
-            // 
-            // loadReplaceBibTexFolderRawToolStripMenuItem
-            // 
-            this.loadReplaceBibTexFolderRawToolStripMenuItem.Name = "loadReplaceBibTexFolderRawToolStripMenuItem";
-            this.loadReplaceBibTexFolderRawToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
-            this.loadReplaceBibTexFolderRawToolStripMenuItem.Text = "Open folder - as raw";
-            this.loadReplaceBibTexFolderRawToolStripMenuItem.Click += new System.EventHandler(this.loadReplaceBibTexFolderRawToolStripMenuItem_Click);
-            // 
-            // loadBibTexFolderRawToolStripMenuItem
-            // 
-            this.loadBibTexFolderRawToolStripMenuItem.Name = "loadBibTexFolderRawToolStripMenuItem";
-            this.loadBibTexFolderRawToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
-            this.loadBibTexFolderRawToolStripMenuItem.Text = "Add folder - as raw";
-            this.loadBibTexFolderRawToolStripMenuItem.Click += new System.EventHandler(this.loadBibTexFolderRawToolStripMenuItem_Click);
+            this.rawModeToolStripMenuItem.CheckOnClick = true;
+            this.rawModeToolStripMenuItem.Name = "rawModeToolStripMenuItem";
+            this.rawModeToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
+            this.rawModeToolStripMenuItem.Text = "Raw Mode";
+            this.rawModeToolStripMenuItem.CheckedChanged += new System.EventHandler(this.rawModeToolStripMenuItem_CheckedChanged);
             // 
             // toolStripSeparator12
             // 
@@ -1068,13 +1042,10 @@
         private System.Windows.Forms.ToolStripMenuItem projectToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem loadReplaceBibTexFileToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem loadReplaceBibTexFolderToolStripMenuItem;
-        private System.Windows.Forms.ToolStripMenuItem loadReplaceBibTexFileRawToolStripMenuItem;
-        private System.Windows.Forms.ToolStripMenuItem loadReplaceBibTexFolderRawToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem rawModeToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem newToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripMenuItem5;
         private System.Windows.Forms.ToolStripMenuItem loadBibTexFolderToolStripMenuItem;
-        private System.Windows.Forms.ToolStripMenuItem loadBibTexFileRawToolStripMenuItem;
-        private System.Windows.Forms.ToolStripMenuItem loadBibTexFolderRawToolStripMenuItem;
         private System.Windows.Forms.StatusStrip statusStrip1;
         private System.Windows.Forms.ToolStripStatusLabel lblStatus;
         private System.Windows.Forms.DataGridView dataGridView1;

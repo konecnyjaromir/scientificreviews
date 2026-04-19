@@ -9,6 +9,7 @@ Scientific Reviews is a Windows desktop tool for researchers who work with BibTe
 
 - Open a BibTeX file or a whole folder as a new archive from `Project -> Open file` / `Open folder`
 - Add more BibTeX files or folders into the current archive from `Project -> Add file` / `Add folder`
+- `Project -> Raw Mode` turns open/add file/folder actions into raw import without post-load preprocessing
 - Open a completely new application window from `Project -> New`
 - Show the currently opened BibTeX file in the main window title
 - Restore the latest autosave backup on startup when available
@@ -312,6 +313,7 @@ Additional clipboard and metadata-related settings include:
 1. Open a `.bib` file or folder as a new archive.
 2. Configure `PDF source folder`, matching mode, preprocessing level, smart paste mode, and metadata/JCR settings.
 3. Import additional records by file, folder, or smart paste using `Ctrl+V` / `Ctrl+Shift+V`.
+   Enable `Project -> Raw Mode` first when you want file/folder imports without automatic post-load preprocessing.
 4. Run `Autofix` or individual tools such as `Normalize DOI`, `Fetch missing metadata`, `Auto-pair PDFs`, or `Update JCR`.
 5. Screen, edit, tag, bind or rebind PDFs, and search records in the main grid.
    Use smart search for WoS-like field queries and numeric filters, or switch back to classic full-record search when needed.

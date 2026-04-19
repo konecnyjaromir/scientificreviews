@@ -32,6 +32,12 @@ namespace ScientificReviews
         Deep
     }
 
+    public enum OpenAddMode
+    {
+        Normal,
+        Raw
+    }
+
     public class LastExportSettingsData
     {
         public string Scope { get; set; } = "All";
@@ -43,7 +49,7 @@ namespace ScientificReviews
 
     public class AppSettingsData
     {
-        public const int CURRENT_SETTINGS_VERSION = 2;
+        public const int CURRENT_SETTINGS_VERSION = 3;
 
         private const string APPLICATION_CAT = "0: Application";
         private const string PDF_CAT = "1: PDFs";
@@ -74,6 +80,13 @@ namespace ScientificReviews
         [DisplayName("Auto-preprocessing mode")]
         [Description("Selects which automatic preprocessing steps run after opening a BibTeX database: Off = none, Fast = local quick fixes and PDF pairing, Deep = all preprocessing including metadata fetch and JCR update.")]
         public AutoPreprocessingMode AutoPreprocessingMode { get; set; } = AutoPreprocessingMode.Fast;
+
+        [Browsable(true)]
+        [Category(APPLICATION_CAT)]
+        [DisplayName("Open/Add Mode")]
+        [Description("Controls the default mode used by Project -> Open/Add file/folder. Normal (classic) keeps standard post-load preprocessing, Raw (origin data) uses raw import without post-load preprocessing.")]
+        [TypeConverter(typeof(OpenAddModeConverter))]
+        public OpenAddMode OpenAddMode { get; set; } = OpenAddMode.Normal;
 
         [Browsable(true)]
         [Category(APPLICATION_CAT)]

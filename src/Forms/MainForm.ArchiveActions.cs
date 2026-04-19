@@ -13,6 +13,45 @@ namespace ScientificReviews.Forms
 {
     public partial class MainForm
     {
+        private bool _isInitializingRawModeUi;
+
+        private OpenAddMode DefaultOpenAddMode
+        {
+            get => Program.AppSettings?.Data?.OpenAddMode ?? OpenAddMode.Normal;
+            set
+            {
+                if (Program.AppSettings?.Data != null)
+                    Program.AppSettings.Data.OpenAddMode = value;
+            }
+        }
+
+        private bool IsRawModeEnabled => rawModeToolStripMenuItem != null && rawModeToolStripMenuItem.Checked;
+
+        private void InitializeOpenAddModeUi()
+        {
+            UpdateOpenAddModeUi();
+        }
+
+        private void UpdateOpenAddModeUi()
+        {
+            if (rawModeToolStripMenuItem == null)
+                return;
+
+            bool rawModeEnabled = DefaultOpenAddMode == OpenAddMode.Raw;
+            if (rawModeToolStripMenuItem.Checked == rawModeEnabled)
+                return;
+
+            _isInitializingRawModeUi = true;
+            try
+            {
+                rawModeToolStripMenuItem.Checked = rawModeEnabled;
+            }
+            finally
+            {
+                _isInitializingRawModeUi = false;
+            }
+        }
+
         private void UpdateWindowTitle()
         {
             string title = Program.APP_NAME;
@@ -257,6 +296,12 @@ namespace ScientificReviews.Forms
 
         private async void loadBibTexFolderToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (IsRawModeEnabled)
+            {
+                loadBibTexFolderRawToolStripMenuItem_Click(sender, e);
+                return;
+            }
+
             try
             {
                 bool loaded = await LoadBibTexFolderAsync(false);
@@ -285,6 +330,12 @@ namespace ScientificReviews.Forms
 
         private async void loadBibTexFileToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (IsRawModeEnabled)
+            {
+                loadBibTexFileRawToolStripMenuItem_Click(sender, e);
+                return;
+            }
+
             try
             {
                 bool loaded = await LoadBibTexFileAsync(false);
@@ -313,6 +364,12 @@ namespace ScientificReviews.Forms
 
         private async void loadReplaceBibTexFileToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (IsRawModeEnabled)
+            {
+                loadReplaceBibTexFileRawToolStripMenuItem_Click(sender, e);
+                return;
+            }
+
             try
             {
                 bool loaded = await LoadBibTexFileAsync(true);
@@ -327,6 +384,12 @@ namespace ScientificReviews.Forms
 
         private async void loadReplaceBibTexFolderToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (IsRawModeEnabled)
+            {
+                loadReplaceBibTexFolderRawToolStripMenuItem_Click(sender, e);
+                return;
+            }
+
             try
             {
                 bool loaded = await LoadBibTexFolderAsync(true);
@@ -387,6 +450,22 @@ namespace ScientificReviews.Forms
         private void clearToolStripMenuItem_Click(object sender, EventArgs e)
         {
             ClearCurrentArchiveState(true);
+        }
+
+        private void rawModeToolStripMenuItem_CheckedChanged(object sender, EventArgs e)
+        {
+            if (_isInitializingRawModeUi)
+                return;
+
+            DefaultOpenAddMode = rawModeToolStripMenuItem.Checked
+                ? OpenAddMode.Raw
+                : OpenAddMode.Normal;
+
+            string statusMessage = rawModeToolStripMenuItem.Checked
+                ? "Raw Mode enabled."
+                : "Normal open/add mode enabled.";
+
+            lblStatus.Text = statusMessage;
         }
     }
 }

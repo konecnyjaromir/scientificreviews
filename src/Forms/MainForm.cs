@@ -30,6 +30,7 @@ namespace ScientificReviews.Forms
         public MainForm()
         {
             InitializeComponent();
+            InitializeOpenAddModeUi();
             InitializeSearchUi();
             _operationManager = new StatusStripOperationManager(statusStrip1, toolStripStatusLabel1, this);
             InitializeReportCenter();
@@ -547,7 +548,10 @@ namespace ScientificReviews.Forms
         private void settingsToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (new SettingsForm().ShowDialog(this) == DialogResult.OK)
+            {
                 Program.AppSettings.LoadSettings();
+                UpdateOpenAddModeUi();
+            }
         }
 
         private void MainForm_Shown(object sender, EventArgs e)
