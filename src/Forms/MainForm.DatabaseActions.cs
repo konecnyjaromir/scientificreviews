@@ -16,6 +16,8 @@ namespace ScientificReviews.Forms
 {
     public partial class MainForm
     {
+        private bool _isInitializingAutofixModeUi;
+
         private sealed class DoiNormalizationResult
         {
             public int ChangedEntries { get; set; }
@@ -24,6 +26,40 @@ namespace ScientificReviews.Forms
             public int EnrichedEprintEntries { get; set; }
             public int InvalidEntries { get; set; }
             public List<string> InvalidRecordKeys { get; } = new List<string>();
+        }
+
+        private AutoPreprocessingMode AutofixMode
+        {
+            get => Program.AppSettings?.Data?.AutofixMode ?? AutoPreprocessingMode.Normal;
+            set
+            {
+                if (Program.AppSettings?.Data != null)
+                    Program.AppSettings.Data.AutofixMode = value;
+            }
+        }
+
+        private void InitializeAutofixModeUi()
+        {
+            UpdateAutofixModeUi();
+        }
+
+        private void UpdateAutofixModeUi()
+        {
+            if (autofixModeOffToolStripMenuItem == null)
+                return;
+
+            _isInitializingAutofixModeUi = true;
+            try
+            {
+                autofixModeOffToolStripMenuItem.Checked = AutofixMode == AutoPreprocessingMode.Off;
+                autofixModeFastToolStripMenuItem.Checked = AutofixMode == AutoPreprocessingMode.Fast;
+                autofixModeNormalToolStripMenuItem.Checked = AutofixMode == AutoPreprocessingMode.Normal;
+                autofixModeDeepToolStripMenuItem.Checked = AutofixMode == AutoPreprocessingMode.Deep;
+            }
+            finally
+            {
+                _isInitializingAutofixModeUi = false;
+            }
         }
 
         private void createEntryKeysToolStripMenuItem_Click(object sender, EventArgs e)
@@ -577,6 +613,12 @@ namespace ScientificReviews.Forms
 
         private async void autofixToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (AutofixMode == AutoPreprocessingMode.Off)
+            {
+                lblStatus.Text = "Autofix mode is Off.";
+                return;
+            }
+
             if (ConfirmAutofix() == false)
                 return;
 
@@ -586,10 +628,28 @@ namespace ScientificReviews.Forms
         private async Task StartAutofixOperationAsync()
         {
             await StartPreprocessingPipelineAsync(
-                AutoPreprocessingMode.Deep,
+                AutofixMode,
                 startedAutomatically: false,
                 operationKey: "autofix",
                 operationName: "Autofix");
+        }
+
+        private void autofixModeToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            if (_isInitializingAutofixModeUi)
+                return;
+
+            ToolStripMenuItem clickedItem = sender as ToolStripMenuItem;
+            AutoPreprocessingMode selectedMode;
+            if (clickedItem == null ||
+                Enum.TryParse(clickedItem.Tag as string, true, out selectedMode) == false)
+                return;
+
+            AutofixMode = selectedMode;
+            Program.AppSettings.SaveSettings();
+            UpdateAutofixModeUi();
+
+            lblStatus.Text = $"Autofix mode set to {selectedMode}.";
         }
 
         private async Task StartPreprocessingPipelineAsync(
@@ -631,17 +691,22 @@ namespace ScientificReviews.Forms
 
                 try
                 {
+                    bool runFullPipeline = RequiresFullPreprocessingPipeline(mode);
+                    MetadataScreenMode? metadataScreenModeOverride = mode == AutoPreprocessingMode.Deep
+                        ? MetadataScreenMode.All
+                        : (MetadataScreenMode?)null;
+
                     currentStep++;
                     operation.Report("Normalize DOI", "Preparing DOI values", currentStep, totalSteps, false);
                     cancellation.Token.ThrowIfCancellationRequested();
                     RunNormalizeDoiOperation(entries.ToArray());
                     LogProcessProgress(log, "Normalize DOI completed.");
 
-                    if (mode == AutoPreprocessingMode.Deep)
+                    if (runFullPipeline)
                     {
                         currentStep++;
                         operation.Report("Fetch missing metadata", "Querying metadata services", currentStep, totalSteps, false);
-                        await StartFetchMissingMetadataOperationAsync(false, MetadataScreenMode.All, cancellation.Token);
+                        await StartFetchMissingMetadataOperationAsync(false, metadataScreenModeOverride, cancellation.Token);
                         LogProcessProgress(log, "Fetch missing metadata completed.");
 
                         currentStep++;
@@ -683,7 +748,7 @@ namespace ScientificReviews.Forms
                         LogProcessProgress(log, "Auto-pair PDFs completed.");
                     }
 
-                    if (mode == AutoPreprocessingMode.Deep)
+                    if (runFullPipeline)
                     {
                         currentStep++;
                         if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.JcrApiKey))
@@ -742,6 +807,7 @@ namespace ScientificReviews.Forms
             switch (mode)
             {
                 case AutoPreprocessingMode.Deep:
+                case AutoPreprocessingMode.Normal:
                     return 8;
                 case AutoPreprocessingMode.Fast:
                     return 4;
@@ -755,12 +821,19 @@ namespace ScientificReviews.Forms
             switch (mode)
             {
                 case AutoPreprocessingMode.Deep:
-                    return "Normalize DOI -> Fetch metadata -> Remove duplicates by title -> Remove duplicates by DOI -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs -> Update JCR";
+                    return "Normalize DOI -> Fetch metadata (forced All) -> Remove duplicates by title -> Remove duplicates by DOI -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs -> Update JCR";
+                case AutoPreprocessingMode.Normal:
+                    return "Normalize DOI -> Fetch metadata (settings) -> Remove duplicates by title -> Remove duplicates by DOI -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs -> Update JCR";
                 case AutoPreprocessingMode.Fast:
                     return "Normalize DOI -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs";
                 default:
                     return "No preprocessing";
             }
+        }
+
+        private static bool RequiresFullPreprocessingPipeline(AutoPreprocessingMode mode)
+        {
+            return mode == AutoPreprocessingMode.Normal || mode == AutoPreprocessingMode.Deep;
         }
 
         private async Task StartFetchMissingMetadataOperationAsync(

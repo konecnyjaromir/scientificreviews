@@ -261,6 +261,7 @@
     <Compile Include="Reports\EntryChangeTracker.cs" />
     <Compile Include="Reports\OperationReportCenter.cs" />
     <Compile Include="Settings\AppSettingsJson.cs" />
+    <Compile Include="Settings\Editors\AutoPreprocessingModeConverter.cs" />
     <Compile Include="Settings\Editors\OpenAddModeConverter.cs" />
     <Compile Include="Settings\Editors\StringArrayEditor.cs" />
     <Compile Include="Settings\Editors\PathEditor.cs" />

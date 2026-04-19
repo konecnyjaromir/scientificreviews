@@ -31,6 +31,7 @@ namespace ScientificReviews.Forms
         {
             InitializeComponent();
             InitializeOpenAddModeUi();
+            InitializeAutofixModeUi();
             InitializeSearchUi();
             _operationManager = new StatusStripOperationManager(statusStrip1, toolStripStatusLabel1, this);
             InitializeReportCenter();
@@ -551,6 +552,7 @@ namespace ScientificReviews.Forms
             {
                 Program.AppSettings.LoadSettings();
                 UpdateOpenAddModeUi();
+                UpdateAutofixModeUi();
             }
         }
 

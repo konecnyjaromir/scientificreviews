@@ -13,9 +13,10 @@ namespace ScientificReviews
 
     public enum AutoPreprocessingMode
     {
-        Off,
-        Fast,
-        Deep
+        Off = 0,
+        Fast = 1,
+        Deep = 2,
+        Normal = 3
     }
 
     public enum PdfSourceMatchMode
@@ -49,7 +50,7 @@ namespace ScientificReviews
 
     public class AppSettingsData
     {
-        public const int CURRENT_SETTINGS_VERSION = 3;
+        public const int CURRENT_SETTINGS_VERSION = 4;
 
         private const string APPLICATION_CAT = "0: Application";
         private const string PDF_CAT = "1: PDFs";
@@ -78,8 +79,16 @@ namespace ScientificReviews
         [Browsable(true)]
         [Category(APPLICATION_CAT)]
         [DisplayName("Auto-preprocessing mode")]
-        [Description("Selects which automatic preprocessing steps run after opening a BibTeX database: Off = none, Fast = local quick fixes and PDF pairing, Deep = all preprocessing including metadata fetch and JCR update.")]
+        [Description("Selects which automatic preprocessing steps run after opening a BibTeX database: Off = none, Fast = local quick fixes and PDF pairing, Normal = the full preprocessing pipeline using the current settings of individual procedures, Deep = the full preprocessing pipeline with the most exhaustive metadata options.")]
+        [TypeConverter(typeof(AutoPreprocessingModeConverter))]
         public AutoPreprocessingMode AutoPreprocessingMode { get; set; } = AutoPreprocessingMode.Fast;
+
+        [Browsable(true)]
+        [Category(APPLICATION_CAT)]
+        [DisplayName("Autofix mode")]
+        [Description("Selects which preprocessing mode is used by Database -> Autofix. Off = disabled, Fast = local quick fixes and PDF pairing, Normal = the full preprocessing pipeline using the current settings of individual procedures, Deep = the full preprocessing pipeline with the most exhaustive metadata options.")]
+        [TypeConverter(typeof(AutoPreprocessingModeConverter))]
+        public AutoPreprocessingMode AutofixMode { get; set; } = AutoPreprocessingMode.Normal;
 
         [Browsable(true)]
         [Category(APPLICATION_CAT)]

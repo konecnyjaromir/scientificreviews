@@ -128,6 +128,12 @@ namespace ScientificReviews
                 changed = true;
             }
 
+            if (settings.SettingsVersion < 4)
+            {
+                settings.AutofixMode = AutoPreprocessingMode.Normal;
+                changed = true;
+            }
+
             if (settings.SettingsVersion != AppSettingsData.CURRENT_SETTINGS_VERSION)
             {
                 settings.SettingsVersion = AppSettingsData.CURRENT_SETTINGS_VERSION;

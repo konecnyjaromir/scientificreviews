@@ -53,6 +53,11 @@
             this.createEntryKeysToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator9 = new System.Windows.Forms.ToolStripSeparator();
             this.autofixToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.autofixModeToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.autofixModeOffToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.autofixModeFastToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.autofixModeNormalToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.autofixModeDeepToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.fetchMissingMetadataToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator3 = new System.Windows.Forms.ToolStripSeparator();
             this.removeDuplicitiesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -308,6 +313,7 @@
             this.createEntryKeysToolStripMenuItem,
             this.toolStripSeparator9,
             this.autofixToolStripMenuItem,
+            this.autofixModeToolStripMenuItem,
             this.fetchMissingMetadataToolStripMenuItem,
             this.toolStripSeparator3,
             this.removeDuplicitiesToolStripMenuItem,
@@ -351,6 +357,49 @@
             this.autofixToolStripMenuItem.Size = new System.Drawing.Size(344, 26);
             this.autofixToolStripMenuItem.Text = "Autofix";
             this.autofixToolStripMenuItem.Click += new System.EventHandler(this.autofixToolStripMenuItem_Click);
+            // 
+            // autofixModeToolStripMenuItem
+            // 
+            this.autofixModeToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.autofixModeOffToolStripMenuItem,
+            this.autofixModeFastToolStripMenuItem,
+            this.autofixModeNormalToolStripMenuItem,
+            this.autofixModeDeepToolStripMenuItem});
+            this.autofixModeToolStripMenuItem.Name = "autofixModeToolStripMenuItem";
+            this.autofixModeToolStripMenuItem.Size = new System.Drawing.Size(344, 26);
+            this.autofixModeToolStripMenuItem.Text = "Autofix mode";
+            // 
+            // autofixModeOffToolStripMenuItem
+            // 
+            this.autofixModeOffToolStripMenuItem.Name = "autofixModeOffToolStripMenuItem";
+            this.autofixModeOffToolStripMenuItem.Size = new System.Drawing.Size(145, 26);
+            this.autofixModeOffToolStripMenuItem.Tag = "Off";
+            this.autofixModeOffToolStripMenuItem.Text = "Off";
+            this.autofixModeOffToolStripMenuItem.Click += new System.EventHandler(this.autofixModeToolStripMenuItem_Click);
+            // 
+            // autofixModeFastToolStripMenuItem
+            // 
+            this.autofixModeFastToolStripMenuItem.Name = "autofixModeFastToolStripMenuItem";
+            this.autofixModeFastToolStripMenuItem.Size = new System.Drawing.Size(145, 26);
+            this.autofixModeFastToolStripMenuItem.Tag = "Fast";
+            this.autofixModeFastToolStripMenuItem.Text = "Fast";
+            this.autofixModeFastToolStripMenuItem.Click += new System.EventHandler(this.autofixModeToolStripMenuItem_Click);
+            // 
+            // autofixModeNormalToolStripMenuItem
+            // 
+            this.autofixModeNormalToolStripMenuItem.Name = "autofixModeNormalToolStripMenuItem";
+            this.autofixModeNormalToolStripMenuItem.Size = new System.Drawing.Size(145, 26);
+            this.autofixModeNormalToolStripMenuItem.Tag = "Normal";
+            this.autofixModeNormalToolStripMenuItem.Text = "Normal";
+            this.autofixModeNormalToolStripMenuItem.Click += new System.EventHandler(this.autofixModeToolStripMenuItem_Click);
+            // 
+            // autofixModeDeepToolStripMenuItem
+            // 
+            this.autofixModeDeepToolStripMenuItem.Name = "autofixModeDeepToolStripMenuItem";
+            this.autofixModeDeepToolStripMenuItem.Size = new System.Drawing.Size(145, 26);
+            this.autofixModeDeepToolStripMenuItem.Tag = "Deep";
+            this.autofixModeDeepToolStripMenuItem.Text = "Deep";
+            this.autofixModeDeepToolStripMenuItem.Click += new System.EventHandler(this.autofixModeToolStripMenuItem_Click);
             // 
             // fetchMissingMetadataToolStripMenuItem
             // 
@@ -1052,6 +1101,11 @@
         private System.Windows.Forms.ToolStripMenuItem databaseToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem createEntryKeysToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem autofixToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem autofixModeToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem autofixModeOffToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem autofixModeFastToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem autofixModeNormalToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem autofixModeDeepToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem removeTagsToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem renameTagToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem removeTypesToolStripMenuItem;
