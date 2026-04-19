@@ -140,6 +140,7 @@ namespace ScientificReviews.Forms
         private readonly PasteAnythingService _pasteAnythingService = new PasteAnythingService();
         private readonly OperationReportCenter _reportCenter = new OperationReportCenter();
         private string _currentBibTexPath;
+        private readonly List<string> _currentBibTexSourcePaths = new List<string>();
         private bool DatabaseChanged { get; set; }
         private ContextMenuStrip _recordContextMenu;
         private ContextMenuStrip _gridBackgroundContextMenu;

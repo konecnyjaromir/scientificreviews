@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -55,11 +56,10 @@ namespace ScientificReviews.Forms
         private void UpdateWindowTitle()
         {
             string title = Program.APP_NAME;
-            if (string.IsNullOrWhiteSpace(_currentBibTexPath) == false)
+            string currentSessionTitle = GetCurrentBibTexSessionTitle();
+            if (string.IsNullOrWhiteSpace(currentSessionTitle) == false)
             {
-                string bibFileName = Path.GetFileName(_currentBibTexPath);
-                if (string.IsNullOrWhiteSpace(bibFileName) == false)
-                    title += " - " + bibFileName;
+                title += " - " + currentSessionTitle;
             }
 
             Text = title;
@@ -67,11 +67,102 @@ namespace ScientificReviews.Forms
 
         private void SetCurrentBibTex(string filePath)
         {
-            _currentBibTexPath = string.IsNullOrWhiteSpace(filePath) ? null : filePath;
-            if (string.IsNullOrWhiteSpace(filePath) == false)
-                Program.AppSettings.Data.LastBibTex = filePath;
+            SetCurrentBibTexSources(string.IsNullOrWhiteSpace(filePath) ? Array.Empty<string>() : new[] { filePath }, filePath);
+        }
+
+        private void SetCurrentBibTexSources(IEnumerable<string> sourcePaths, string currentFilePath = null)
+        {
+            string[] normalizedSourcePaths = NormalizeBibTexSourcePaths(sourcePaths);
+
+            _currentBibTexSourcePaths.Clear();
+            _currentBibTexSourcePaths.AddRange(normalizedSourcePaths);
+
+            if (string.IsNullOrWhiteSpace(currentFilePath))
+                _currentBibTexPath = normalizedSourcePaths.Length == 1 ? normalizedSourcePaths[0] : null;
+            else
+                _currentBibTexPath = Path.GetFullPath(currentFilePath);
+
+            if (string.IsNullOrWhiteSpace(_currentBibTexPath) == false)
+                Program.AppSettings.Data.LastBibTex = _currentBibTexPath;
 
             UpdateWindowTitle();
+        }
+
+        private void AddCurrentBibTexSources(IEnumerable<string> sourcePaths)
+        {
+            string[] normalizedSourcePaths = NormalizeBibTexSourcePaths(sourcePaths);
+            if (normalizedSourcePaths.Length == 0)
+                return;
+
+            string[] combinedSourcePaths = _currentBibTexSourcePaths
+                .Concat(normalizedSourcePaths)
+                .Where(path => string.IsNullOrWhiteSpace(path) == false)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            SetCurrentBibTexSources(combinedSourcePaths);
+        }
+
+        private string[] NormalizeBibTexSourcePaths(IEnumerable<string> sourcePaths)
+        {
+            return (sourcePaths ?? Array.Empty<string>())
+                .Where(path => string.IsNullOrWhiteSpace(path) == false)
+                .Select(path => Path.GetFullPath(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private string[] GetBibTexSourcePaths(string sourcePath, bool isFolderLoad)
+        {
+            if (string.IsNullOrWhiteSpace(sourcePath))
+                return Array.Empty<string>();
+
+            if (!isFolderLoad)
+                return NormalizeBibTexSourcePaths(new[] { sourcePath });
+
+            return Directory
+                .GetFiles(sourcePath, "*.bib", SearchOption.AllDirectories)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private string GetCurrentBibTexSessionTitle()
+        {
+            return string.Join(",",
+                _currentBibTexSourcePaths
+                    .Select(Path.GetFileName)
+                    .Where(fileName => string.IsNullOrWhiteSpace(fileName) == false));
+        }
+
+        private string GetCurrentBibTexSessionSaveName()
+        {
+            string[] nameParts = _currentBibTexSourcePaths
+                .Select(path => Path.GetFileNameWithoutExtension(path))
+                .Where(name => string.IsNullOrWhiteSpace(name) == false)
+                .Select(SanitizeFileNamePart)
+                .Where(name => string.IsNullOrWhiteSpace(name) == false)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            if (nameParts.Length == 0)
+                return null;
+
+            return string.Join("_", nameParts);
+        }
+
+        private string SanitizeFileNamePart(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            char[] invalidChars = Path.GetInvalidFileNameChars();
+            char[] sanitized = value
+                .Trim()
+                .Select(ch => invalidChars.Contains(ch) ? '_' : ch)
+                .ToArray();
+
+            string result = new string(sanitized).Trim();
+            return string.IsNullOrWhiteSpace(result) ? null : result;
         }
 
         private string GetDefaultPdfExportDirectory()
@@ -79,6 +170,13 @@ namespace ScientificReviews.Forms
             if (string.IsNullOrWhiteSpace(_currentBibTexPath) == false)
             {
                 string bibDirectory = Path.GetDirectoryName(_currentBibTexPath);
+                if (string.IsNullOrWhiteSpace(bibDirectory) == false)
+                    return bibDirectory;
+            }
+
+            if (_currentBibTexSourcePaths.Count > 0)
+            {
+                string bibDirectory = Path.GetDirectoryName(_currentBibTexSourcePaths[0]);
                 if (string.IsNullOrWhiteSpace(bibDirectory) == false)
                     return bibDirectory;
             }
@@ -178,8 +276,12 @@ namespace ScientificReviews.Forms
                         });
                         BibtexLoadResult loadResult = await _bibtexLoadService.LoadFolderAsync(folderDialog.SelectedPath, progress, cancellation.Token);
                         var loadedEntries = loadResult.Entries;
+                        string[] sourcePaths = GetBibTexSourcePaths(loadResult.SourcePath, loadResult.IsFolderLoad);
 
-                        SetCurrentBibTex(null);
+                        if (replaceExisting)
+                            SetCurrentBibTexSources(sourcePaths);
+                        else
+                            AddCurrentBibTexSources(sourcePaths);
                         entries.AddRange(loadedEntries);
                         LoadData(entries.ToArray());
                         Changed(!replaceExisting);
@@ -259,8 +361,12 @@ namespace ScientificReviews.Forms
                     });
                     BibtexLoadResult loadResult = await _bibtexLoadService.LoadFileAsync(fileName, progress, cancellation.Token);
                     var loadedEntries = loadResult.Entries;
+                    string[] sourcePaths = GetBibTexSourcePaths(loadResult.SourcePath, loadResult.IsFolderLoad);
 
-                    SetCurrentBibTex(fileName);
+                    if (replaceExisting)
+                        SetCurrentBibTexSources(sourcePaths, fileName);
+                    else
+                        AddCurrentBibTexSources(sourcePaths);
                     entries.AddRange(loadedEntries);
                     LoadData(entries.ToArray());
                     Changed(!replaceExisting);

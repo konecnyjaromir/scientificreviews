@@ -199,10 +199,17 @@ namespace ScientificReviews.Forms
         {
             string initialDirectory = Program.AppSettings.Data.LastDirectory;
             string currentFile = _currentBibTexPath;
+            string sessionFileName = GetCurrentBibTexSessionSaveName();
 
             if (string.IsNullOrWhiteSpace(currentFile) == false)
             {
                 string currentDirectory = Path.GetDirectoryName(currentFile);
+                if (string.IsNullOrWhiteSpace(currentDirectory) == false)
+                    initialDirectory = currentDirectory;
+            }
+            else if (_currentBibTexSourcePaths.Count > 0)
+            {
+                string currentDirectory = Path.GetDirectoryName(_currentBibTexSourcePaths[0]);
                 if (string.IsNullOrWhiteSpace(currentDirectory) == false)
                     initialDirectory = currentDirectory;
             }
@@ -219,6 +226,8 @@ namespace ScientificReviews.Forms
 
             if (string.IsNullOrWhiteSpace(currentFile) == false)
                 saveFileDialog.FileName = Path.GetFileName(currentFile);
+            else if (string.IsNullOrWhiteSpace(sessionFileName) == false)
+                saveFileDialog.FileName = sessionFileName + ".bib";
 
             return saveFileDialog;
         }
