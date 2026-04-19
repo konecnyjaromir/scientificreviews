@@ -16,8 +16,10 @@ Scientific Reviews is a Windows desktop tool for researchers who work with BibTe
 
 ### Fast screening and editing
 
-- Full-table search across rendered BibTeX content
-- Multi-term filtering using comma-separated search terms
+- Smart search with field selectors, `AND` / `OR` / `NOT`, parentheses, and implicit `AND`
+- Numeric smart-search filters such as `year:2020-2025`, `year>2025`, or `year>=2020`
+- Classic full-table search across rendered BibTeX content remains available as a fallback mode
+- Search mode toggle remembers the last selected `Smart search` / classic mode between application runs
 - Record editing through the property grid and tag editor
 - Bulk tag add/edit for selected records
 - Remove selected tags from all selected records
@@ -26,6 +28,21 @@ Scientific Reviews is a Windows desktop tool for researchers who work with BibTe
 - Duplicate, delete, and bulk-clean records directly from the grid
 - Double-click a record to open its paired PDF
 - Record menu and row context menu expose fast actions such as copy, duplicate, PDF rebind, and PDF unbind
+
+### Search modes
+
+The main search box supports two modes:
+
+- `Smart search`
+  - field-aware querying such as `title:"machine learning" AND author:novak`
+  - boolean logic with `AND`, `OR`, `NOT`
+  - grouping with parentheses, for example `(title:graph OR title:vision) AND year>=2022`
+  - numeric ranges and comparisons for number-like tags, for example `year:2020-2025`, `year>2025`, `jif>=4`
+- classic search
+  - searches the whole rendered BibTeX record
+  - comma-separated values act as `OR`
+
+The `Smart search` checkbox next to the search box switches between these modes. Hovering over the search box shows a tooltip with example syntax for the active mode.
 
 ### Clipboard and record transfer
 
@@ -297,6 +314,7 @@ Additional clipboard and metadata-related settings include:
 3. Import additional records by file, folder, or smart paste using `Ctrl+V` / `Ctrl+Shift+V`.
 4. Run `Autofix` or individual tools such as `Normalize DOI`, `Fetch missing metadata`, `Auto-pair PDFs`, or `Update JCR`.
 5. Screen, edit, tag, bind or rebind PDFs, and search records in the main grid.
+   Use smart search for WoS-like field queries and numeric filters, or switch back to classic full-record search when needed.
 6. Open PDFs by double-click or via DOI.
 7. Export the final result as BibTeX, CSV, or matched PDFs.
 

@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-This development cycle focused on turning Scientific Reviews into a faster multi-window workflow tool with stronger PDF handling, configurable preprocessing, safer save/close behavior, unified export workflows, and better background-operation control.
+This development cycle focused on turning Scientific Reviews into a faster multi-window workflow tool with stronger PDF handling, configurable preprocessing, safer save/close behavior, smarter search and filtering, unified export workflows, and better background-operation control.
 
 ### Project Workflow
 
@@ -55,6 +55,21 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Added `Ctrl+N` for `Project -> New`
 - Added `Ctrl+O` for `Open file`
 - Added `Ctrl+Shift+O` for `Open folder`
+
+### Search and Filtering
+
+- Added `Smart search` mode in the main search box
+- Smart search now supports:
+  - field selectors such as `title:value`, `author:value`, `year:value`
+  - boolean operators `AND`, `OR`, `NOT`
+  - grouping with parentheses
+  - implicit `AND` between adjacent terms
+  - numeric range filters such as `year:2020-2025`
+  - numeric comparison filters such as `year > 2025`, `year>=2025`, `jif<=4`
+- Added checkbox toggle next to the search box to switch between smart search and the original classic full-record search
+- Smart search is now the default mode for new and migrated settings
+- The selected search mode is persisted between application runs
+- Classic search remains available and keeps the original comma-separated `OR` behavior over the whole rendered record
 
 ### Tags and Record Actions
 
