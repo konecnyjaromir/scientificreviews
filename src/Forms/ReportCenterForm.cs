@@ -9,6 +9,12 @@ namespace ScientificReviews.Forms
 {
     public sealed class ReportCenterForm : Form
     {
+        private const int DefaultClientWidth = 1350;
+        private const int DefaultClientHeight = 620;
+        private const int DesiredClientWidth = 1688;
+        private const int DesiredClientHeight = 620;
+        private const int ScreenWidthMargin = 80;
+        private const int ScreenHeightMargin = 120;
         private const int LeftPanelMinimumWidth = 240;
         private const int RightPanelMinimumWidth = 420;
         private const int PreferredLeftPanelWidth = 300;
@@ -33,6 +39,7 @@ namespace ScientificReviews.Forms
         {
             _reportCenter = reportCenter ?? throw new ArgumentNullException(nameof(reportCenter));
             InitializeComponent();
+            ApplyInitialWindowSize();
             UpdateSplitterDistanceSafe();
             LoadReports();
         }
@@ -102,7 +109,7 @@ namespace ScientificReviews.Forms
             AcceptButton = _btnClose;
             AutoScaleDimensions = new SizeF(8F, 16F);
             AutoScaleMode = AutoScaleMode.Font;
-            ClientSize = new Size(1350, 620);
+            ClientSize = new Size(DefaultClientWidth, DefaultClientHeight);
             Controls.Add(_splitContainer);
             Controls.Add(buttons);
             MinimizeBox = false;
@@ -111,7 +118,6 @@ namespace ScientificReviews.Forms
             ShowIcon = false;
             StartPosition = FormStartPosition.CenterParent;
             Text = "Notifications and Reports";
-            FormClosed += ReportCenterForm_FormClosed;
             Shown += ReportCenterForm_Shown;
             SizeChanged += ReportCenterForm_SizeChanged;
 
@@ -123,18 +129,21 @@ namespace ScientificReviews.Forms
             UpdateSplitterDistanceSafe();
         }
 
-        private void ReportCenterForm_FormClosed(object sender, FormClosedEventArgs e)
-        {
-            _treeBoldFont?.Dispose();
-            _detailFont?.Dispose();
-            _detailBoldFont?.Dispose();
-            _titleFont?.Dispose();
-            _sectionFont?.Dispose();
-        }
-
         private void ReportCenterForm_SizeChanged(object sender, EventArgs e)
         {
             UpdateSplitterDistanceSafe();
+        }
+
+        private void ApplyInitialWindowSize()
+        {
+            Rectangle workingArea = Screen.FromControl(this).WorkingArea;
+            int maxClientWidth = Math.Max(MinimumSize.Width, workingArea.Width - ScreenWidthMargin);
+            int maxClientHeight = Math.Max(MinimumSize.Height, workingArea.Height - ScreenHeightMargin);
+
+            int targetWidth = Math.Min(DesiredClientWidth, maxClientWidth);
+            int targetHeight = Math.Min(DesiredClientHeight, maxClientHeight);
+
+            ClientSize = new Size(targetWidth, targetHeight);
         }
 
         private void LoadReports(Guid? selectedId = null)
