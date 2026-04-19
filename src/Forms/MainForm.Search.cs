@@ -109,7 +109,7 @@ namespace ScientificReviews.Forms
             if (UseSmartSearch)
             {
                 _searchModeCheckBoxHost.ToolTipText = "Smart search is active. Uncheck to switch to classic full-text search.";
-                txtSearch.ToolTipText = "Examples: title:\"machine learning\" AND author:novak, year:2024 OR doi:10.1000/xyz";
+                txtSearch.ToolTipText = "Examples: title:\"machine learning\" AND author:novak, year:2020-2025, year>2025 OR doi:10.1000/xyz";
             }
             else
             {

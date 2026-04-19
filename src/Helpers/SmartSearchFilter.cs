@@ -1,8 +1,10 @@
 using ScientificReviews.Bibtex;
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 
 namespace ScientificReviews.Helpers
 {
@@ -70,6 +72,15 @@ namespace ScientificReviews.Helpers
             public abstract bool Evaluate(BibtexEntry entry);
         }
 
+        private enum NumericComparisonOperator
+        {
+            Equal,
+            GreaterThan,
+            GreaterThanOrEqual,
+            LessThan,
+            LessThanOrEqual
+        }
+
         private sealed class TermNode : SearchNode
         {
             private readonly string _field;
@@ -86,59 +97,64 @@ namespace ScientificReviews.Helpers
                 return GetCandidateValues(entry, _field)
                     .Any(candidate => candidate?.IndexOf(_value, StringComparison.OrdinalIgnoreCase) >= 0);
             }
+        }
 
-            private static IEnumerable<string> GetCandidateValues(BibtexEntry entry, string field)
+        private sealed class NumericRangeNode : SearchNode
+        {
+            private readonly string _field;
+            private readonly double _minValue;
+            private readonly double _maxValue;
+
+            public NumericRangeNode(string field, double minValue, double maxValue)
             {
-                if (entry == null)
-                    return Array.Empty<string>();
+                _field = field;
+                _minValue = minValue;
+                _maxValue = maxValue;
+            }
 
-                if (string.IsNullOrWhiteSpace(field) ||
-                    string.Equals(field, "*", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(field, "all", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(field, "any", StringComparison.OrdinalIgnoreCase))
+            public override bool Evaluate(BibtexEntry entry)
+            {
+                return GetNumericCandidateValues(entry, _field)
+                    .Any(value => value >= _minValue && value <= _maxValue);
+            }
+        }
+
+        private sealed class NumericComparisonNode : SearchNode
+        {
+            private readonly string _field;
+            private readonly NumericComparisonOperator _operator;
+            private readonly double _expectedValue;
+
+            public NumericComparisonNode(string field, NumericComparisonOperator comparisonOperator, double expectedValue)
+            {
+                _field = field;
+                _operator = comparisonOperator;
+                _expectedValue = expectedValue;
+            }
+
+            public override bool Evaluate(BibtexEntry entry)
+            {
+                return GetNumericCandidateValues(entry, _field)
+                    .Any(MatchesOperator);
+            }
+
+            private bool MatchesOperator(double candidate)
+            {
+                switch (_operator)
                 {
-                    List<string> values = new List<string>();
-
-                    if (string.IsNullOrWhiteSpace(entry.Key) == false)
-                        values.Add(entry.Key);
-
-                    if (string.IsNullOrWhiteSpace(entry.Type) == false)
-                        values.Add(entry.Type);
-
-                    foreach (BibtexTag tag in entry.Tags ?? Array.Empty<BibtexTag>())
-                    {
-                        if (tag == null)
-                            continue;
-
-                        if (string.IsNullOrWhiteSpace(tag.Key) == false)
-                            values.Add(tag.Key);
-
-                        if (string.IsNullOrWhiteSpace(tag.Value) == false)
-                            values.Add(tag.Value);
-                    }
-
-                    return values;
+                    case NumericComparisonOperator.Equal:
+                        return candidate == _expectedValue;
+                    case NumericComparisonOperator.GreaterThan:
+                        return candidate > _expectedValue;
+                    case NumericComparisonOperator.GreaterThanOrEqual:
+                        return candidate >= _expectedValue;
+                    case NumericComparisonOperator.LessThan:
+                        return candidate < _expectedValue;
+                    case NumericComparisonOperator.LessThanOrEqual:
+                        return candidate <= _expectedValue;
+                    default:
+                        return false;
                 }
-
-                if (string.Equals(field, "key", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(field, "entrykey", StringComparison.OrdinalIgnoreCase))
-                    return new[] { entry.Key ?? string.Empty };
-
-                if (string.Equals(field, "type", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(field, "entrytype", StringComparison.OrdinalIgnoreCase))
-                    return new[] { entry.Type ?? string.Empty };
-
-                if (string.Equals(field, "tag", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(field, "tags", StringComparison.OrdinalIgnoreCase))
-                {
-                    return (entry.Tags ?? Array.Empty<BibtexTag>())
-                        .Where(tag => tag != null && string.IsNullOrWhiteSpace(tag.Key) == false)
-                        .Select(tag => tag.Key);
-                }
-
-                return (entry.Tags ?? Array.Empty<BibtexTag>())
-                    .Where(tag => tag != null && string.Equals(tag.Key, field, StringComparison.OrdinalIgnoreCase))
-                    .Select(tag => tag.Value ?? string.Empty);
             }
         }
 
@@ -278,6 +294,13 @@ namespace ScientificReviews.Helpers
                 if (IsOperator(token) || token == ")")
                     throw new SmartSearchParseException($"Expected a search term, got '{token}'.");
 
+                SearchNode comparisonNode;
+                if (TryParseSeparatedComparison(token, out comparisonNode))
+                    return comparisonNode;
+
+                if (TryParseEmbeddedComparison(token, out comparisonNode))
+                    return comparisonNode;
+
                 string field = null;
                 string value = null;
 
@@ -310,7 +333,101 @@ namespace ScientificReviews.Helpers
                 if (string.IsNullOrWhiteSpace(value))
                     throw new SmartSearchParseException($"Field '{field}' is missing a value.");
 
+                if (TryCreateNumericRangeNode(field, value, out SearchNode numericRangeNode))
+                    return numericRangeNode;
+
+                if (TryCreateNumericComparisonNode(field, value, out SearchNode numericComparisonNode))
+                    return numericComparisonNode;
+
                 return new TermNode(field, value);
+            }
+
+            private bool TryParseSeparatedComparison(string token, out SearchNode node)
+            {
+                node = null;
+                if (string.IsNullOrWhiteSpace(token) || token.IndexOf(':') >= 0 || IsAtEnd())
+                    return false;
+
+                if (!TryParseComparisonOperator(Peek(), out NumericComparisonOperator comparisonOperator))
+                    return false;
+
+                _position++;
+                string valueToken = ReadValueToken(token);
+                node = CreateNumericComparisonNode(token, comparisonOperator, valueToken);
+                return true;
+            }
+
+            private bool TryParseEmbeddedComparison(string token, out SearchNode node)
+            {
+                node = null;
+                if (string.IsNullOrWhiteSpace(token))
+                    return false;
+
+                foreach (string comparisonToken in new[] { ">=", "<=", ">", "<", "=" })
+                {
+                    int comparisonIndex = token.IndexOf(comparisonToken, StringComparison.Ordinal);
+                    if (comparisonIndex <= 0)
+                        continue;
+
+                    string field = token.Substring(0, comparisonIndex).Trim();
+                    string value = token.Substring(comparisonIndex + comparisonToken.Length).Trim();
+                    if (field.Length == 0 || value.Length == 0)
+                        continue;
+
+                    if (!TryParseComparisonOperator(comparisonToken, out NumericComparisonOperator comparisonOperator))
+                        continue;
+
+                    node = CreateNumericComparisonNode(field, comparisonOperator, value);
+                    return true;
+                }
+
+                return false;
+            }
+
+            private SearchNode CreateNumericComparisonNode(string field, NumericComparisonOperator comparisonOperator, string valueToken)
+            {
+                if (!TryParseNumber(valueToken, out double expectedValue))
+                    throw new SmartSearchParseException($"Comparison value '{valueToken}' is not a number.");
+
+                return new NumericComparisonNode(field, comparisonOperator, expectedValue);
+            }
+
+            private bool TryCreateNumericRangeNode(string field, string value, out SearchNode node)
+            {
+                node = null;
+                if (string.IsNullOrWhiteSpace(field))
+                    return false;
+
+                if (!TryParseNumericRange(value, out double minValue, out double maxValue))
+                    return false;
+
+                node = new NumericRangeNode(field, minValue, maxValue);
+                return true;
+            }
+
+            private bool TryCreateNumericComparisonNode(string field, string value, out SearchNode node)
+            {
+                node = null;
+                if (string.IsNullOrWhiteSpace(field) || string.IsNullOrWhiteSpace(value))
+                    return false;
+
+                foreach (string comparisonToken in new[] { ">=", "<=", ">", "<", "=" })
+                {
+                    if (!value.StartsWith(comparisonToken, StringComparison.Ordinal))
+                        continue;
+
+                    string numericValue = value.Substring(comparisonToken.Length).Trim();
+                    if (numericValue.Length == 0)
+                        throw new SmartSearchParseException($"Field '{field}' is missing a numeric comparison value.");
+
+                    if (!TryParseComparisonOperator(comparisonToken, out NumericComparisonOperator comparisonOperator))
+                        continue;
+
+                    node = CreateNumericComparisonNode(field, comparisonOperator, numericValue);
+                    return true;
+                }
+
+                return false;
             }
 
             private string ReadValueToken(string field)
@@ -456,6 +573,143 @@ namespace ScientificReviews.Helpers
                 flush();
                 return tokens;
             }
+        }
+
+        private static IEnumerable<double> GetNumericCandidateValues(BibtexEntry entry, string field)
+        {
+            return GetCandidateValues(entry, field)
+                .Select(value =>
+                {
+                    if (TryParseNumber(value, out double numericValue))
+                        return new double?(numericValue);
+
+                    return null;
+                })
+                .Where(value => value.HasValue)
+                .Select(value => value.Value);
+        }
+
+        private static IEnumerable<string> GetCandidateValues(BibtexEntry entry, string field)
+        {
+            if (entry == null)
+                return Array.Empty<string>();
+
+            if (string.IsNullOrWhiteSpace(field) ||
+                string.Equals(field, "*", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(field, "all", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(field, "any", StringComparison.OrdinalIgnoreCase))
+            {
+                List<string> values = new List<string>();
+
+                if (string.IsNullOrWhiteSpace(entry.Key) == false)
+                    values.Add(entry.Key);
+
+                if (string.IsNullOrWhiteSpace(entry.Type) == false)
+                    values.Add(entry.Type);
+
+                foreach (BibtexTag tag in entry.Tags ?? Array.Empty<BibtexTag>())
+                {
+                    if (tag == null)
+                        continue;
+
+                    if (string.IsNullOrWhiteSpace(tag.Key) == false)
+                        values.Add(tag.Key);
+
+                    if (string.IsNullOrWhiteSpace(tag.Value) == false)
+                        values.Add(tag.Value);
+                }
+
+                return values;
+            }
+
+            if (string.Equals(field, "key", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(field, "entrykey", StringComparison.OrdinalIgnoreCase))
+                return new[] { entry.Key ?? string.Empty };
+
+            if (string.Equals(field, "type", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(field, "entrytype", StringComparison.OrdinalIgnoreCase))
+                return new[] { entry.Type ?? string.Empty };
+
+            if (string.Equals(field, "tag", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(field, "tags", StringComparison.OrdinalIgnoreCase))
+            {
+                return (entry.Tags ?? Array.Empty<BibtexTag>())
+                    .Where(tag => tag != null && string.IsNullOrWhiteSpace(tag.Key) == false)
+                    .Select(tag => tag.Key);
+            }
+
+            return (entry.Tags ?? Array.Empty<BibtexTag>())
+                .Where(tag => tag != null && string.Equals(tag.Key, field, StringComparison.OrdinalIgnoreCase))
+                .Select(tag => tag.Value ?? string.Empty);
+        }
+
+        private static bool TryParseComparisonOperator(string token, out NumericComparisonOperator comparisonOperator)
+        {
+            comparisonOperator = NumericComparisonOperator.Equal;
+            switch (token)
+            {
+                case "=":
+                    comparisonOperator = NumericComparisonOperator.Equal;
+                    return true;
+                case ">":
+                    comparisonOperator = NumericComparisonOperator.GreaterThan;
+                    return true;
+                case ">=":
+                    comparisonOperator = NumericComparisonOperator.GreaterThanOrEqual;
+                    return true;
+                case "<":
+                    comparisonOperator = NumericComparisonOperator.LessThan;
+                    return true;
+                case "<=":
+                    comparisonOperator = NumericComparisonOperator.LessThanOrEqual;
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        private static bool TryParseNumericRange(string value, out double minValue, out double maxValue)
+        {
+            minValue = 0;
+            maxValue = 0;
+
+            Match rangeMatch = Regex.Match(
+                value ?? string.Empty,
+                @"^\s*(?<min>[+-]?\d+(?:[.,]\d+)?)\s*-\s*(?<max>[+-]?\d+(?:[.,]\d+)?)\s*$");
+
+            if (!rangeMatch.Success)
+                return false;
+
+            if (!TryParseNumber(rangeMatch.Groups["min"].Value, out minValue) ||
+                !TryParseNumber(rangeMatch.Groups["max"].Value, out maxValue))
+                return false;
+
+            if (minValue > maxValue)
+            {
+                double tmp = minValue;
+                minValue = maxValue;
+                maxValue = tmp;
+            }
+
+            return true;
+        }
+
+        private static bool TryParseNumber(string value, out double numericValue)
+        {
+            if (double.TryParse(
+                value,
+                NumberStyles.Float | NumberStyles.AllowThousands,
+                CultureInfo.InvariantCulture,
+                out numericValue))
+            {
+                return true;
+            }
+
+            return double.TryParse(
+                value,
+                NumberStyles.Float | NumberStyles.AllowThousands,
+                CultureInfo.CurrentCulture,
+                out numericValue);
         }
 
         private sealed class SmartSearchParseException : Exception

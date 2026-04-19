@@ -31,6 +31,9 @@ namespace ScientificReviews.Tests
             RunTest(nameof(SmartSearchFilterTests.TryParse_UsesImplicitAndBetweenAdjacentTerms), SmartSearchFilterTests.TryParse_UsesImplicitAndBetweenAdjacentTerms, failures);
             RunTest(nameof(SmartSearchFilterTests.TryParse_ReturnsValidationErrorForIncompleteField), SmartSearchFilterTests.TryParse_ReturnsValidationErrorForIncompleteField, failures);
             RunTest(nameof(SmartSearchFilterTests.TryParse_TreatsPlainUrlAsValueInsteadOfFieldSelector), SmartSearchFilterTests.TryParse_TreatsPlainUrlAsValueInsteadOfFieldSelector, failures);
+            RunTest(nameof(SmartSearchFilterTests.TryParse_MatchesNumericRangeQueries), SmartSearchFilterTests.TryParse_MatchesNumericRangeQueries, failures);
+            RunTest(nameof(SmartSearchFilterTests.TryParse_MatchesNumericComparisonsWithSpaces), SmartSearchFilterTests.TryParse_MatchesNumericComparisonsWithSpaces, failures);
+            RunTest(nameof(SmartSearchFilterTests.TryParse_MatchesNumericComparisonsWithoutSpaces), SmartSearchFilterTests.TryParse_MatchesNumericComparisonsWithoutSpaces, failures);
 
             if (failures.Count == 0)
             {

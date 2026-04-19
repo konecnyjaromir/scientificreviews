@@ -71,6 +71,45 @@ namespace ScientificReviews.Tests
             AssertTrue(result.Filter.IsMatch(entry));
         }
 
+        public static void TryParse_MatchesNumericRangeQueries()
+        {
+            BibtexEntry entry = CreateEntry(
+                "novak2022",
+                "article",
+                new BibtexTag("year", "2022"));
+
+            SmartSearchParseResult result = SmartSearchFilter.TryParse("year:2020-2025");
+
+            AssertTrue(result.Success);
+            AssertTrue(result.Filter.IsMatch(entry));
+        }
+
+        public static void TryParse_MatchesNumericComparisonsWithSpaces()
+        {
+            BibtexEntry entry = CreateEntry(
+                "novak2026",
+                "article",
+                new BibtexTag("year", "2026"));
+
+            SmartSearchParseResult result = SmartSearchFilter.TryParse("year > 2025");
+
+            AssertTrue(result.Success);
+            AssertTrue(result.Filter.IsMatch(entry));
+        }
+
+        public static void TryParse_MatchesNumericComparisonsWithoutSpaces()
+        {
+            BibtexEntry entry = CreateEntry(
+                "novak2025",
+                "article",
+                new BibtexTag("year", "2025"));
+
+            SmartSearchParseResult result = SmartSearchFilter.TryParse("year>=2025");
+
+            AssertTrue(result.Success);
+            AssertTrue(result.Filter.IsMatch(entry));
+        }
+
         private static BibtexEntry CreateEntry(string key, string type, params BibtexTag[] tags)
         {
             return new BibtexEntry
