@@ -36,15 +36,15 @@
             this.loadReplaceBibTexFolderToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator11 = new System.Windows.Forms.ToolStripSeparator();
             this.loadReplaceBibTexFileRawToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.loadBibTexFileRawToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.loadReplaceBibTexFolderRawToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.loadBibTexFolderRawToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator12 = new System.Windows.Forms.ToolStripSeparator();
             this.newToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.clearToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripMenuItem5 = new System.Windows.Forms.ToolStripSeparator();
             this.loadBibTexFileToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.loadBibTexFolderToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.loadBibTexFileRawToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.loadBibTexFolderRawToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.clearToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripMenuItem2 = new System.Windows.Forms.ToolStripSeparator();
             this.settingsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripMenuItem4 = new System.Windows.Forms.ToolStripSeparator();
@@ -82,7 +82,6 @@
             this.toolStripSeparator10 = new System.Windows.Forms.ToolStripSeparator();
             this.rebindPdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.unbindPdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.deleteSelectedToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.copyToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.copyRecordToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.cutRecordToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -105,6 +104,7 @@
             this.createExtraJCRTagsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.removeQ3Q4ToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.aboutToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.deleteSelectedToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.checkPdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.statusStrip1 = new System.Windows.Forms.StatusStrip();
             this.lblStatus = new System.Windows.Forms.ToolStripStatusLabel();
@@ -220,12 +220,26 @@
             this.loadReplaceBibTexFileRawToolStripMenuItem.Text = "Open file - as raw";
             this.loadReplaceBibTexFileRawToolStripMenuItem.Click += new System.EventHandler(this.loadReplaceBibTexFileRawToolStripMenuItem_Click);
             // 
+            // loadBibTexFileRawToolStripMenuItem
+            // 
+            this.loadBibTexFileRawToolStripMenuItem.Name = "loadBibTexFileRawToolStripMenuItem";
+            this.loadBibTexFileRawToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
+            this.loadBibTexFileRawToolStripMenuItem.Text = "Add file - as raw";
+            this.loadBibTexFileRawToolStripMenuItem.Click += new System.EventHandler(this.loadBibTexFileRawToolStripMenuItem_Click);
+            // 
             // loadReplaceBibTexFolderRawToolStripMenuItem
             // 
             this.loadReplaceBibTexFolderRawToolStripMenuItem.Name = "loadReplaceBibTexFolderRawToolStripMenuItem";
             this.loadReplaceBibTexFolderRawToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
             this.loadReplaceBibTexFolderRawToolStripMenuItem.Text = "Open folder - as raw";
             this.loadReplaceBibTexFolderRawToolStripMenuItem.Click += new System.EventHandler(this.loadReplaceBibTexFolderRawToolStripMenuItem_Click);
+            // 
+            // loadBibTexFolderRawToolStripMenuItem
+            // 
+            this.loadBibTexFolderRawToolStripMenuItem.Name = "loadBibTexFolderRawToolStripMenuItem";
+            this.loadBibTexFolderRawToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
+            this.loadBibTexFolderRawToolStripMenuItem.Text = "Add folder - as raw";
+            this.loadBibTexFolderRawToolStripMenuItem.Click += new System.EventHandler(this.loadBibTexFolderRawToolStripMenuItem_Click);
             // 
             // toolStripSeparator12
             // 
@@ -239,6 +253,13 @@
             this.newToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
             this.newToolStripMenuItem.Text = "New";
             this.newToolStripMenuItem.Click += new System.EventHandler(this.newToolStripMenuItem_Click);
+            // 
+            // clearToolStripMenuItem
+            // 
+            this.clearToolStripMenuItem.Name = "clearToolStripMenuItem";
+            this.clearToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
+            this.clearToolStripMenuItem.Text = "Clear";
+            this.clearToolStripMenuItem.Click += new System.EventHandler(this.clearToolStripMenuItem_Click);
             // 
             // toolStripMenuItem5
             // 
@@ -258,27 +279,6 @@
             this.loadBibTexFolderToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
             this.loadBibTexFolderToolStripMenuItem.Text = "Add folder";
             this.loadBibTexFolderToolStripMenuItem.Click += new System.EventHandler(this.loadBibTexFolderToolStripMenuItem_Click);
-            // 
-            // loadBibTexFileRawToolStripMenuItem
-            // 
-            this.loadBibTexFileRawToolStripMenuItem.Name = "loadBibTexFileRawToolStripMenuItem";
-            this.loadBibTexFileRawToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
-            this.loadBibTexFileRawToolStripMenuItem.Text = "Add file - as raw";
-            this.loadBibTexFileRawToolStripMenuItem.Click += new System.EventHandler(this.loadBibTexFileRawToolStripMenuItem_Click);
-            // 
-            // loadBibTexFolderRawToolStripMenuItem
-            // 
-            this.loadBibTexFolderRawToolStripMenuItem.Name = "loadBibTexFolderRawToolStripMenuItem";
-            this.loadBibTexFolderRawToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
-            this.loadBibTexFolderRawToolStripMenuItem.Text = "Add folder - as raw";
-            this.loadBibTexFolderRawToolStripMenuItem.Click += new System.EventHandler(this.loadBibTexFolderRawToolStripMenuItem_Click);
-            // 
-            // clearToolStripMenuItem
-            // 
-            this.clearToolStripMenuItem.Name = "clearToolStripMenuItem";
-            this.clearToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
-            this.clearToolStripMenuItem.Text = "Clear";
-            this.clearToolStripMenuItem.Click += new System.EventHandler(this.clearToolStripMenuItem_Click);
             // 
             // toolStripMenuItem2
             // 
@@ -551,7 +551,7 @@
             // 
             this.rebindPdfToolStripMenuItem.Name = "rebindPdfToolStripMenuItem";
             this.rebindPdfToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
-            this.rebindPdfToolStripMenuItem.Text = "Rebind PDF";
+            this.rebindPdfToolStripMenuItem.Text = "Change PDF";
             this.rebindPdfToolStripMenuItem.Click += new System.EventHandler(this.rebindPdfToolStripMenuItem_Click);
             // 
             // unbindPdfToolStripMenuItem
@@ -560,13 +560,6 @@
             this.unbindPdfToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
             this.unbindPdfToolStripMenuItem.Text = "Unbind PDF";
             this.unbindPdfToolStripMenuItem.Click += new System.EventHandler(this.unbindPdfToolStripMenuItem_Click);
-            // 
-            // deleteSelectedToolStripMenuItem
-            // 
-            this.deleteSelectedToolStripMenuItem.Name = "deleteSelectedToolStripMenuItem";
-            this.deleteSelectedToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
-            this.deleteSelectedToolStripMenuItem.Text = "Remove selected";
-            this.deleteSelectedToolStripMenuItem.Click += new System.EventHandler(this.deleteSelectedToolStripMenuItem_Click);
             // 
             // copyToolStripMenuItem
             // 
@@ -741,6 +734,13 @@
             this.aboutToolStripMenuItem.Text = "About";
             this.aboutToolStripMenuItem.Click += new System.EventHandler(this.aboutToolStripMenuItem_Click);
             // 
+            // deleteSelectedToolStripMenuItem
+            // 
+            this.deleteSelectedToolStripMenuItem.Name = "deleteSelectedToolStripMenuItem";
+            this.deleteSelectedToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
+            this.deleteSelectedToolStripMenuItem.Text = "Remove selected";
+            this.deleteSelectedToolStripMenuItem.Click += new System.EventHandler(this.deleteSelectedToolStripMenuItem_Click);
+            // 
             // checkPdfToolStripMenuItem
             // 
             this.checkPdfToolStripMenuItem.Name = "checkPdfToolStripMenuItem";
@@ -772,7 +772,7 @@
             // toolStripStatusLabel1
             // 
             this.toolStripStatusLabel1.Name = "toolStripStatusLabel1";
-            this.toolStripStatusLabel1.Size = new System.Drawing.Size(1753, 20);
+            this.toolStripStatusLabel1.Size = new System.Drawing.Size(1659, 20);
             this.toolStripStatusLabel1.Spring = true;
             // 
             // lblSelected
@@ -791,7 +791,7 @@
             // 
             this.lblReports.IsLink = true;
             this.lblReports.Name = "lblReports";
-            this.lblReports.Size = new System.Drawing.Size(93, 20);
+            this.lblReports.Size = new System.Drawing.Size(94, 20);
             this.lblReports.Text = "Notifications";
             this.lblReports.Click += new System.EventHandler(this.lblReports_Click);
             // 

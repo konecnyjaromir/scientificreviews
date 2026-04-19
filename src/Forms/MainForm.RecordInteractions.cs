@@ -33,7 +33,7 @@ namespace ScientificReviews.Forms
             _contextDuplicateMenuItem.ShortcutKeyDisplayString = "Ctrl+D";
             _contextDuplicateMenuItem.Click += (sender, e) => DuplicateSelectedRecords();
 
-            _contextRebindPdfMenuItem = new ToolStripMenuItem("Rebind PDF");
+            _contextRebindPdfMenuItem = new ToolStripMenuItem("Change PDF");
             _contextRebindPdfMenuItem.Click += (sender, e) => RebindPdfForCurrentEntry();
 
             _contextUnbindPdfMenuItem = new ToolStripMenuItem("Unbind PDF");
