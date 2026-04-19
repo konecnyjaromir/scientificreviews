@@ -166,6 +166,28 @@ namespace ScientificReviews.Forms
             UnbindPdfForCurrentEntry();
         }
 
+        private bool HasPdfTag(BibtexEntry entry)
+        {
+            string hasPdfValue = BibtexTagService.GetTagValueIgnoreCase(entry, "has_pdf");
+            if (string.IsNullOrWhiteSpace(hasPdfValue))
+                return false;
+
+            string normalized = hasPdfValue.Trim();
+            return string.Equals(normalized, "yes", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "true", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "1", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void UpdatePdfActionUi()
+        {
+            BibtexEntry currentEntry = GetCurrentEntry();
+            bool hasCurrentEntry = currentEntry != null;
+            bool canUnbindPdf = HasPdfTag(currentEntry);
+
+            rebindPdfToolStripMenuItem.Enabled = hasCurrentEntry;
+            unbindPdfToolStripMenuItem.Enabled = canUnbindPdf;
+        }
+
         private void RebindPdfForCurrentEntry()
         {
             try
@@ -193,6 +215,12 @@ namespace ScientificReviews.Forms
                 if (entry == null)
                 {
                     lblStatus.Text = "No current record selected.";
+                    return;
+                }
+
+                if (!HasPdfTag(entry))
+                {
+                    lblStatus.Text = "Current record has no PDF to unbind.";
                     return;
                 }
 

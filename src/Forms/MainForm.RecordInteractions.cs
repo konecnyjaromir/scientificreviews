@@ -64,14 +64,17 @@ namespace ScientificReviews.Forms
         private void recordContextMenu_Opening(object sender, System.ComponentModel.CancelEventArgs e)
         {
             bool hasSelection = GetSelectedOrdered().Length > 0;
+            BibtexEntry currentEntry = GetCurrentEntry();
+            bool hasCurrentEntry = currentEntry != null;
+            bool canUnbindPdf = HasPdfTag(currentEntry);
 
             _contextEditMenuItem.Checked = allowEditToolStripMenuItem.Checked;
             _contextCopyMenuItem.Enabled = hasSelection;
             _contextCutMenuItem.Enabled = hasSelection;
             _contextPasteMenuItem.Enabled = Clipboard.ContainsText() && string.IsNullOrWhiteSpace(Clipboard.GetText()) == false;
             _contextDuplicateMenuItem.Enabled = hasSelection;
-            _contextRebindPdfMenuItem.Enabled = GetCurrentEntry() != null;
-            _contextUnbindPdfMenuItem.Enabled = GetCurrentEntry() != null;
+            _contextRebindPdfMenuItem.Enabled = hasCurrentEntry;
+            _contextUnbindPdfMenuItem.Enabled = canUnbindPdf;
         }
 
         private void dataGridView1_CellMouseDown(object sender, DataGridViewCellMouseEventArgs e)
@@ -487,7 +490,10 @@ namespace ScientificReviews.Forms
         private void SelectEntry()
         {
             if (bindingSource1.Current is DataRowView == false)
+            {
+                UpdatePdfActionUi();
                 return;
+            }
 
             bool readOnly = allowEditToolStripMenuItem.Checked == false;
             DataRowView drv = (DataRowView)bindingSource1.Current;
@@ -510,6 +516,7 @@ namespace ScientificReviews.Forms
             }
 
             lblSelected.Text = $"({dataGridView1.SelectedRows.Count})";
+            UpdatePdfActionUi();
         }
 
         private void ShowEntry(BibtexEntry entry, string search = "")
