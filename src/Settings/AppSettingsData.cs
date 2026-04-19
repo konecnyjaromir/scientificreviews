@@ -43,7 +43,7 @@ namespace ScientificReviews
 
     public class AppSettingsData
     {
-        public const int CURRENT_SETTINGS_VERSION = 1;
+        public const int CURRENT_SETTINGS_VERSION = 2;
 
         private const string APPLICATION_CAT = "0: Application";
         private const string PDF_CAT = "1: PDFs";
@@ -192,6 +192,9 @@ namespace ScientificReviews
 
         [Browsable(false)]
         public LastExportSettingsData LastExportSettings { get; set; } = new LastExportSettingsData();
+
+        [Browsable(false)]
+        public bool UseSmartSearch { get; set; } = true;
 
         [Browsable(false)]
         public int SettingsVersion { get; set; } = CURRENT_SETTINGS_VERSION;

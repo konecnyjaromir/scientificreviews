@@ -1422,6 +1422,7 @@ namespace ScientificReviews.Forms
         private void txtSearch_TextChanged(object sender, EventArgs e)
         {
             LoadData(entries.ToArray(), txtSearch.Text);
+            UpdateSearchValidationStatus();
         }
 
         private void columnsToolStripMenuItem_Click(object sender, EventArgs e)

@@ -160,6 +160,7 @@
     <Compile Include="Helpers\PdfExportService.cs" />
     <Compile Include="Helpers\PdfMatchingService.cs" />
     <Compile Include="Helpers\StatusStripOperationManager.cs" />
+    <Compile Include="Helpers\SmartSearchFilter.cs" />
     <Compile Include="Forms\EditColumnsForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -235,6 +236,10 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Forms\MainForm.RecordInteractions.cs">
+      <DependentUpon>MainForm.cs</DependentUpon>
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\MainForm.Search.cs">
       <DependentUpon>MainForm.cs</DependentUpon>
       <SubType>Form</SubType>
     </Compile>

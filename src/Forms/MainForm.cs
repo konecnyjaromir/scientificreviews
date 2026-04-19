@@ -30,6 +30,7 @@ namespace ScientificReviews.Forms
         public MainForm()
         {
             InitializeComponent();
+            InitializeSearchUi();
             _operationManager = new StatusStripOperationManager(statusStrip1, toolStripStatusLabel1, this);
             InitializeReportCenter();
             UpdateWindowTitle();
@@ -199,23 +200,8 @@ namespace ScientificReviews.Forms
 
         private void LoadData(BibtexEntry[] entries, string search = "")
         {
-            if (search != "")
-            {
-                search = search.ToLower();
-                string[] searches = search.Split(',');
-                List<BibtexEntry> list = new List<BibtexEntry>();
-                foreach (string s in searches)
-                {
-                    foreach (BibtexEntry entry in entries)
-                    {
-                        string en = bibtexExporter.EntryToString(entry);
-                        if (en.ToLower().Contains(s) && list.Contains(entry) == false)
-                            list.Add(entry);
-                    }
-                }
-
-                entries = list.ToArray();
-            }
+            string searchValidationMessage;
+            entries = ApplySearchFilter(entries, search, out searchValidationMessage);
 
             visibleEntries.Clear();
             visibleEntries.AddRange(entries);
@@ -227,6 +213,9 @@ namespace ScientificReviews.Forms
             dataGridView1.DataSource = bindingSource1;
             dataGridView1.Columns["Entry"].Visible = false;
             lblInfo.Text = $"{entries.Length} entries";
+
+            if (string.IsNullOrWhiteSpace(searchValidationMessage) == false)
+                lblStatus.Text = searchValidationMessage;
         }
 
         private DataTable BuildTable(BibtexEntry[] entries, string[] userColumns)

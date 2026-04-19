@@ -113,6 +113,17 @@ namespace ScientificReviews
             if (settings.SettingsVersion < 1)
             {
                 settings.RecursivePdfSearch = true;
+                changed = true;
+            }
+
+            if (settings.SettingsVersion < 2)
+            {
+                settings.UseSmartSearch = true;
+                changed = true;
+            }
+
+            if (settings.SettingsVersion != AppSettingsData.CURRENT_SETTINGS_VERSION)
+            {
                 settings.SettingsVersion = AppSettingsData.CURRENT_SETTINGS_VERSION;
                 changed = true;
             }

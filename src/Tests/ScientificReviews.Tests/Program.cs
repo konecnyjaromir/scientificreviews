@@ -26,6 +26,11 @@ namespace ScientificReviews.Tests
             RunTest(nameof(PasteAnythingServiceTests.Parse_CreatesMiscEntryForArxivUrlAndEprint), PasteAnythingServiceTests.Parse_CreatesMiscEntryForArxivUrlAndEprint, failures);
             RunTest(nameof(PasteAnythingServiceTests.Parse_CreatesOnlineEntryForWebUrl), PasteAnythingServiceTests.Parse_CreatesOnlineEntryForWebUrl, failures);
             RunTest(nameof(PasteAnythingServiceTests.Parse_CreatesMiscEntryForTitleFallback), PasteAnythingServiceTests.Parse_CreatesMiscEntryForTitleFallback, failures);
+            RunTest(nameof(SmartSearchFilterTests.TryParse_MatchesFieldSelectorsAndBooleanOperators), SmartSearchFilterTests.TryParse_MatchesFieldSelectorsAndBooleanOperators, failures);
+            RunTest(nameof(SmartSearchFilterTests.TryParse_TreatsCommaAsOrAndSupportsParentheses), SmartSearchFilterTests.TryParse_TreatsCommaAsOrAndSupportsParentheses, failures);
+            RunTest(nameof(SmartSearchFilterTests.TryParse_UsesImplicitAndBetweenAdjacentTerms), SmartSearchFilterTests.TryParse_UsesImplicitAndBetweenAdjacentTerms, failures);
+            RunTest(nameof(SmartSearchFilterTests.TryParse_ReturnsValidationErrorForIncompleteField), SmartSearchFilterTests.TryParse_ReturnsValidationErrorForIncompleteField, failures);
+            RunTest(nameof(SmartSearchFilterTests.TryParse_TreatsPlainUrlAsValueInsteadOfFieldSelector), SmartSearchFilterTests.TryParse_TreatsPlainUrlAsValueInsteadOfFieldSelector, failures);
 
             if (failures.Count == 0)
             {

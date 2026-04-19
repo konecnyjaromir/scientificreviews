@@ -126,7 +126,6 @@
             this.toolStrip1 = new System.Windows.Forms.ToolStrip();
             this.toolStripLabel1 = new System.Windows.Forms.ToolStripLabel();
             this.txtSearch = new System.Windows.Forms.ToolStripTextBox();
-            this.toolStripLabel2 = new System.Windows.Forms.ToolStripLabel();
             this.toolStripSeparator1 = new System.Windows.Forms.ToolStripSeparator();
             this.btnGoogle = new System.Windows.Forms.ToolStripButton();
             this.btnDoi = new System.Windows.Forms.ToolStripButton();
@@ -927,7 +926,6 @@
             this.toolStrip1.Items.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.toolStripLabel1,
             this.txtSearch,
-            this.toolStripLabel2,
             this.toolStripSeparator1,
             this.btnGoogle,
             this.btnDoi,
@@ -956,12 +954,6 @@
             this.txtSearch.Name = "txtSearch";
             this.txtSearch.Size = new System.Drawing.Size(399, 27);
             this.txtSearch.TextChanged += new System.EventHandler(this.txtSearch_TextChanged);
-            // 
-            // toolStripLabel2
-            // 
-            this.toolStripLabel2.Name = "toolStripLabel2";
-            this.toolStripLabel2.Size = new System.Drawing.Size(152, 24);
-            this.toolStripLabel2.Text = "Separated by \',\' as OR";
             // 
             // toolStripSeparator1
             // 
@@ -1127,7 +1119,6 @@
         private System.Windows.Forms.ToolStripStatusLabel lblSelected;
         private System.Windows.Forms.ToolStripButton btnGoogle;
         private System.Windows.Forms.ToolStripButton btnPdf;
-        private System.Windows.Forms.ToolStripLabel toolStripLabel2;
         private System.Windows.Forms.ToolStripMenuItem clearToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripMenuItem2;
         private System.Windows.Forms.RichTextBox richTextBox1;
