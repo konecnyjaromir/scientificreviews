@@ -102,6 +102,7 @@
             this.toolStripMenuItem3 = new System.Windows.Forms.ToolStripSeparator();
             this.exportSelectedPDFToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.journalCitationReportsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.autoupdateJCRToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.updateJournalsDatabaseToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator7 = new System.Windows.Forms.ToolStripSeparator();
             this.createExtraJCRTagsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -728,6 +729,7 @@
             // journalCitationReportsToolStripMenuItem
             // 
             this.journalCitationReportsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.autoupdateJCRToolStripMenuItem,
             this.updateJournalsDatabaseToolStripMenuItem,
             this.toolStripSeparator7,
             this.createExtraJCRTagsToolStripMenuItem,
@@ -736,29 +738,38 @@
             this.journalCitationReportsToolStripMenuItem.Size = new System.Drawing.Size(282, 24);
             this.journalCitationReportsToolStripMenuItem.Text = "Journal Citation Reports (Experimental)";
             // 
+            // autoupdateJCRToolStripMenuItem
+            // 
+            this.autoupdateJCRToolStripMenuItem.Name = "autoupdateJCRToolStripMenuItem";
+            this.autoupdateJCRToolStripMenuItem.ShortcutKeys = ((System.Windows.Forms.Keys)(((System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift) 
+            | System.Windows.Forms.Keys.U)));
+            this.autoupdateJCRToolStripMenuItem.Size = new System.Drawing.Size(298, 26);
+            this.autoupdateJCRToolStripMenuItem.Text = "Autoupdate JCR";
+            this.autoupdateJCRToolStripMenuItem.Click += new System.EventHandler(this.autoupdateJCRToolStripMenuItem_Click);
+            // 
             // updateJournalsDatabaseToolStripMenuItem
             // 
             this.updateJournalsDatabaseToolStripMenuItem.Name = "updateJournalsDatabaseToolStripMenuItem";
-            this.updateJournalsDatabaseToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
+            this.updateJournalsDatabaseToolStripMenuItem.Size = new System.Drawing.Size(298, 26);
             this.updateJournalsDatabaseToolStripMenuItem.Text = "Update Journals Database";
             this.updateJournalsDatabaseToolStripMenuItem.Click += new System.EventHandler(this.updateJournalsDatabaseToolStripMenuItem_Click);
             // 
             // toolStripSeparator7
             // 
             this.toolStripSeparator7.Name = "toolStripSeparator7";
-            this.toolStripSeparator7.Size = new System.Drawing.Size(262, 6);
+            this.toolStripSeparator7.Size = new System.Drawing.Size(295, 6);
             // 
             // createExtraJCRTagsToolStripMenuItem
             // 
             this.createExtraJCRTagsToolStripMenuItem.Name = "createExtraJCRTagsToolStripMenuItem";
-            this.createExtraJCRTagsToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
+            this.createExtraJCRTagsToolStripMenuItem.Size = new System.Drawing.Size(298, 26);
             this.createExtraJCRTagsToolStripMenuItem.Text = "Create extra JCR tags";
             this.createExtraJCRTagsToolStripMenuItem.Click += new System.EventHandler(this.createExtraJCRTagsToolStripMenuItem_Click);
             // 
             // removeQ3Q4ToolStripMenuItem
             // 
             this.removeQ3Q4ToolStripMenuItem.Name = "removeQ3Q4ToolStripMenuItem";
-            this.removeQ3Q4ToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
+            this.removeQ3Q4ToolStripMenuItem.Size = new System.Drawing.Size(298, 26);
             this.removeQ3Q4ToolStripMenuItem.Text = "Remove Q3 Q4";
             this.removeQ3Q4ToolStripMenuItem.Click += new System.EventHandler(this.removeQ3Q4ToolStripMenuItem_Click);
             // 
@@ -1164,6 +1175,7 @@
         private System.Windows.Forms.Splitter splitter2;
         private System.Windows.Forms.ToolStripMenuItem updatePageTagFormatToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem journalCitationReportsToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem autoupdateJCRToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem updateJournalsDatabaseToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem createExtraJCRTagsToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem removeQ3Q4ToolStripMenuItem;

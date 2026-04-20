@@ -712,6 +712,11 @@ namespace ScientificReviews.Forms
             await StartUpdateJcrOperationAsync(false);
         }
 
+        private async void autoupdateJCRToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            await StartAutoupdateJcrOperationAsync();
+        }
+
         private async Task StartUpdateJcrOperationAsync(bool startedAutomatically, CancellationToken externalCancellationToken = default(CancellationToken))
         {
             if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.JcrApiKey))
@@ -804,12 +809,192 @@ namespace ScientificReviews.Forms
             }
         }
 
-        private async Task<JcrUpdateResult> RunUpdateJcrAsync(StatusStripOperationHandle operation, CancellationToken cancellationToken)
+        private async Task StartAutoupdateJcrOperationAsync(CancellationToken externalCancellationToken = default(CancellationToken))
+        {
+            if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.JcrApiKey))
+            {
+                lblStatus.Text = "JCR Api key is not set.";
+                return;
+            }
+
+            StatusStripOperationHandle operation = StartTrackedOperation(
+                "autoupdate-jcr",
+                "Autoupdate JCR",
+                "Update Journals Database -> Create extra JCR tags");
+            if (operation == null)
+                return;
+
+            ProcessLogScope log = BeginProcessLog("Autoupdate JCR", "Update Journals Database -> Create extra JCR tags");
+            EntryChangeSnapshot overallChangeSnapshot = CaptureEntryChanges(entries.ToArray());
+            using (CancellationTokenSource cancellation = CancellationTokenSource.CreateLinkedTokenSource(externalCancellationToken))
+            using (ReportScopeContext reportScope = BeginReportScope(
+                "Autoupdate JCR",
+                "Autoupdate JCR started.",
+                $"Records: {entries.Count}{Environment.NewLine}Subtasks: Update Journals Database -> Create extra JCR tags"))
+            {
+                operation.RegisterCancellation(cancellation.Cancel);
+
+                try
+                {
+                    lblStatus.Text = "Autoupdate JCR started.";
+
+                    JcrUpdateResult updateResult;
+                    using (ReportScopeContext updateScope = BeginReportScope(
+                        "Update Journals Database",
+                        "Update Journals Database started.",
+                        "Subtask 1/2"))
+                    {
+                        operation.Report("Update Journals Database", "Subtask 1/2", 1, 2, false);
+                        updateResult = await RunUpdateJcrAsync(operation, cancellation.Token, 1, 2);
+
+                        Dictionary<string, JournalReportsDto> updatedReportsByName = BuildJcrReportsByName();
+                        Dictionary<string, string> lookupReasonsByJournal = BuildJcrLookupReasonsByJournal(updateResult);
+                        JcrCoverageReport updateCoverageReport = BuildJcrCoverageReport(entries.ToArray(), updatedReportsByName, lookupReasonsByJournal);
+                        string updateSummary = updateResult.MissingJournalCount == 0
+                            ? "No missing journals."
+                            : $"Resolved {updateResult.ResolvedJournalCount}/{updateResult.MissingJournalCount} missing journals.";
+                        string updateDetails = BuildJcrCoverageDetails(
+                            updateCoverageReport.ResolvedEntries,
+                            updateCoverageReport.MissingJcrTagEntries,
+                            updateCoverageReport.MissingJournalEntries,
+                            updateCoverageReport.UnresolvedEntries,
+                            updateCoverageReport.ErrorEntries,
+                            updateCoverageReport.ResolvedRecordDetails,
+                            updateCoverageReport.UnresolvedRecordDetails,
+                            updateCoverageReport.MissingJournalRecordDetails,
+                            updateCoverageReport.ErrorRecordDetails,
+                            "These records have journal and their JCR data is now available");
+
+                        updateScope.Complete(
+                            updateSummary,
+                            updateDetails,
+                            updateResult.NotFoundJournalCount > 0 || updateCoverageReport.ErrorEntries > 0
+                                ? OperationReportSeverity.Warning
+                                : OperationReportSeverity.Info);
+                        LogProcessProgress(log, "Update Journals Database completed.");
+                    }
+
+                    JcrTagCreationResult tagResult;
+                    EntryChangeReport changeReport;
+                    string tagSummary;
+                    string tagDetails;
+                    OperationReportSeverity tagSeverity;
+                    using (ReportScopeContext createScope = BeginReportScope(
+                        "Create extra JCR tags",
+                        "Create extra JCR tags started.",
+                        "Subtask 2/2"))
+                    {
+                        operation.Report("Create extra JCR tags", "Subtask 2/2", 2, 2, false);
+                        Dictionary<string, JournalReportsDto> reportsByName = BuildJcrReportsByName();
+                        EntryChangeSnapshot tagChangeSnapshot = CaptureEntryChanges(entries.ToArray());
+                        tagResult = CreateExtraJcrTags(entries.ToArray(), reportsByName);
+                        changeReport = BuildEntryChangeReport(tagChangeSnapshot);
+
+                        if (tagResult.UpdatedEntries > 0)
+                        {
+                            RefreshGrid();
+                            Changed();
+                        }
+
+                        tagSummary = tagResult.UpdatedEntries > 0
+                            ? $"Create extra JCR tags finished. Updated {tagResult.UpdatedEntries} record(s)."
+                            : "Create extra JCR tags finished. No records required JCR tag changes.";
+                        tagDetails = BuildJcrCoverageDetails(
+                            tagResult.MatchedJournalEntries,
+                            tagResult.MissingJcrTagEntries,
+                            tagResult.MissingJournalTagEntries,
+                            tagResult.MissingJcrReportEntries + tagResult.InvalidJcrDataEntries,
+                            tagResult.ErrorEntries,
+                            tagResult.ResolvedRecordDetails,
+                            tagResult.UnresolvedRecordDetails,
+                            tagResult.MissingJournalRecordDetails,
+                            tagResult.ErrorRecordDetails,
+                            "These records have journal and JCR tags were created or confirmed.");
+                        tagSeverity = tagResult.InvalidJcrDataEntries > 0 || tagResult.MissingJcrReportEntries > 0 || tagResult.ErrorEntries > 0
+                            ? OperationReportSeverity.Warning
+                            : OperationReportSeverity.Info;
+
+                        createScope.Complete(tagSummary, tagDetails, tagSeverity, changeReport);
+                        LogProcessProgress(log, "Create extra JCR tags completed.");
+                    }
+
+                    EntryChangeReport overallChangeReport = BuildEntryChangeReport(overallChangeSnapshot);
+                    string summary = updateResult.MissingJournalCount == 0
+                        ? $"Autoupdate JCR finished. {tagSummary}"
+                        : $"Autoupdate JCR finished. Resolved {updateResult.ResolvedJournalCount}/{updateResult.MissingJournalCount} journals and updated {tagResult.UpdatedEntries} record(s).";
+                    string details =
+                        $"Subtask 1/2: Update Journals Database{Environment.NewLine}" +
+                        $"Resolved journals: {updateResult.ResolvedJournalCount}/{updateResult.MissingJournalCount}{Environment.NewLine}{Environment.NewLine}" +
+                        $"Subtask 2/2: Create extra JCR tags{Environment.NewLine}" +
+                        $"Updated records: {tagResult.UpdatedEntries}{Environment.NewLine}" +
+                        $"Records still missing JCR tags: {tagResult.MissingJcrTagEntries}";
+
+                    operation.Complete(summary, details);
+                    lblStatus.Text = summary;
+                    log.Complete(summary);
+                    reportScope.Complete(
+                        summary,
+                        details,
+                        (updateResult.NotFoundJournalCount > 0 || tagSeverity != OperationReportSeverity.Info)
+                            ? OperationReportSeverity.Warning
+                            : OperationReportSeverity.Info,
+                        overallChangeReport);
+                }
+                catch (OperationCanceledException)
+                {
+                    operation.Cancel("Cancelled", "Autoupdate JCR was stopped by user.");
+                    lblStatus.Text = "Autoupdate JCR cancelled.";
+                    log.Complete("Autoupdate JCR cancelled.");
+                    reportScope.Complete("Autoupdate JCR cancelled.", null, OperationReportSeverity.Warning);
+                }
+                catch (Exception ex)
+                {
+                    operation.Fail(ex, "Failed");
+                    lblStatus.Text = ex.Message;
+                    log.Fail(ex, "Autoupdate JCR failed.");
+                    reportScope.Complete("Autoupdate JCR failed.", ex.Message, OperationReportSeverity.Error);
+                }
+                finally
+                {
+                    log.Dispose();
+                }
+            }
+        }
+
+        private Dictionary<string, JournalReportsDto> BuildJcrReportsByName()
+        {
+            return (Program.JournalsDatabase.Data.JournalReports ?? new List<JournalReportsDto>())
+                .Where(report => string.IsNullOrWhiteSpace(NormalizeJournalNameForLookup(report?.Journal?.Name)) == false)
+                .GroupBy(report => NormalizeJournalNameForLookup(report.Journal.Name))
+                .ToDictionary(group => group.Key, group => group.First());
+        }
+
+        private Dictionary<string, string> BuildJcrLookupReasonsByJournal(JcrUpdateResult result)
+        {
+            return (result?.LookupIssues ?? new List<JcrJournalLookupIssue>())
+                .Where(item => string.IsNullOrWhiteSpace(NormalizeJournalNameForLookup(item?.JournalName)) == false)
+                .GroupBy(item => NormalizeJournalNameForLookup(item.JournalName))
+                .ToDictionary(group => group.Key, group => group.Last().Reason);
+        }
+
+        private async Task<JcrUpdateResult> RunUpdateJcrAsync(StatusStripOperationHandle operation, CancellationToken cancellationToken, int subtaskIndex = 1, int totalSubtasks = 1)
         {
             ProcessLogScope log = BeginProcessLog("Update JCR inner", "Progress tracking");
             Progress<JcrUpdateProgress> progress = new Progress<JcrUpdateProgress>(update =>
             {
-                operation.Report(update?.Summary, update?.Details, update?.Completed, update?.Total, false);
+                string details = update?.Details;
+                if (totalSubtasks > 1)
+                {
+                    details = string.IsNullOrWhiteSpace(details)
+                        ? $"Subtask {subtaskIndex}/{totalSubtasks}"
+                        : $"Subtask {subtaskIndex}/{totalSubtasks}{Environment.NewLine}{details}";
+
+                    operation.Report(update?.Summary, details, subtaskIndex, totalSubtasks, false);
+                }
+                else
+                {
+                    operation.Report(update?.Summary, details, update?.Completed, update?.Total, false);
+                }
                 LogProcessProgress(log, update?.Summary, update?.Details, update?.Completed, update?.Total);
             });
 
