@@ -116,6 +116,8 @@
             this.lblReports = new System.Windows.Forms.ToolStripStatusLabel();
             this.dataGridView1 = new System.Windows.Forms.DataGridView();
             this.splitter1 = new System.Windows.Forms.Splitter();
+            this.panelRecordPanelToggle = new System.Windows.Forms.Panel();
+            this.btnToggleRecordPanel = new System.Windows.Forms.Button();
             this.propertyGrid1 = new System.Windows.Forms.PropertyGrid();
             this.panel1 = new System.Windows.Forms.Panel();
             this.richTextBox1 = new System.Windows.Forms.RichTextBox();
@@ -142,6 +144,7 @@
             this.menuStrip1.SuspendLayout();
             this.statusStrip1.SuspendLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridView1)).BeginInit();
+            this.panelRecordPanelToggle.SuspendLayout();
             this.panel1.SuspendLayout();
             this.toolStrip2.SuspendLayout();
             this.toolStrip1.SuspendLayout();
@@ -846,6 +849,32 @@
             this.splitter1.TabIndex = 5;
             this.splitter1.TabStop = false;
             // 
+            // panelRecordPanelToggle
+            // 
+            this.panelRecordPanelToggle.BackColor = System.Drawing.SystemColors.ControlLight;
+            this.panelRecordPanelToggle.Controls.Add(this.btnToggleRecordPanel);
+            this.panelRecordPanelToggle.Dock = System.Windows.Forms.DockStyle.Left;
+            this.panelRecordPanelToggle.Location = new System.Drawing.Point(1076, 55);
+            this.panelRecordPanelToggle.Margin = new System.Windows.Forms.Padding(0);
+            this.panelRecordPanelToggle.Name = "panelRecordPanelToggle";
+            this.panelRecordPanelToggle.Size = new System.Drawing.Size(18, 974);
+            this.panelRecordPanelToggle.TabIndex = 6;
+            // 
+            // btnToggleRecordPanel
+            // 
+            this.btnToggleRecordPanel.Cursor = System.Windows.Forms.Cursors.Hand;
+            this.btnToggleRecordPanel.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.btnToggleRecordPanel.FlatAppearance.BorderSize = 0;
+            this.btnToggleRecordPanel.FlatStyle = System.Windows.Forms.FlatStyle.Flat;
+            this.btnToggleRecordPanel.Location = new System.Drawing.Point(0, 0);
+            this.btnToggleRecordPanel.Margin = new System.Windows.Forms.Padding(0);
+            this.btnToggleRecordPanel.Name = "btnToggleRecordPanel";
+            this.btnToggleRecordPanel.Size = new System.Drawing.Size(18, 974);
+            this.btnToggleRecordPanel.TabIndex = 0;
+            this.btnToggleRecordPanel.Text = ">";
+            this.btnToggleRecordPanel.UseVisualStyleBackColor = true;
+            this.btnToggleRecordPanel.Click += new System.EventHandler(this.btnToggleRecordPanel_Click);
+            // 
             // propertyGrid1
             // 
             this.propertyGrid1.Dock = System.Windows.Forms.DockStyle.Top;
@@ -1054,6 +1083,7 @@
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(1840, 1055);
             this.Controls.Add(this.panel1);
+            this.Controls.Add(this.panelRecordPanelToggle);
             this.Controls.Add(this.splitter1);
             this.Controls.Add(this.dataGridView1);
             this.Controls.Add(this.statusStrip1);
@@ -1073,6 +1103,7 @@
             this.statusStrip1.ResumeLayout(false);
             this.statusStrip1.PerformLayout();
             ((System.ComponentModel.ISupportInitialize)(this.dataGridView1)).EndInit();
+            this.panelRecordPanelToggle.ResumeLayout(false);
             this.panel1.ResumeLayout(false);
             this.panel1.PerformLayout();
             this.toolStrip2.ResumeLayout(false);
@@ -1110,6 +1141,8 @@
         private System.Windows.Forms.ToolStripMenuItem renameTagToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem removeTypesToolStripMenuItem;
         private System.Windows.Forms.Splitter splitter1;
+        private System.Windows.Forms.Panel panelRecordPanelToggle;
+        private System.Windows.Forms.Button btnToggleRecordPanel;
         private System.Windows.Forms.ToolStripStatusLabel toolStripStatusLabel1;
         private System.Windows.Forms.ToolStripStatusLabel lblInfo;
         private System.Windows.Forms.ToolStripStatusLabel lblReports;

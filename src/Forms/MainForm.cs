@@ -21,6 +21,9 @@ namespace ScientificReviews.Forms
         private const int WM_CUT = 0x0300;
         private const int WM_COPY = 0x0301;
         private const int WM_PASTE = 0x0302;
+        private const int RecordPanelToggleWidth = 18;
+        private const int MinimumExpandedGridWidth = 360;
+        private const int MinimumExpandedRecordPanelWidth = 280;
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetFocus();
@@ -42,10 +45,12 @@ namespace ScientificReviews.Forms
             InitializeReportCenter();
             UpdateWindowTitle();
             InitializeRecordContextMenu();
+            InitializeRecordPanelToggleUi();
             dataGridView1.CellMouseDoubleClick += dataGridView1_CellMouseDoubleClick;
             dataGridView1.CellMouseDown += dataGridView1_CellMouseDown;
             dataGridView1.ColumnHeaderMouseClick += dataGridView1_ColumnHeaderMouseClick;
             dataGridView1.MouseDown += dataGridView1_MouseDown;
+            splitter1.SplitterMoved += splitter1_SplitterMoved;
         }
 
         private bool IsBlockingUiActive => _operationManager?.HasBlockingOperations ?? false;
@@ -74,6 +79,7 @@ namespace ScientificReviews.Forms
             toolStrip1.Enabled = enabled;
             toolStrip2.Enabled = enabled;
             dataGridView1.Enabled = enabled;
+            panelRecordPanelToggle.Enabled = enabled;
             panel1.Enabled = enabled;
             splitter1.Enabled = enabled;
             splitter2.Enabled = enabled;
@@ -171,6 +177,9 @@ namespace ScientificReviews.Forms
         private readonly List<string> _currentBibTexSourcePaths = new List<string>();
         private string _currentSortColumnName;
         private ListSortDirection? _currentSortDirection;
+        private bool _isRecordPanelCollapsed;
+        private int _expandedGridWidth;
+        private int _expandedRecordPanelWidth;
         private bool DatabaseChanged { get; set; }
         private ContextMenuStrip _recordContextMenu;
         private ContextMenuStrip _gridBackgroundContextMenu;
@@ -198,6 +207,84 @@ namespace ScientificReviews.Forms
                 ThreadCount = GetConfiguredThreadCount(),
                 SourceMatchMode = Program.AppSettings.Data.PdfSourceMatchMode
             };
+        }
+
+        private void InitializeRecordPanelToggleUi()
+        {
+            _expandedGridWidth = Math.Max(MinimumExpandedGridWidth, dataGridView1.Width);
+            _expandedRecordPanelWidth = Math.Max(MinimumExpandedRecordPanelWidth, panel1.Width);
+            panelRecordPanelToggle.Width = RecordPanelToggleWidth;
+            ApplyRecordPanelLayout();
+        }
+
+        private void btnToggleRecordPanel_Click(object sender, EventArgs e)
+        {
+            ToggleRecordPanelVisibility();
+        }
+
+        private void splitter1_SplitterMoved(object sender, SplitterEventArgs e)
+        {
+            if (_isRecordPanelCollapsed)
+                return;
+
+            StoreExpandedRecordPanelMetrics();
+        }
+
+        private void ToggleRecordPanelVisibility()
+        {
+            if (_isRecordPanelCollapsed)
+            {
+                _isRecordPanelCollapsed = false;
+                ApplyRecordPanelLayout();
+                lblStatus.Text = "Record panel expanded.";
+                return;
+            }
+
+            StoreExpandedRecordPanelMetrics();
+            _isRecordPanelCollapsed = true;
+            ApplyRecordPanelLayout();
+            lblStatus.Text = "Record panel hidden.";
+        }
+
+        private void StoreExpandedRecordPanelMetrics()
+        {
+            if (_isRecordPanelCollapsed)
+                return;
+
+            if (dataGridView1.Width >= MinimumExpandedGridWidth)
+                _expandedGridWidth = dataGridView1.Width;
+
+            if (panel1.Width >= MinimumExpandedRecordPanelWidth)
+                _expandedRecordPanelWidth = panel1.Width;
+        }
+
+        private void ApplyRecordPanelLayout()
+        {
+            if (_isRecordPanelCollapsed)
+            {
+                panel1.Visible = false;
+                splitter1.Visible = false;
+                panelRecordPanelToggle.Dock = DockStyle.Right;
+                btnToggleRecordPanel.Text = "<";
+                dataGridView1.Dock = DockStyle.Fill;
+                panelRecordPanelToggle.BringToFront();
+                return;
+            }
+
+            dataGridView1.Dock = DockStyle.Left;
+            dataGridView1.Width = CalculateExpandedGridWidth();
+            splitter1.Visible = true;
+            panelRecordPanelToggle.Dock = DockStyle.Left;
+            panel1.Visible = true;
+            panel1.Dock = DockStyle.Fill;
+            btnToggleRecordPanel.Text = ">";
+        }
+
+        private int CalculateExpandedGridWidth()
+        {
+            int availableWidth = ClientSize.Width - splitter1.Width - panelRecordPanelToggle.Width - _expandedRecordPanelWidth;
+            int maxGridWidth = Math.Max(MinimumExpandedGridWidth, availableWidth);
+            return Math.Max(MinimumExpandedGridWidth, Math.Min(_expandedGridWidth, maxGridWidth));
         }
 
         private StatusStripOperationHandle StartTrackedOperation(string key, string name, string details = null, bool silentIfAlreadyRunning = false, Action cancelAction = null, bool isBlocking = false)
