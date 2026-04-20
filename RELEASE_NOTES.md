@@ -26,6 +26,7 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Added `DatabaseChanged` tracking for unsaved BibTeX changes
 - Closing the application now warns before losing unsaved work, with default action set to `No`
 - Added `Allow unsafe closing` setting to bypass the unsaved-changes warning when desired
+- Save and `Save As` now run through the new blocking-task mechanism, so saving stays async but the main window is temporarily locked against conflicting edits
 
 ### Record Editing and Clipboard
 
@@ -117,6 +118,7 @@ This development cycle focused on turning Scientific Reviews into a faster multi
   - `Custom` with placeholders such as `<key>_<title>_<doi>`
 - Export now runs asynchronously and in parallel
 - Added progress bar and cancel support to the export dialog
+- PDF export now also uses the new blocking-task mechanism, so the export stays async while the main window is temporarily locked against conflicting edits
 - Updated the `Export PDFs` dialog to match the newer export-form GUI style
 - Switched PDF metadata injection to the iText library
 - Added export preflight validation for source PDFs and destination paths
@@ -206,11 +208,14 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Added `Ctrl+Shift+E` shortcut for database export
 - Database export now runs modally from the export form with progress and cancel support
 - Successful database export now closes the export form automatically
+- Database export now runs through the new blocking-task mechanism to protect the in-memory archive during export
 
 ### Background Operations and Performance
 
 - Added a status-strip operation manager for long-running tasks
 - Added support for multiple parallel background operations in the main window
+- Added general blocking/non-blocking task support to the operation manager
+- Blocking tasks are now tracked centrally, automatically labeled with `(blocking)`, and can temporarily lock the main window while still using async execution
 - Added shared `Threads` setting with default value `4`
 - Multi-threaded operations now use the configured `Threads` value
 - `Auto-pair with PDFs` now runs asynchronously and in parallel

@@ -219,6 +219,7 @@ Scientific Reviews includes multiple export workflows.
 
 - Dedicated export form for BibTeX and CSV exports
 - Separate dedicated export form for PDF export
+- Save and export workflows support blocking tasks that temporarily lock the main window to protect the current archive from concurrent edits
 
 ### Export form
 
@@ -242,6 +243,7 @@ The export dialog lets you configure:
   - custom separator
 
 `As columns` uses the `Custom columns` setting. `As standard` uses the `Standard columns` setting.
+- Blocking save/export tasks are marked with `(blocking)` in the status strip while they are running
 
 ### PDF export
 
@@ -255,6 +257,7 @@ The export dialog lets you configure:
   - `Key_Title`
   - `Custom` using placeholders like `<key>_<title>_<doi>`
 - Export runs asynchronously with progress bar and cancel button
+- PDF export can also run as a blocking task, so the export stays asynchronous while edits in the main window are temporarily disabled
 - PDF metadata injection is implemented through the open-source iText library
 - Export performs source/destination validation before copying files
 - Detailed export logging records skipped records, prepared jobs, successful exports, and per-file errors
@@ -274,6 +277,8 @@ The export dialog lets you configure:
 ## Logging and Background Operations
 
 - Long-running tasks run through a status-strip operation manager
+- The operation manager supports both regular background tasks and blocking tasks
+- Blocking tasks lock the main window, suppress shortcuts, and prevent closing the main form until the operation completes, fails, or is cancelled
 - Process logging is written next to the executable into the `logs` folder
 - Log files are text `.log` files separated by date
 - Major workflows such as load, save, export, PDF auto-pair, metadata fetch, and JCR update are logged
