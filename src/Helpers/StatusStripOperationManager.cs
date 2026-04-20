@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -131,7 +132,7 @@ namespace ScientificReviews.Helpers
             public string Status { get; set; }
             public ToolStripSeparator Separator { get; set; }
             public ToolStripStatusLabel Label { get; set; }
-            public ToolStripProgressBar ProgressBar { get; set; }
+            public StatusStripOperationIndicatorHost IndicatorHost { get; set; }
             public int? Completed { get; set; }
             public int? Total { get; set; }
             public bool IsIndeterminate { get; set; }
@@ -228,7 +229,7 @@ namespace ScientificReviews.Helpers
             PostToUi(() =>
             {
                 var state = GetState(operationId);
-                if (state == null || state.Label == null || state.ProgressBar == null)
+                if (state == null || state.Label == null || state.IndicatorHost == null)
                     return;
 
                 if (string.IsNullOrWhiteSpace(update?.Summary) == false)
@@ -324,20 +325,21 @@ namespace ScientificReviews.Helpers
             PostToUi(() =>
             {
                 state = GetState(operationId);
-                if (state == null || state.Label == null || state.ProgressBar == null)
+                if (state == null || state.Label == null || state.IndicatorHost == null)
                     return;
 
                 state.Status = status;
                 if (string.IsNullOrWhiteSpace(summary) == false)
                     state.Summary = summary;
                 if (string.IsNullOrWhiteSpace(details) == false)
-                    state.Details = details;
+                state.Details = details;
                 state.CancellationRequested = false;
                 state.CancelAction = null;
 
-                state.ProgressBar.Style = ProgressBarStyle.Continuous;
-                state.ProgressBar.Maximum = 1;
-                state.ProgressBar.Value = 1;
+                state.IsIndeterminate = false;
+                state.Completed = 1;
+                state.Total = 1;
+                state.IndicatorHost.Indicator.SetFiniteProgress(1, 1);
 
                 state.Label.Text = failed
                     ? $"{GetDisplayName(state)}: failed"
@@ -359,8 +361,7 @@ namespace ScientificReviews.Helpers
                 state.IsIndeterminate = true;
                 state.Completed = null;
                 state.Total = null;
-                state.ProgressBar.Style = ProgressBarStyle.Marquee;
-                state.ProgressBar.MarqueeAnimationSpeed = 20;
+                state.IndicatorHost.Indicator.SetIndeterminate();
                 return;
             }
 
@@ -370,8 +371,7 @@ namespace ScientificReviews.Helpers
             {
                 state.Completed = update.Completed;
                 state.Total = update.Total;
-                state.ProgressBar.Style = ProgressBarStyle.Marquee;
-                state.ProgressBar.MarqueeAnimationSpeed = 20;
+                state.IndicatorHost.Indicator.SetIndeterminate();
                 return;
             }
 
@@ -379,11 +379,7 @@ namespace ScientificReviews.Helpers
             int completed = Math.Max(0, Math.Min(total, update.Completed ?? 0));
             state.Total = total;
             state.Completed = completed;
-
-            state.ProgressBar.Style = ProgressBarStyle.Continuous;
-            state.ProgressBar.MarqueeAnimationSpeed = 0;
-            state.ProgressBar.Maximum = total;
-            state.ProgressBar.Value = Math.Min(total, completed);
+            state.IndicatorHost.Indicator.SetFiniteProgress(completed, total);
         }
 
         private void UpdateLabel(OperationState state)
@@ -394,6 +390,8 @@ namespace ScientificReviews.Helpers
 
             state.Label.Text = text;
             state.Label.ToolTipText = BuildDetailsText(state);
+            if (state.IndicatorHost != null)
+                state.IndicatorHost.ToolTipText = state.Label.ToolTipText;
         }
 
         private void AddOperationUi(OperationState state)
@@ -409,13 +407,9 @@ namespace ScientificReviews.Helpers
             };
             state.Label.Click += (sender, e) => ShowDetails(state.Id);
 
-            state.ProgressBar = new ToolStripProgressBar
-            {
-                AutoSize = false,
-                Width = 90,
-                Style = ProgressBarStyle.Marquee,
-                MarqueeAnimationSpeed = 20
-            };
+            state.IndicatorHost = new StatusStripOperationIndicatorHost();
+            state.IndicatorHost.ToolTipText = BuildDetailsText(state);
+            state.IndicatorHost.Indicator.SetIndeterminate();
 
             int anchorIndex = _statusStrip.Items.IndexOf(_anchorItem);
             if (anchorIndex < 0)
@@ -423,7 +417,7 @@ namespace ScientificReviews.Helpers
 
             _statusStrip.Items.Insert(anchorIndex, state.Separator);
             _statusStrip.Items.Insert(anchorIndex + 1, state.Label);
-            _statusStrip.Items.Insert(anchorIndex + 2, state.ProgressBar);
+            _statusStrip.Items.Insert(anchorIndex + 2, state.IndicatorHost);
 
             UpdateLabel(state);
         }
@@ -488,13 +482,13 @@ namespace ScientificReviews.Helpers
 
                 if (state.Label != null)
                     _statusStrip.Items.Remove(state.Label);
-                if (state.ProgressBar != null)
-                    _statusStrip.Items.Remove(state.ProgressBar);
+                if (state.IndicatorHost != null)
+                    _statusStrip.Items.Remove(state.IndicatorHost);
                 if (state.Separator != null)
                     _statusStrip.Items.Remove(state.Separator);
 
                 state.Label?.Dispose();
-                state.ProgressBar?.Dispose();
+                state.IndicatorHost?.Dispose();
                 state.Separator?.Dispose();
             });
         }
@@ -570,6 +564,157 @@ namespace ScientificReviews.Helpers
             else
             {
                 action();
+            }
+        }
+    }
+
+    internal sealed class StatusStripOperationIndicatorHost : ToolStripControlHost
+    {
+        public StatusStripOperationIndicatorHost()
+            : base(new StatusStripOperationIndicatorControl())
+        {
+            AutoSize = false;
+            Width = 24;
+            Height = 24;
+            Margin = new Padding(2, 1, 4, 1);
+        }
+
+        public StatusStripOperationIndicatorControl Indicator => Control as StatusStripOperationIndicatorControl;
+
+        protected override Size DefaultSize => new Size(24, 24);
+    }
+
+    internal sealed class StatusStripOperationIndicatorControl : Control
+    {
+        private readonly Timer _animationTimer;
+        private bool _isIndeterminate = true;
+        private int _value;
+        private int _maximum = 1;
+        private int _spinnerFrame;
+
+        public StatusStripOperationIndicatorControl()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.OptimizedDoubleBuffer |
+                     ControlStyles.ResizeRedraw |
+                     ControlStyles.UserPaint |
+                     ControlStyles.SupportsTransparentBackColor, true);
+
+            BackColor = Color.Transparent;
+            Size = new Size(20, 20);
+
+            _animationTimer = new Timer
+            {
+                Interval = 90,
+                Enabled = true
+            };
+            _animationTimer.Tick += animationTimer_Tick;
+        }
+
+        public void SetIndeterminate()
+        {
+            _isIndeterminate = true;
+            EnsureAnimationState();
+            Invalidate();
+        }
+
+        public void SetFiniteProgress(int value, int maximum)
+        {
+            _isIndeterminate = false;
+            _maximum = Math.Max(1, maximum);
+            _value = Math.Max(0, Math.Min(_maximum, value));
+            EnsureAnimationState();
+            Invalidate();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _animationTimer.Tick -= animationTimer_Tick;
+                _animationTimer.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.Clear(GetBackgroundColor());
+
+            Rectangle bounds = ClientRectangle;
+            bounds.Inflate(-2, -2);
+            if (bounds.Width <= 0 || bounds.Height <= 0)
+                return;
+
+            if (_isIndeterminate)
+                DrawSpinner(e.Graphics, bounds);
+            else
+                DrawProgressRing(e.Graphics, bounds);
+        }
+
+        private void animationTimer_Tick(object sender, EventArgs e)
+        {
+            _spinnerFrame = (_spinnerFrame + 1) % 12;
+            if (_isIndeterminate)
+                Invalidate();
+        }
+
+        private void EnsureAnimationState()
+        {
+            _animationTimer.Enabled = _isIndeterminate;
+        }
+
+        private Color GetBackgroundColor()
+        {
+            if (Parent != null)
+                return Parent.BackColor;
+
+            return SystemColors.Control;
+        }
+
+        private void DrawSpinner(Graphics graphics, Rectangle bounds)
+        {
+            PointF center = new PointF(bounds.Left + bounds.Width / 2f, bounds.Top + bounds.Height / 2f);
+            float radius = Math.Min(bounds.Width, bounds.Height) / 2f - 3f;
+            float dotRadius = Math.Max(1.6f, radius / 4.5f);
+            Color accent = Color.FromArgb(43, 122, 204);
+
+            for (int i = 0; i < 12; i++)
+            {
+                int distance = (i - _spinnerFrame + 12) % 12;
+                int alpha = Math.Max(35, 255 - distance * 18);
+                double angle = (Math.PI * 2d * i / 12d) - Math.PI / 2d;
+                float x = center.X + (float)(Math.Cos(angle) * radius) - dotRadius;
+                float y = center.Y + (float)(Math.Sin(angle) * radius) - dotRadius;
+
+                using (Brush brush = new SolidBrush(Color.FromArgb(alpha, accent)))
+                {
+                    graphics.FillEllipse(brush, x, y, dotRadius * 2f, dotRadius * 2f);
+                }
+            }
+        }
+
+        private void DrawProgressRing(Graphics graphics, Rectangle bounds)
+        {
+            float progress = _maximum <= 0 ? 0f : Math.Min(1f, _value / (float)_maximum);
+            int thickness = Math.Max(2, Math.Min(bounds.Width, bounds.Height) / 6);
+            Color trackColor = Color.FromArgb(210, 218, 228);
+            Color accentColor = Color.FromArgb(43, 122, 204);
+
+            using (Pen trackPen = new Pen(trackColor, thickness))
+            using (Pen progressPen = new Pen(accentColor, thickness))
+            {
+                trackPen.StartCap = LineCap.Round;
+                trackPen.EndCap = LineCap.Round;
+                progressPen.StartCap = LineCap.Round;
+                progressPen.EndCap = LineCap.Round;
+
+                graphics.DrawArc(trackPen, bounds, -90, 360);
+                graphics.DrawArc(progressPen, bounds, -90, Math.Max(4f, 360f * progress));
             }
         }
     }
