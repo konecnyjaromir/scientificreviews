@@ -822,11 +822,85 @@ namespace ScientificReviews.Forms
         private void settingsToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (new SettingsForm().ShowDialog(this) == DialogResult.OK)
+                ReloadSettingsIntoUi("Settings updated.");
+        }
+
+        private void importSettingsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            using (OpenFileDialog openFileDialog = new OpenFileDialog())
             {
-                Program.AppSettings.LoadSettings();
-                UpdateOpenAddModeUi();
-                UpdateAutofixModeUi();
+                openFileDialog.CheckFileExists = true;
+                openFileDialog.CheckPathExists = true;
+                openFileDialog.Filter = "Settings JSON (*.json)|*.json|All files (*.*)|*.*";
+                openFileDialog.Title = "Import settings";
+                openFileDialog.InitialDirectory = GetSettingsImportInitialDirectory();
+
+                if (openFileDialog.ShowDialog(this) != DialogResult.OK)
+                    return;
+
+                DialogResult confirmResult = MessageBox.Show(
+                    this,
+                    "This will replace the current application settings. A backup of the current settings file will be created automatically. Continue?",
+                    Program.APP_NAME,
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+
+                if (confirmResult != DialogResult.Yes)
+                    return;
+
+                if (Program.TryImportSettings(openFileDialog.FileName, out SettingsImportResult result, out string errorMessage) == false)
+                {
+                    MessageBox.Show(this, errorMessage, Program.APP_NAME, MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    lblStatus.Text = "Settings import failed.";
+                    return;
+                }
+
+                ReloadSettingsIntoUi("Settings imported.");
+
+                string migrationSuffix = result.WasNormalizedOrMigrated
+                    ? " Imported settings were normalized and migrated to the current version."
+                    : string.Empty;
+                string backupMessage = string.IsNullOrWhiteSpace(result.BackupFilePath)
+                    ? "No previous settings file existed, so no backup file was needed."
+                    : $"Backup created: {result.BackupFilePath}";
+
+                MessageBox.Show(
+                    this,
+                    $"Settings were imported successfully from:{Environment.NewLine}{result.SourceFilePath}{Environment.NewLine}{Environment.NewLine}{backupMessage}{migrationSuffix}",
+                    Program.APP_NAME,
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+
+                lblStatus.Text = string.IsNullOrWhiteSpace(result.BackupFilePath)
+                    ? "Settings imported."
+                    : $"Settings imported. Backup: {Path.GetFileName(result.BackupFilePath)}";
             }
+        }
+
+        private void ReloadSettingsIntoUi(string statusMessage = null)
+        {
+            Program.AppSettings.LoadSettings();
+            Program.PrepareSettingsData(Program.AppSettings.Data);
+            UpdateOpenAddModeUi();
+            UpdateAutofixModeUi();
+            UpdateSearchModeUi();
+            RefreshGrid(statusMessage: statusMessage);
+            UpdateSearchValidationStatus(statusMessage);
+        }
+
+        private string GetSettingsImportInitialDirectory()
+        {
+            string settingsDirectory = Path.GetDirectoryName(Program.SettingsFilePath);
+            if (string.IsNullOrWhiteSpace(settingsDirectory) == false && Directory.Exists(settingsDirectory))
+                return settingsDirectory;
+
+            if (string.IsNullOrWhiteSpace(Program.AppSettings?.Data?.LastDirectory) == false &&
+                Directory.Exists(Program.AppSettings.Data.LastDirectory))
+            {
+                return Program.AppSettings.Data.LastDirectory;
+            }
+
+            return Application.StartupPath;
         }
 
         private void MainForm_Shown(object sender, EventArgs e)
