@@ -10,6 +10,9 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Kept `Add file` and `Add folder` for incremental import into the current archive
 - Added `Project -> Raw Mode` as a shared toggle for raw file/folder import without post-load preprocessing
 - `Open file`, `Open folder`, `Add file`, and `Add folder` now reuse the existing raw import behavior when `Raw Mode` is enabled instead of exposing separate raw-only menu actions
+- Added `Project -> Import Settings` for restoring `settings.json` from an older installation or application version
+- Settings import now validates the selected JSON, normalizes missing defaults, migrates older settings versions, and only replaces the active settings file after verification succeeds
+- Settings import now creates an automatic backup of the current active settings file before replacing it
 - Added `Project -> New` to launch a separate application window
 - Main window title now shows the active BibTeX file name from the current session
 - Opening a new empty project no longer shows the previous file name in the window title

@@ -10,6 +10,7 @@ Scientific Reviews is a Windows desktop tool for researchers who work with BibTe
 - Open a BibTeX file or a whole folder as a new archive from `Project -> Open file` / `Open folder`
 - Add more BibTeX files or folders into the current archive from `Project -> Add file` / `Add folder`
 - `Project -> Raw Mode` turns open/add file/folder actions into raw import without post-load preprocessing
+- `Project -> Import Settings` lets you import a settings JSON from an older installation or version after an update
 - Open a completely new application window from `Project -> New`
 - Show the currently opened BibTeX file in the main window title
 - Restore the latest autosave backup on startup when available
@@ -313,10 +314,19 @@ Additional clipboard and metadata-related settings include:
 - `Enable Paste Anything`
 - `Paste Anything mode`
 
+### Importing settings
+
+- `Project -> Import Settings` can import a previously saved or copied `settings.json` file
+- The import flow is designed for update scenarios where the user wants to restore settings from an older app version
+- Imported settings are validated, normalized, and migrated to the current settings version before they become active
+- The current active settings file is backed up automatically before replacement when one already exists
+- If import validation fails, the current settings stay unchanged
+
 ## Typical Workflow
 
 1. Open a `.bib` file or folder as a new archive.
 2. Configure `PDF source folder`, matching mode, preprocessing level, smart paste mode, and metadata/JCR settings.
+   After updating the application, use `Project -> Import Settings` if you want to restore settings from an older installation.
 3. Import additional records by file, folder, or smart paste using `Ctrl+V` / `Ctrl+Shift+V`.
    Enable `Project -> Raw Mode` first when you want file/folder imports without automatic post-load preprocessing.
 4. Run `Autofix` or individual tools such as `Normalize DOI`, `Fetch missing metadata`, `Auto-pair PDFs`, or `Update JCR`.
