@@ -6,6 +6,7 @@ using System;
 using System.ComponentModel;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
@@ -27,6 +28,9 @@ namespace ScientificReviews.Forms
         [DllImport("user32.dll", CharSet = CharSet.Auto)]
         private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
 
+        [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
+        private static extern int StrCmpLogicalW(string left, string right);
+
         public MainForm()
         {
             InitializeComponent();
@@ -40,6 +44,7 @@ namespace ScientificReviews.Forms
             InitializeRecordContextMenu();
             dataGridView1.CellMouseDoubleClick += dataGridView1_CellMouseDoubleClick;
             dataGridView1.CellMouseDown += dataGridView1_CellMouseDown;
+            dataGridView1.ColumnHeaderMouseClick += dataGridView1_ColumnHeaderMouseClick;
             dataGridView1.MouseDown += dataGridView1_MouseDown;
         }
 
@@ -164,6 +169,8 @@ namespace ScientificReviews.Forms
         private readonly OperationReportCenter _reportCenter = new OperationReportCenter();
         private string _currentBibTexPath;
         private readonly List<string> _currentBibTexSourcePaths = new List<string>();
+        private string _currentSortColumnName;
+        private ListSortDirection? _currentSortDirection;
         private bool DatabaseChanged { get; set; }
         private ContextMenuStrip _recordContextMenu;
         private ContextMenuStrip _gridBackgroundContextMenu;
@@ -228,6 +235,7 @@ namespace ScientificReviews.Forms
         {
             string searchValidationMessage;
             entries = ApplySearchFilter(entries, search, out searchValidationMessage);
+            entries = ApplyCurrentSort(entries);
 
             visibleEntries.Clear();
             visibleEntries.AddRange(entries);
@@ -238,6 +246,7 @@ namespace ScientificReviews.Forms
             bindingSource1.DataSource = dt;
             dataGridView1.DataSource = bindingSource1;
             dataGridView1.Columns["Entry"].Visible = false;
+            ConfigureGridSorting();
             lblInfo.Text = $"{entries.Length} entries";
 
             if (string.IsNullOrWhiteSpace(searchValidationMessage) == false)
@@ -411,19 +420,7 @@ namespace ScientificReviews.Forms
             if (selectedEntries.Length == 0 && bindingSource1.Current is DataRowView currentView && currentView.Row != null)
                 currentEntry = currentView.Row["Entry"] as BibtexEntry;
 
-            string sortColumnName = dataGridView1?.SortedColumn?.DataPropertyName;
-            if (string.IsNullOrWhiteSpace(sortColumnName))
-                sortColumnName = dataGridView1?.SortedColumn?.Name;
-
-            ListSortDirection? sortDirection =
-                dataGridView1?.SortOrder == SortOrder.Ascending
-                    ? ListSortDirection.Ascending
-                    : dataGridView1?.SortOrder == SortOrder.Descending
-                        ? ListSortDirection.Descending
-                        : (ListSortDirection?)null;
-
             LoadData(entries.ToArray(), txtSearch.Text);
-            ReapplyGridSort(sortColumnName, sortDirection);
 
             if (selectedEntries.Length > 0)
                 SelectEntriesInGrid(selectedEntries);
@@ -434,21 +431,179 @@ namespace ScientificReviews.Forms
                 lblStatus.Text = statusMessage;
         }
 
-        private void ReapplyGridSort(string sortColumnName, ListSortDirection? sortDirection)
+        private BibtexEntry[] ApplyCurrentSort(IEnumerable<BibtexEntry> sourceEntries)
         {
-            if (string.IsNullOrWhiteSpace(sortColumnName) || !sortDirection.HasValue || dataGridView1 == null)
+            BibtexEntry[] sourceArray = sourceEntries?.ToArray() ?? Array.Empty<BibtexEntry>();
+            if (string.IsNullOrWhiteSpace(_currentSortColumnName) || !_currentSortDirection.HasValue || sourceArray.Length <= 1)
+                return sourceArray;
+
+            bool sortAsNumeric = IsNumericColumn(sourceArray, _currentSortColumnName);
+            List<BibtexEntry> sorted = sourceArray.ToList();
+            sorted.Sort((left, right) =>
+            {
+                int comparison = CompareEntryValues(left, right, _currentSortColumnName, sortAsNumeric);
+                return _currentSortDirection == ListSortDirection.Descending
+                    ? -comparison
+                    : comparison;
+            });
+
+            return sorted.ToArray();
+        }
+
+        private void ConfigureGridSorting()
+        {
+            if (dataGridView1 == null)
                 return;
 
-            DataGridViewColumn sortColumn = dataGridView1.Columns
+            foreach (DataGridViewColumn column in dataGridView1.Columns)
+            {
+                if (column == null)
+                    continue;
+
+                column.SortMode = column.Visible
+                    ? DataGridViewColumnSortMode.Programmatic
+                    : DataGridViewColumnSortMode.NotSortable;
+
+                column.HeaderCell.SortGlyphDirection = SortOrder.None;
+            }
+
+            if (string.IsNullOrWhiteSpace(_currentSortColumnName) || !_currentSortDirection.HasValue)
+                return;
+
+            DataGridViewColumn sortedColumn = dataGridView1.Columns
                 .Cast<DataGridViewColumn>()
-                .FirstOrDefault(column =>
-                    string.Equals(column.DataPropertyName, sortColumnName, StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(column.Name, sortColumnName, StringComparison.OrdinalIgnoreCase));
+                .FirstOrDefault(column => string.Equals(GetSortColumnName(column), _currentSortColumnName, StringComparison.OrdinalIgnoreCase));
 
-            if (sortColumn == null || sortColumn.SortMode == DataGridViewColumnSortMode.NotSortable)
+            if (sortedColumn != null)
+            {
+                sortedColumn.HeaderCell.SortGlyphDirection = _currentSortDirection == ListSortDirection.Ascending
+                    ? SortOrder.Ascending
+                    : SortOrder.Descending;
+            }
+        }
+
+        private void dataGridView1_ColumnHeaderMouseClick(object sender, DataGridViewCellMouseEventArgs e)
+        {
+            if (e.ColumnIndex < 0 || dataGridView1 == null || e.ColumnIndex >= dataGridView1.Columns.Count)
                 return;
 
-            dataGridView1.Sort(sortColumn, sortDirection.Value);
+            DataGridViewColumn clickedColumn = dataGridView1.Columns[e.ColumnIndex];
+            string sortColumnName = GetSortColumnName(clickedColumn);
+            if (string.IsNullOrWhiteSpace(sortColumnName) || string.Equals(sortColumnName, "Entry", StringComparison.OrdinalIgnoreCase))
+                return;
+
+            if (string.Equals(_currentSortColumnName, sortColumnName, StringComparison.OrdinalIgnoreCase))
+            {
+                _currentSortDirection = _currentSortDirection == ListSortDirection.Ascending
+                    ? ListSortDirection.Descending
+                    : ListSortDirection.Ascending;
+            }
+            else
+            {
+                _currentSortColumnName = sortColumnName;
+                _currentSortDirection = ListSortDirection.Ascending;
+            }
+
+            string directionLabel = _currentSortDirection == ListSortDirection.Ascending ? "ascending" : "descending";
+            RefreshGrid(statusMessage: $"Sorted by {sortColumnName} ({directionLabel}).");
+        }
+
+        private string GetSortColumnName(DataGridViewColumn column)
+        {
+            if (column == null)
+                return null;
+
+            return string.IsNullOrWhiteSpace(column.DataPropertyName)
+                ? column.Name
+                : column.DataPropertyName;
+        }
+
+        private bool IsNumericColumn(IEnumerable<BibtexEntry> sourceEntries, string columnName)
+        {
+            bool hasNumericValue = false;
+
+            foreach (BibtexEntry entry in sourceEntries ?? Array.Empty<BibtexEntry>())
+            {
+                string value = GetSortableValue(entry, columnName);
+                if (string.IsNullOrWhiteSpace(value))
+                    continue;
+
+                if (!TryParseSortableNumber(value, out _))
+                    return false;
+
+                hasNumericValue = true;
+            }
+
+            return hasNumericValue;
+        }
+
+        private int CompareEntryValues(BibtexEntry left, BibtexEntry right, string columnName, bool sortAsNumeric)
+        {
+            string leftValue = GetSortableValue(left, columnName);
+            string rightValue = GetSortableValue(right, columnName);
+
+            int comparison = CompareSortValues(leftValue, rightValue, sortAsNumeric);
+            if (comparison != 0)
+                return comparison;
+
+            comparison = CompareLogicalText(left?.Key, right?.Key);
+            if (comparison != 0)
+                return comparison;
+
+            return CompareLogicalText(left?.Type, right?.Type);
+        }
+
+        private string GetSortableValue(BibtexEntry entry, string columnName)
+        {
+            if (entry == null || string.IsNullOrWhiteSpace(columnName))
+                return null;
+
+            if (string.Equals(columnName, "Key", StringComparison.OrdinalIgnoreCase))
+                return entry.Key;
+
+            if (string.Equals(columnName, "Entry Type", StringComparison.OrdinalIgnoreCase))
+                return entry.Type;
+
+            return entry.GetTagValue(columnName);
+        }
+
+        private int CompareSortValues(string leftValue, string rightValue, bool sortAsNumeric)
+        {
+            bool leftEmpty = string.IsNullOrWhiteSpace(leftValue);
+            bool rightEmpty = string.IsNullOrWhiteSpace(rightValue);
+
+            if (leftEmpty && rightEmpty)
+                return 0;
+
+            if (leftEmpty)
+                return 1;
+
+            if (rightEmpty)
+                return -1;
+
+            if (sortAsNumeric &&
+                TryParseSortableNumber(leftValue, out decimal leftNumber) &&
+                TryParseSortableNumber(rightValue, out decimal rightNumber))
+            {
+                return leftNumber.CompareTo(rightNumber);
+            }
+
+            return CompareLogicalText(leftValue, rightValue);
+        }
+
+        private int CompareLogicalText(string left, string right)
+        {
+            left = left ?? string.Empty;
+            right = right ?? string.Empty;
+
+            return StrCmpLogicalW(left, right);
+        }
+
+        private bool TryParseSortableNumber(string value, out decimal parsed)
+        {
+            string normalized = (value ?? string.Empty).Trim();
+            return decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.InvariantCulture, out parsed) ||
+                   decimal.TryParse(normalized, NumberStyles.Number, CultureInfo.CurrentCulture, out parsed);
         }
 
         private void refreshToolStripMenuItem_Click(object sender, EventArgs e)
