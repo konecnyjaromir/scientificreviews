@@ -267,7 +267,12 @@ The export dialog lets you configure:
 
 - Update missing journals from Clarivate JCR API
 - Generate JCR-derived tags such as `jif`, `jif_<year>`, and `jif_Q`
+- `Update JCR` now reports which records were resolved, which still miss JCR tags, which records have no `journal`, and which records failed for another reason
+- `Create extra JCR tags` now reports record-level success/failure details, including records without `journal`, unresolved journals, unusable JCR rank data, and other errors
 - Remove lower-ranked records, for example Q3 and Q4
+- `Remove Q3 Q4` is controlled by the `Low Quantile (Q3,Q4) Deleting Mode` setting:
+  - `Only Records With Valid Jif Tags`
+  - `All records`
 - Remove duplicate records by title or DOI
 - Remove duplicate tags while preserving the newest value
 - Remove records without DOI
@@ -299,6 +304,7 @@ The settings dialog contains the main workflow switches and defaults, including:
 - `Auto-preprocessing mode`
 - `Metadata contact email`
 - `Metadata fetch scope`
+- `Low Quantile (Q3,Q4) Deleting Mode`
 - `JCR API key`
 - `Default CSV separator`
 - `Custom columns`

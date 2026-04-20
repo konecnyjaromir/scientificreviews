@@ -231,6 +231,18 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 
 ### JCR and Database Cleanup
 
+- Fixed incorrect `Update Journals Database` progress/success summaries so resolved journal counts no longer exceed the number of missing journals
+- `Update JCR` now reports record-level outcomes:
+  - records whose `journal` was resolved and now have JCR coverage
+  - records with `journal` that still could not get JCR tags, including the reason
+  - records without `journal`
+  - records that failed for another reason
+- `Create extra JCR tags` now reports record-level success/failure details instead of finishing silently
+- Both `Update JCR` and `Create extra JCR tags` now include a combined `Records still missing JCR tags` count that also includes records without `journal`
+- Added `Low Quantile (Q3,Q4) Deleting Mode` setting with:
+  - `Only Records With Valid Jif Tags`
+  - `All records`
+- Fixed `Remove Q3 Q4` so it no longer deletes records without valid JCR tags unless the new setting explicitly allows it
 - JCR tag generation now updates existing tags instead of duplicating them
 - Added `Remove duplicate tags` database action
 - Duplicate-tag cleanup preserves the newest value for the same tag key
