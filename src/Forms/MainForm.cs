@@ -977,7 +977,11 @@ namespace ScientificReviews.Forms
                 .ToDictionary(group => group.Key, group => group.Last().Reason);
         }
 
-        private async Task<JcrUpdateResult> RunUpdateJcrAsync(StatusStripOperationHandle operation, CancellationToken cancellationToken, int subtaskIndex = 1, int totalSubtasks = 1)
+        private async Task<JcrUpdateResult> RunUpdateJcrAsync(
+            StatusStripOperationHandle operation,
+            CancellationToken cancellationToken,
+            int subtaskIndex = 1,
+            int totalSubtasks = 1)
         {
             ProcessLogScope log = BeginProcessLog("Update JCR inner", "Progress tracking");
             Progress<JcrUpdateProgress> progress = new Progress<JcrUpdateProgress>(update =>
@@ -995,6 +999,7 @@ namespace ScientificReviews.Forms
                 {
                     operation.Report(update?.Summary, details, update?.Completed, update?.Total, false);
                 }
+
                 LogProcessProgress(log, update?.Summary, update?.Details, update?.Completed, update?.Total);
             });
 

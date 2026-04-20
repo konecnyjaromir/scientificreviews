@@ -825,15 +825,15 @@ namespace ScientificReviews.Forms
                         currentStep++;
                         if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.JcrApiKey))
                         {
-                            skippedSteps.Add("Update JCR");
-                            operation.Report("Update JCR", "Skipped: JCR API key is not set.", currentStep, totalSteps, false);
-                            LogProcessProgress(log, "Skipped Update JCR", "JCR API key is not set.");
+                            skippedSteps.Add("Autoupdate JCR");
+                            operation.Report("Autoupdate JCR", "Skipped: JCR API key is not set.", currentStep, totalSteps, false);
+                            LogProcessProgress(log, "Skipped Autoupdate JCR", "JCR API key is not set.");
                         }
                         else
                         {
-                            operation.Report("Update JCR", "Fetching missing journals from Clarivate", currentStep, totalSteps, false);
-                            await StartUpdateJcrOperationAsync(startedAutomatically, cancellation.Token);
-                            LogProcessProgress(log, "Update JCR completed.");
+                            operation.Report("Autoupdate JCR", "Running as a separate visible subtask.", currentStep, totalSteps, false);
+                            await StartAutoupdateJcrOperationAsync(cancellation.Token);
+                            LogProcessProgress(log, "Autoupdate JCR completed.");
                         }
                     }
 
@@ -893,9 +893,9 @@ namespace ScientificReviews.Forms
             switch (mode)
             {
                 case AutoPreprocessingMode.Deep:
-                    return "Normalize DOI -> Fetch metadata (forced All) -> Remove duplicates by title -> Remove duplicates by DOI -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs -> Update JCR";
+                    return "Normalize DOI -> Fetch metadata (forced All) -> Remove duplicates by title -> Remove duplicates by DOI -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs -> Autoupdate JCR";
                 case AutoPreprocessingMode.Normal:
-                    return "Normalize DOI -> Fetch metadata (settings) -> Remove duplicates by title -> Remove duplicates by DOI -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs -> Update JCR";
+                    return "Normalize DOI -> Fetch metadata (settings) -> Remove duplicates by title -> Remove duplicates by DOI -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs -> Autoupdate JCR";
                 case AutoPreprocessingMode.Fast:
                     return "Normalize DOI -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs";
                 default:
@@ -1040,7 +1040,7 @@ namespace ScientificReviews.Forms
         {
             DialogResult response = MessageBox.Show(
                 this,
-                "Autofix will automatically modify record metadata and run multiple repair/update steps, including DOI normalization, metadata fetching, duplicate removal by title and DOI, page-tag normalization, entry key generation, PDF auto-pairing, and JCR update when configured.\r\n\r\nThis operation is irreversible and may damage records.\r\n\r\nDo you want to continue?",
+                "Autofix will automatically modify record metadata and run multiple repair/update steps, including DOI normalization, metadata fetching, duplicate removal by title and DOI, page-tag normalization, entry key generation, PDF auto-pairing, and JCR autoupdate when configured.\r\n\r\nThis operation is irreversible and may damage records.\r\n\r\nDo you want to continue?",
                 "Autofix",
                 MessageBoxButtons.YesNo,
                 MessageBoxIcon.Warning);
