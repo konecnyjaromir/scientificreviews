@@ -20,7 +20,6 @@ namespace ScientificReviews.Forms
         private const int WM_CUT = 0x0300;
         private const int WM_COPY = 0x0301;
         private const int WM_PASTE = 0x0302;
-        private int _blockingOperationCount;
 
         [DllImport("user32.dll")]
         private static extern IntPtr GetFocus();
@@ -35,6 +34,7 @@ namespace ScientificReviews.Forms
             InitializeAutofixModeUi();
             InitializeSearchUi();
             _operationManager = new StatusStripOperationManager(statusStrip1, toolStripStatusLabel1, this);
+            _operationManager.BlockingOperationsChanged += OperationManager_BlockingOperationsChanged;
             InitializeReportCenter();
             UpdateWindowTitle();
             InitializeRecordContextMenu();
@@ -43,7 +43,7 @@ namespace ScientificReviews.Forms
             dataGridView1.MouseDown += dataGridView1_MouseDown;
         }
 
-        private bool IsBlockingUiActive => _blockingOperationCount > 0;
+        private bool IsBlockingUiActive => _operationManager?.HasBlockingOperations ?? false;
 
         protected override bool ProcessCmdKey(ref Message msg, Keys keyData)
         {
@@ -63,25 +63,6 @@ namespace ScientificReviews.Forms
             return base.ProcessCmdKey(ref msg, keyData);
         }
 
-        private IDisposable BeginBlockingUiScope()
-        {
-            _blockingOperationCount++;
-            if (_blockingOperationCount == 1)
-                SetMainInteractionEnabled(false);
-
-            return new BlockingUiScope(this);
-        }
-
-        private void EndBlockingUiScope()
-        {
-            if (_blockingOperationCount <= 0)
-                return;
-
-            _blockingOperationCount--;
-            if (_blockingOperationCount == 0)
-                SetMainInteractionEnabled(true);
-        }
-
         private void SetMainInteractionEnabled(bool enabled)
         {
             menuStrip1.Enabled = enabled;
@@ -94,23 +75,9 @@ namespace ScientificReviews.Forms
             UseWaitCursor = !enabled;
         }
 
-        private sealed class BlockingUiScope : IDisposable
+        private void OperationManager_BlockingOperationsChanged(object sender, StatusStripBlockingOperationsChangedEventArgs e)
         {
-            private MainForm _owner;
-
-            public BlockingUiScope(MainForm owner)
-            {
-                _owner = owner;
-            }
-
-            public void Dispose()
-            {
-                if (_owner == null)
-                    return;
-
-                _owner.EndBlockingUiScope();
-                _owner = null;
-            }
+            SetMainInteractionEnabled(e == null || !e.HasBlockingOperations);
         }
 
         private bool HandleClipboardShortcut(Keys keyData)
@@ -226,9 +193,9 @@ namespace ScientificReviews.Forms
             };
         }
 
-        private StatusStripOperationHandle StartTrackedOperation(string key, string name, string details = null, bool silentIfAlreadyRunning = false, Action cancelAction = null)
+        private StatusStripOperationHandle StartTrackedOperation(string key, string name, string details = null, bool silentIfAlreadyRunning = false, Action cancelAction = null, bool isBlocking = false)
         {
-            StatusStripOperationHandle operation = _operationManager.StartOperation(key, name, details);
+            StatusStripOperationHandle operation = _operationManager.StartOperation(key, name, details, isBlocking);
             if (operation == null && !silentIfAlreadyRunning)
                 lblStatus.Text = $"{name} is already running.";
 

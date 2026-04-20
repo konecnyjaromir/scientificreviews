@@ -10,6 +10,7 @@ namespace ScientificReviews.Helpers
     {
         public Guid Id { get; set; }
         public string Name { get; set; }
+        public bool IsBlocking { get; set; }
         public string Summary { get; set; }
         public string Details { get; set; }
         public string Status { get; set; }
@@ -28,6 +29,12 @@ namespace ScientificReviews.Helpers
         public int? Completed { get; set; }
         public int? Total { get; set; }
         public bool? IsIndeterminate { get; set; }
+    }
+
+    public sealed class StatusStripBlockingOperationsChangedEventArgs : EventArgs
+    {
+        public bool HasBlockingOperations { get; set; }
+        public int ActiveBlockingOperationCount { get; set; }
     }
 
     public sealed class StatusStripOperationHandle : IDisposable
@@ -117,6 +124,7 @@ namespace ScientificReviews.Helpers
             public Guid Id { get; set; }
             public string Key { get; set; }
             public string Name { get; set; }
+            public bool IsBlocking { get; set; }
             public string Summary { get; set; }
             public string Details { get; set; }
             public DateTime StartedAt { get; set; }
@@ -137,12 +145,26 @@ namespace ScientificReviews.Helpers
         private readonly IWin32Window _owner;
         private readonly Dictionary<Guid, OperationState> _operationsById = new Dictionary<Guid, OperationState>();
         private readonly HashSet<string> _activeKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<Guid> _activeBlockingOperationIds = new HashSet<Guid>();
+
+        public event EventHandler<StatusStripBlockingOperationsChangedEventArgs> BlockingOperationsChanged;
 
         public StatusStripOperationManager(StatusStrip statusStrip, ToolStripItem anchorItem, IWin32Window owner)
         {
             _statusStrip = statusStrip ?? throw new ArgumentNullException(nameof(statusStrip));
             _anchorItem = anchorItem ?? throw new ArgumentNullException(nameof(anchorItem));
             _owner = owner;
+        }
+
+        public bool HasBlockingOperations
+        {
+            get
+            {
+                lock (_sync)
+                {
+                    return _activeBlockingOperationIds.Count > 0;
+                }
+            }
         }
 
         public bool IsActive(string key)
@@ -156,7 +178,7 @@ namespace ScientificReviews.Helpers
             }
         }
 
-        public StatusStripOperationHandle StartOperation(string key, string name, string details = null)
+        public StatusStripOperationHandle StartOperation(string key, string name, string details = null, bool isBlocking = false)
         {
             if (string.IsNullOrWhiteSpace(key))
                 throw new ArgumentException("Operation key must not be empty.", nameof(key));
@@ -165,6 +187,7 @@ namespace ScientificReviews.Helpers
                 throw new ArgumentException("Operation name must not be empty.", nameof(name));
 
             OperationState state;
+            bool blockingStateChanged = false;
 
             lock (_sync)
             {
@@ -177,15 +200,26 @@ namespace ScientificReviews.Helpers
                     Id = Guid.NewGuid(),
                     Key = key,
                     Name = name,
+                    IsBlocking = isBlocking,
                     Summary = "Starting...",
                     Details = details,
                     StartedAt = DateTime.Now,
                     Status = "Running"
                 };
                 _operationsById[state.Id] = state;
+                if (state.IsBlocking)
+                {
+                    _activeBlockingOperationIds.Add(state.Id);
+                    blockingStateChanged = true;
+                }
             }
 
-            PostToUi(() => AddOperationUi(state));
+            PostToUi(() =>
+            {
+                AddOperationUi(state);
+                if (blockingStateChanged)
+                    RaiseBlockingOperationsChanged();
+            });
             return new StatusStripOperationHandle(this, state.Id);
         }
 
@@ -275,6 +309,7 @@ namespace ScientificReviews.Helpers
         private void Finish(Guid operationId, string status, string summary, string details, bool failed)
         {
             OperationState state;
+            bool blockingStateChanged = false;
 
             lock (_sync)
             {
@@ -282,6 +317,8 @@ namespace ScientificReviews.Helpers
                     return;
 
                 _activeKeys.Remove(state.Key);
+                if (state.IsBlocking)
+                    blockingStateChanged = _activeBlockingOperationIds.Remove(state.Id);
             }
 
             PostToUi(() =>
@@ -303,10 +340,13 @@ namespace ScientificReviews.Helpers
                 state.ProgressBar.Value = 1;
 
                 state.Label.Text = failed
-                    ? $"{state.Name}: failed"
+                    ? $"{GetDisplayName(state)}: failed"
                     : string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase)
-                        ? $"{state.Name}: cancelled"
-                        : $"{state.Name}: done";
+                        ? $"{GetDisplayName(state)}: cancelled"
+                        : $"{GetDisplayName(state)}: done";
+
+                if (blockingStateChanged)
+                    RaiseBlockingOperationsChanged();
 
                 ScheduleRemoval(operationId, failed ? 12000 : 6000);
             });
@@ -348,7 +388,7 @@ namespace ScientificReviews.Helpers
 
         private void UpdateLabel(OperationState state)
         {
-            string text = state.Name;
+            string text = GetDisplayName(state);
             if (string.IsNullOrWhiteSpace(state.Summary) == false)
                 text += ": " + state.Summary;
 
@@ -364,7 +404,7 @@ namespace ScientificReviews.Helpers
             state.Separator = new ToolStripSeparator();
             state.Label = new ToolStripStatusLabel
             {
-                Text = state.Name,
+                Text = GetDisplayName(state),
                 IsLink = true
             };
             state.Label.Click += (sender, e) => ShowDetails(state.Id);
@@ -403,7 +443,8 @@ namespace ScientificReviews.Helpers
         private string BuildDetailsText(OperationState state)
         {
             return
-                $"Operation: {state.Name}\n" +
+                $"Operation: {GetDisplayName(state)}\n" +
+                $"Blocking: {(state.IsBlocking ? "Yes" : "No")}\n" +
                 $"Status: {state.Status}\n" +
                 $"Started: {state.StartedAt:G}\n" +
                 $"Summary: {state.Summary ?? string.Empty}\n\n" +
@@ -421,6 +462,7 @@ namespace ScientificReviews.Helpers
                 {
                     Id = state.Id,
                     Name = state.Name,
+                    IsBlocking = state.IsBlocking,
                     Summary = state.Summary,
                     Details = state.Details,
                     Status = state.Status,
@@ -476,6 +518,33 @@ namespace ScientificReviews.Helpers
                 _operationsById.Remove(operationId);
                 _activeKeys.Remove(state.Key);
                 return state;
+            }
+        }
+
+        private string GetDisplayName(OperationState state)
+        {
+            if (state == null)
+                return string.Empty;
+
+            return state.IsBlocking
+                ? state.Name + " (blocking)"
+                : state.Name;
+        }
+
+        private void RaiseBlockingOperationsChanged()
+        {
+            BlockingOperationsChanged?.Invoke(this, new StatusStripBlockingOperationsChangedEventArgs
+            {
+                HasBlockingOperations = HasBlockingOperations,
+                ActiveBlockingOperationCount = GetActiveBlockingOperationCount()
+            });
+        }
+
+        private int GetActiveBlockingOperationCount()
+        {
+            lock (_sync)
+            {
+                return _activeBlockingOperationIds.Count;
             }
         }
 
@@ -655,7 +724,9 @@ namespace ScientificReviews.Helpers
             if (snapshot == null)
                 return;
 
-            _lblName.Text = snapshot.Name;
+            _lblName.Text = snapshot.IsBlocking
+                ? snapshot.Name + " (blocking)"
+                : snapshot.Name;
             _lblStatus.Text = $"Status: {snapshot.Status}";
             _lblStarted.Text = $"Started: {snapshot.StartedAt:G}";
             _lblSummary.Text = $"Summary: {snapshot.Summary ?? string.Empty}";
