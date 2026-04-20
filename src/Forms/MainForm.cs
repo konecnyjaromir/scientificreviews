@@ -1,5 +1,6 @@
 using ScientificReviews.Bibtex;
 using ScientificReviews.Helpers;
+using ScientificReviews.JCR.Dto;
 using ScientificReviews.Logs;
 using ScientificReviews.Reports;
 using System;
@@ -740,28 +741,46 @@ namespace ScientificReviews.Forms
                     changeSnapshot = CaptureEntryChanges(entries.ToArray());
                     JcrUpdateResult result = await RunUpdateJcrAsync(operation, cancellation.Token);
                     EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot);
+                    Dictionary<string, JournalReportsDto> reportsByName = (Program.JournalsDatabase.Data.JournalReports ?? new List<JournalReportsDto>())
+                        .Where(report => string.IsNullOrWhiteSpace(NormalizeJournalNameForLookup(report?.Journal?.Name)) == false)
+                        .GroupBy(report => NormalizeJournalNameForLookup(report.Journal.Name))
+                        .ToDictionary(group => group.Key, group => group.First());
+                    Dictionary<string, string> lookupReasonsByJournal = (result.LookupIssues ?? new List<JcrJournalLookupIssue>())
+                        .Where(item => string.IsNullOrWhiteSpace(NormalizeJournalNameForLookup(item?.JournalName)) == false)
+                        .GroupBy(item => NormalizeJournalNameForLookup(item.JournalName))
+                        .ToDictionary(group => group.Key, group => group.Last().Reason);
+                    JcrCoverageReport coverageReport = BuildJcrCoverageReport(entries.ToArray(), reportsByName, lookupReasonsByJournal);
 
                     string summary = result.MissingJournalCount == 0
                         ? "No missing journals."
-                        : $"Added {result.AddedJournalCount}, missing {result.NotFoundJournalCount}";
+                        : $"Resolved {result.ResolvedJournalCount}/{result.MissingJournalCount} missing journals.";
 
                     operation.Complete(summary, "Click to see details.");
 
                     if (result.MissingJournalCount == 0)
                         lblStatus.Text = "Journal database is already up to date.";
                     else if (result.NotFoundJournalCount > 0)
-                        lblStatus.Text = $"Some journals were not found. Added {result.AddedJournalCount}/{result.MissingJournalCount}.";
+                        lblStatus.Text = $"JCR update finished. Resolved {result.ResolvedJournalCount}/{result.MissingJournalCount}, not found {result.NotFoundJournalCount}.";
                     else
-                        lblStatus.Text = "Journal database updated.";
+                        lblStatus.Text = $"Journal database updated. Resolved {result.ResolvedJournalCount}/{result.MissingJournalCount}.";
 
-                    log.Complete($"{summary}. Missing: {result.MissingJournalCount}, not found: {result.NotFoundJournalCount}.");
-                    string notFound = BuildReportList(result.NotFoundJournals, "Journals not found");
+                    log.Complete($"{summary} Added to local DB: {result.AddedJournalCount}. Missing: {result.MissingJournalCount}, not found: {result.NotFoundJournalCount}.");
+                    string details = BuildJcrCoverageDetails(
+                        coverageReport.ResolvedEntries,
+                        coverageReport.MissingJcrTagEntries,
+                        coverageReport.MissingJournalEntries,
+                        coverageReport.UnresolvedEntries,
+                        coverageReport.ErrorEntries,
+                        coverageReport.ResolvedRecordDetails,
+                        coverageReport.UnresolvedRecordDetails,
+                        coverageReport.MissingJournalRecordDetails,
+                        coverageReport.ErrorRecordDetails,
+                        "These records have journal and their JCR data is now available");
                     PublishReport(
                         "Update JCR",
                         summary,
-                        $"Missing journals: {result.MissingJournalCount}{Environment.NewLine}Not found: {result.NotFoundJournalCount}" +
-                        (string.IsNullOrWhiteSpace(notFound) ? string.Empty : Environment.NewLine + Environment.NewLine + notFound),
-                        result.NotFoundJournalCount > 0 ? OperationReportSeverity.Warning : OperationReportSeverity.Info,
+                        details,
+                        result.NotFoundJournalCount > 0 || coverageReport.ErrorEntries > 0 ? OperationReportSeverity.Warning : OperationReportSeverity.Info,
                         changeReport);
                 }
                 catch (OperationCanceledException)

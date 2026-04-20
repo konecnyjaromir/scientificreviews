@@ -243,6 +243,12 @@ namespace ScientificReviews
                 changed = true;
             }
 
+            if (settings.SettingsVersion < 5)
+            {
+                settings.LowQuantileDeletingMode = LowQuantileDeletingMode.OnlyRecordsWithValidJifTags;
+                changed = true;
+            }
+
             if (settings.SettingsVersion != AppSettingsData.CURRENT_SETTINGS_VERSION)
             {
                 settings.SettingsVersion = AppSettingsData.CURRENT_SETTINGS_VERSION;
@@ -358,6 +364,12 @@ namespace ScientificReviews
             if (Enum.IsDefined(typeof(OpenAddMode), settings.OpenAddMode) == false)
             {
                 settings.OpenAddMode = defaults.OpenAddMode;
+                changed = true;
+            }
+
+            if (Enum.IsDefined(typeof(LowQuantileDeletingMode), settings.LowQuantileDeletingMode) == false)
+            {
+                settings.LowQuantileDeletingMode = defaults.LowQuantileDeletingMode;
                 changed = true;
             }
 

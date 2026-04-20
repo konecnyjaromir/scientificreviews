@@ -39,6 +39,12 @@ namespace ScientificReviews
         Raw
     }
 
+    public enum LowQuantileDeletingMode
+    {
+        OnlyRecordsWithValidJifTags,
+        AllRecords
+    }
+
     public class LastExportSettingsData
     {
         public string Scope { get; set; } = "All";
@@ -50,7 +56,7 @@ namespace ScientificReviews
 
     public class AppSettingsData
     {
-        public const int CURRENT_SETTINGS_VERSION = 4;
+        public const int CURRENT_SETTINGS_VERSION = 5;
 
         private const string APPLICATION_CAT = "0: Application";
         private const string PDF_CAT = "1: PDFs";
@@ -157,6 +163,13 @@ namespace ScientificReviews
         [DisplayName("Metadata fetch scope")]
         [Description("Controls which records are processed by metadata fetching.")]
         public MetadataScreenMode MetadataScreenMode { get; set; } = MetadataScreenMode.All;
+
+        [Browsable(true)]
+        [Category(METADATA_CAT)]
+        [DisplayName("Low Quantile (Q3,Q4) Deleting Mode")]
+        [Description("Controls how Journal Citation Reports -> Remove Q3 Q4 treats records without a valid JCR quantile tag. Only Records With Valid Jif Tags removes only records confirmed as Q3/Q4. All records also removes records without valid JCR tags.")]
+        [TypeConverter(typeof(LowQuantileDeletingModeConverter))]
+        public LowQuantileDeletingMode LowQuantileDeletingMode { get; set; } = LowQuantileDeletingMode.OnlyRecordsWithValidJifTags;
 
         [Browsable(true)]
         [Category(EXPORT_CAT)]

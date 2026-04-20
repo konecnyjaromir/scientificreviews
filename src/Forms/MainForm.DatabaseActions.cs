@@ -28,6 +28,34 @@ namespace ScientificReviews.Forms
             public List<string> InvalidRecordKeys { get; } = new List<string>();
         }
 
+        private sealed class JcrTagCreationResult
+        {
+            public int UpdatedEntries { get; set; }
+            public int MatchedJournalEntries { get; set; }
+            public int MissingJournalTagEntries { get; set; }
+            public int MissingJcrReportEntries { get; set; }
+            public int InvalidJcrDataEntries { get; set; }
+            public int ErrorEntries { get; set; }
+            public int MissingJcrTagEntries => MissingJournalTagEntries + MissingJcrReportEntries + InvalidJcrDataEntries + ErrorEntries;
+            public List<string> ResolvedRecordDetails { get; } = new List<string>();
+            public List<string> UnresolvedRecordDetails { get; } = new List<string>();
+            public List<string> MissingJournalRecordDetails { get; } = new List<string>();
+            public List<string> ErrorRecordDetails { get; } = new List<string>();
+        }
+
+        private sealed class JcrCoverageReport
+        {
+            public int ResolvedEntries { get; set; }
+            public int MissingJournalEntries { get; set; }
+            public int UnresolvedEntries { get; set; }
+            public int ErrorEntries { get; set; }
+            public int MissingJcrTagEntries => MissingJournalEntries + UnresolvedEntries + ErrorEntries;
+            public List<string> ResolvedRecordDetails { get; } = new List<string>();
+            public List<string> UnresolvedRecordDetails { get; } = new List<string>();
+            public List<string> MissingJournalRecordDetails { get; } = new List<string>();
+            public List<string> ErrorRecordDetails { get; } = new List<string>();
+        }
+
         private AutoPreprocessingMode AutofixMode
         {
             get => Program.AppSettings?.Data?.AutofixMode ?? AutoPreprocessingMode.Normal;
@@ -37,6 +65,9 @@ namespace ScientificReviews.Forms
                     Program.AppSettings.Data.AutofixMode = value;
             }
         }
+
+        private LowQuantileDeletingMode ConfiguredLowQuantileDeletingMode =>
+            Program.AppSettings?.Data?.LowQuantileDeletingMode ?? LowQuantileDeletingMode.OnlyRecordsWithValidJifTags;
 
         private void InitializeAutofixModeUi()
         {
@@ -1396,38 +1427,65 @@ namespace ScientificReviews.Forms
 
         private void createExtraJCRTagsToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            List<JournalReportsDto> journalReports = Program.JournalsDatabase.Data.JournalReports;
-            Dictionary<string, JournalReportsDto> dic = journalReports.ToDictionary(rep => rep.Journal.Name.ToLower());
-            foreach (BibtexEntry entry in entries)
+            if (entries.Count == 0)
             {
-                if (entry.Type == "article")
-                {
-                    string journalValue = entry.GetTagValue("journal");
-                    if (string.IsNullOrWhiteSpace(journalValue))
-                        continue;
-
-                    string journalName = BibtexUtils.RemoveLatex(journalValue).ToLower();
-                    if (dic.ContainsKey(journalName))
-                    {
-                        JournalReportsDto report = dic[journalName];
-                        double percentile = 0;
-                        foreach (var jif in report.Ranks.Jif)
-                        {
-                            percentile += jif.JifPercentile;
-                        }
-
-                        percentile = percentile / report.Ranks.Jif.Count;
-                        string quartile = percentile >= 75 ? "Q1" : percentile >= 50 ? "Q2" : percentile >= 25 ? "Q3" : "Q4";
-                        string percentileText = Math.Round(percentile, 1).ToString(CultureInfo.InvariantCulture);
-                        BibtexTagService.SetSingleTagValue(entry, "jif", percentileText);
-                        BibtexTagService.SetSingleTagValue(entry, "jif_" + report.Year.ToString(), percentileText);
-                        BibtexTagService.SetSingleTagValue(entry, "jif_Q", quartile);
-                    }
-                }
+                lblStatus.Text = "No records available for JCR tag creation.";
+                return;
             }
 
-            RefreshGrid();
-            Changed();
+            ProcessLogScope log = BeginProcessLog("Create extra JCR tags", $"Records: {entries.Count}");
+            try
+            {
+                Dictionary<string, JournalReportsDto> reportsByName = (Program.JournalsDatabase.Data.JournalReports ?? new List<JournalReportsDto>())
+                    .Where(report => string.IsNullOrWhiteSpace(NormalizeJournalNameForLookup(report?.Journal?.Name)) == false)
+                    .GroupBy(report => NormalizeJournalNameForLookup(report.Journal.Name))
+                    .ToDictionary(group => group.Key, group => group.First());
+
+                EntryChangeSnapshot changeSnapshot = CaptureEntryChanges(entries.ToArray());
+                JcrTagCreationResult result = CreateExtraJcrTags(entries.ToArray(), reportsByName);
+                EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot);
+
+                if (result.UpdatedEntries > 0)
+                {
+                    RefreshGrid();
+                    Changed();
+                }
+
+                string summary = result.UpdatedEntries > 0
+                    ? $"Create extra JCR tags finished. Updated {result.UpdatedEntries} record(s)."
+                    : "Create extra JCR tags finished. No records required JCR tag changes.";
+                string details = BuildJcrCoverageDetails(
+                    result.MatchedJournalEntries,
+                    result.MissingJcrTagEntries,
+                    result.MissingJournalTagEntries,
+                    result.MissingJcrReportEntries + result.InvalidJcrDataEntries,
+                    result.ErrorEntries,
+                    result.ResolvedRecordDetails,
+                    result.UnresolvedRecordDetails,
+                    result.MissingJournalRecordDetails,
+                    result.ErrorRecordDetails,
+                    "These records have journal and JCR tags were created or confirmed.");
+
+                OperationReportSeverity severity =
+                    result.InvalidJcrDataEntries > 0 || result.MissingJcrReportEntries > 0 || result.ErrorEntries > 0
+                        ? OperationReportSeverity.Warning
+                        : OperationReportSeverity.Info;
+
+                log.Complete(summary);
+                AppLog.Log(summary, AppLog.MessageType.Info);
+                lblStatus.Text = summary;
+                PublishReport("Create extra JCR tags", summary, details, severity, changeReport);
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+                log.Fail(ex, "Create extra JCR tags failed.");
+                PublishReport("Create extra JCR tags", "Create extra JCR tags failed.", ex.Message, OperationReportSeverity.Error);
+            }
+            finally
+            {
+                log.Dispose();
+            }
         }
 
         private void removeDuplicateTagsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -1460,21 +1518,385 @@ namespace ScientificReviews.Forms
 
         private void removeQ3Q4ToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            List<BibtexEntry> list = new List<BibtexEntry>();
-            foreach (BibtexEntry entry in entries)
+            if (entries.Count == 0)
             {
-                string jif = entry.GetTagValue("jif");
-                if (jif == null)
-                    continue;
-
-                double jifVal = double.Parse(jif, CultureInfo.InvariantCulture);
-                if (jifVal >= 50)
-                    list.Add(entry);
+                lblStatus.Text = "No records available for Q3/Q4 cleanup.";
+                return;
             }
 
-            entries = list;
-            LoadData(entries.ToArray());
-            Changed();
+            ProcessLogScope log = BeginProcessLog("Remove Q3 Q4", $"Records: {entries.Count}, mode: {ConfiguredLowQuantileDeletingMode}");
+            try
+            {
+                EntryChangeSnapshot changeSnapshot = CaptureEntryChanges(entries.ToArray());
+                int originalCount = entries.Count;
+                int removedWithoutValidJifTags = 0;
+                List<BibtexEntry> keptEntries = new List<BibtexEntry>();
+
+                foreach (BibtexEntry entry in entries)
+                {
+                    if (TryGetEntryJcrQuartile(entry, out string quartile) == false)
+                    {
+                        if (ConfiguredLowQuantileDeletingMode == LowQuantileDeletingMode.AllRecords)
+                        {
+                            removedWithoutValidJifTags++;
+                            continue;
+                        }
+
+                        keptEntries.Add(entry);
+                        continue;
+                    }
+
+                    if (string.Equals(quartile, "Q3", StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(quartile, "Q4", StringComparison.OrdinalIgnoreCase))
+                    {
+                        continue;
+                    }
+
+                    keptEntries.Add(entry);
+                }
+
+                entries = keptEntries;
+                EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot);
+                int removedEntries = Math.Max(0, originalCount - entries.Count);
+
+                RefreshGrid();
+
+                string summary = removedEntries > 0
+                    ? $"Remove Q3 Q4 finished. Removed {removedEntries} record(s)."
+                    : "Remove Q3 Q4 finished. No records matched the selected deletion mode.";
+                string details =
+                    $"Mode: {ConfiguredLowQuantileDeletingMode}{Environment.NewLine}" +
+                    $"Removed without valid Jif tags: {removedWithoutValidJifTags}";
+
+                if (removedEntries > 0)
+                    Changed();
+
+                lblStatus.Text = summary;
+                log.Complete(summary);
+                PublishReport(
+                    "Remove Q3 Q4",
+                    summary,
+                    details,
+                    removedEntries > 0 ? OperationReportSeverity.Warning : OperationReportSeverity.Info,
+                    changeReport);
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+                log.Fail(ex, "Remove Q3 Q4 failed.");
+                PublishReport("Remove Q3 Q4", "Remove Q3 Q4 failed.", ex.Message, OperationReportSeverity.Error);
+            }
+            finally
+            {
+                log.Dispose();
+            }
+        }
+
+        private JcrTagCreationResult CreateExtraJcrTags(IEnumerable<BibtexEntry> sourceEntries, IDictionary<string, JournalReportsDto> reportsByName)
+        {
+            JcrTagCreationResult result = new JcrTagCreationResult();
+
+            foreach (BibtexEntry entry in sourceEntries ?? Array.Empty<BibtexEntry>())
+            {
+                if (entry == null || string.Equals(entry.Type, "article", StringComparison.OrdinalIgnoreCase) == false)
+                    continue;
+
+                try
+                {
+                    string journalValue = entry.GetTagValue("journal");
+                    string recordLabel = GetRecordDisplayLabel(entry);
+                    if (string.IsNullOrWhiteSpace(journalValue))
+                    {
+                        result.MissingJournalTagEntries++;
+                        result.MissingJournalRecordDetails.Add(BuildJcrRecordDetail(recordLabel, null, "Record has no journal tag."));
+                        continue;
+                    }
+
+                    string journalName = BibtexUtils.RemoveLatex(journalValue).Trim();
+                    string journalKey = NormalizeJournalNameForLookup(journalName);
+                    if (string.IsNullOrWhiteSpace(journalKey) || reportsByName == null || reportsByName.TryGetValue(journalKey, out JournalReportsDto report) == false)
+                    {
+                        result.MissingJcrReportEntries++;
+                        result.UnresolvedRecordDetails.Add(BuildJcrRecordDetail(recordLabel, journalName, "Journal was not found in the local JCR database."));
+                        continue;
+                    }
+
+                    if (TryGetJcrTagValues(report, out string percentileText, out string quartile) == false)
+                    {
+                        result.InvalidJcrDataEntries++;
+                        result.UnresolvedRecordDetails.Add(BuildJcrRecordDetail(recordLabel, journalName, "Journal was found, but JCR rank data is unusable for tag creation."));
+                        continue;
+                    }
+
+                    result.MatchedJournalEntries++;
+                    bool changed = false;
+
+                    if (string.IsNullOrWhiteSpace(percentileText) == false)
+                    {
+                        changed |= SetSingleTagValueIfChanged(entry, "jif", percentileText);
+                        if (report.Year > 0)
+                            changed |= SetSingleTagValueIfChanged(entry, "jif_" + report.Year.ToString(CultureInfo.InvariantCulture), percentileText);
+                    }
+
+                    changed |= SetSingleTagValueIfChanged(entry, "jif_Q", quartile);
+
+                    string successDetail = string.IsNullOrWhiteSpace(percentileText)
+                        ? $"Quartile: {quartile}"
+                        : $"JIF percentile: {percentileText}, quartile: {quartile}";
+                    result.ResolvedRecordDetails.Add(BuildJcrRecordDetail(recordLabel, journalName, successDetail));
+
+                    if (changed)
+                        result.UpdatedEntries++;
+                }
+                catch (Exception ex)
+                {
+                    result.ErrorEntries++;
+                    result.ErrorRecordDetails.Add(BuildJcrRecordDetail(GetRecordDisplayLabel(entry), entry?.GetTagValue("journal"), ex.Message));
+                }
+            }
+
+            return result;
+        }
+
+        private JcrCoverageReport BuildJcrCoverageReport(
+            IEnumerable<BibtexEntry> sourceEntries,
+            IDictionary<string, JournalReportsDto> reportsByName,
+            IDictionary<string, string> unresolvedReasonsByJournal)
+        {
+            JcrCoverageReport result = new JcrCoverageReport();
+
+            foreach (BibtexEntry entry in sourceEntries ?? Array.Empty<BibtexEntry>())
+            {
+                if (entry == null || string.Equals(entry.Type, "article", StringComparison.OrdinalIgnoreCase) == false)
+                    continue;
+
+                try
+                {
+                    string recordLabel = GetRecordDisplayLabel(entry);
+                    string journalValue = entry.GetTagValue("journal");
+                    if (string.IsNullOrWhiteSpace(journalValue))
+                    {
+                        result.MissingJournalEntries++;
+                        result.MissingJournalRecordDetails.Add(BuildJcrRecordDetail(recordLabel, null, "Record has no journal tag."));
+                        continue;
+                    }
+
+                    string journalName = BibtexUtils.RemoveLatex(journalValue).Trim();
+                    string journalKey = NormalizeJournalNameForLookup(journalName);
+                    if (string.IsNullOrWhiteSpace(journalKey))
+                    {
+                        result.MissingJournalEntries++;
+                        result.MissingJournalRecordDetails.Add(BuildJcrRecordDetail(recordLabel, null, "Record has no usable journal value."));
+                        continue;
+                    }
+
+                    if (reportsByName != null && reportsByName.TryGetValue(journalKey, out JournalReportsDto report))
+                    {
+                        if (TryGetJcrTagValues(report, out string percentileText, out string quartile))
+                        {
+                            result.ResolvedEntries++;
+                            string detail = string.IsNullOrWhiteSpace(percentileText)
+                                ? $"JCR data available, quartile: {quartile}"
+                                : $"JCR data available, JIF percentile: {percentileText}, quartile: {quartile}";
+                            result.ResolvedRecordDetails.Add(BuildJcrRecordDetail(recordLabel, journalName, detail));
+                        }
+                        else
+                        {
+                            result.UnresolvedEntries++;
+                            result.UnresolvedRecordDetails.Add(BuildJcrRecordDetail(recordLabel, journalName, "Journal exists in the local JCR database, but its rank data is unusable for JCR tags."));
+                        }
+
+                        continue;
+                    }
+
+                    string reason = null;
+                    if (unresolvedReasonsByJournal != null)
+                        unresolvedReasonsByJournal.TryGetValue(journalKey, out reason);
+
+                    result.UnresolvedEntries++;
+                    result.UnresolvedRecordDetails.Add(BuildJcrRecordDetail(
+                        recordLabel,
+                        journalName,
+                        string.IsNullOrWhiteSpace(reason) ? "Journal is still missing in the local JCR database." : reason));
+                }
+                catch (Exception ex)
+                {
+                    result.ErrorEntries++;
+                    result.ErrorRecordDetails.Add(BuildJcrRecordDetail(GetRecordDisplayLabel(entry), entry?.GetTagValue("journal"), ex.Message));
+                }
+            }
+
+            return result;
+        }
+
+        private static bool SetSingleTagValueIfChanged(BibtexEntry entry, string key, string value)
+        {
+            string currentValue = BibtexTagService.GetTagValueIgnoreCase(entry, key);
+            if (string.Equals((currentValue ?? string.Empty).Trim(), (value ?? string.Empty).Trim(), StringComparison.Ordinal))
+                return false;
+
+            BibtexTagService.SetSingleTagValue(entry, key, value);
+            return true;
+        }
+
+        private static bool TryGetEntryJcrQuartile(BibtexEntry entry, out string quartile)
+        {
+            quartile = NormalizeQuartile(BibtexTagService.GetTagValueIgnoreCase(entry, "jif_Q"));
+            if (string.IsNullOrWhiteSpace(quartile) == false)
+                return true;
+
+            if (TryParseJifPercentile(BibtexTagService.GetTagValueIgnoreCase(entry, "jif"), out double percentile))
+            {
+                quartile = GetQuartileFromPercentile(percentile);
+                return true;
+            }
+
+            quartile = null;
+            return false;
+        }
+
+        private static bool TryGetJcrTagValues(JournalReportsDto report, out string percentileText, out string quartile)
+        {
+            percentileText = null;
+            quartile = null;
+
+            if (TryGetJcrPercentile(report, out double percentile))
+            {
+                percentileText = Math.Round(percentile, 1).ToString(CultureInfo.InvariantCulture);
+                quartile = GetQuartileFromPercentile(percentile);
+                return true;
+            }
+
+            quartile = GetQuartileFromReport(report);
+            return string.IsNullOrWhiteSpace(quartile) == false;
+        }
+
+        private static bool TryGetJcrPercentile(JournalReportsDto report, out double percentile)
+        {
+            percentile = 0;
+            List<double> percentiles = (report?.Ranks?.Jif ?? new List<JifRankDetailDto>())
+                .Select(item => item?.JifPercentile ?? double.NaN)
+                .Where(value => double.IsNaN(value) == false && value >= 0 && value <= 100)
+                .ToList();
+
+            if (percentiles.Count == 0)
+                return false;
+
+            percentile = percentiles.Average();
+            return true;
+        }
+
+        private static string GetQuartileFromReport(JournalReportsDto report)
+        {
+            return (report?.Ranks?.Jif ?? new List<JifRankDetailDto>())
+                .Select(item => NormalizeQuartile(item?.Quartile))
+                .Where(value => string.IsNullOrWhiteSpace(value) == false)
+                .OrderBy(value => value, StringComparer.Ordinal)
+                .FirstOrDefault();
+        }
+
+        private static bool TryParseJifPercentile(string value, out double percentile)
+        {
+            percentile = 0;
+            if (double.TryParse(value, NumberStyles.Float, CultureInfo.InvariantCulture, out double parsed) == false)
+                return false;
+
+            if (parsed < 0 || parsed > 100)
+                return false;
+
+            percentile = parsed;
+            return true;
+        }
+
+        private static string GetQuartileFromPercentile(double percentile)
+        {
+            return percentile >= 75 ? "Q1" : percentile >= 50 ? "Q2" : percentile >= 25 ? "Q3" : "Q4";
+        }
+
+        private static string NormalizeQuartile(string value)
+        {
+            string normalized = (value ?? string.Empty).Trim().ToUpperInvariant();
+            return normalized == "Q1" || normalized == "Q2" || normalized == "Q3" || normalized == "Q4"
+                ? normalized
+                : null;
+        }
+
+        private static string NormalizeJournalNameForLookup(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            char[] normalized = BibtexUtils.RemoveLatex(value)
+                .Trim()
+                .ToLowerInvariant()
+                .Where(char.IsLetterOrDigit)
+                .ToArray();
+
+            return normalized.Length == 0 ? null : new string(normalized);
+        }
+
+        private static string BuildJcrCoverageDetails(
+            int resolvedEntries,
+            int missingJcrTagEntries,
+            int missingJournalEntries,
+            int unresolvedEntries,
+            int errorEntries,
+            IEnumerable<string> resolvedRecordDetails,
+            IEnumerable<string> unresolvedRecordDetails,
+            IEnumerable<string> missingJournalRecordDetails,
+            IEnumerable<string> errorRecordDetails,
+            string resolvedHeader)
+        {
+            string details =
+                $"Resolved records: {resolvedEntries}{Environment.NewLine}" +
+                $"Records still missing JCR tags: {missingJcrTagEntries}{Environment.NewLine}" +
+                $"Records without journal: {missingJournalEntries}{Environment.NewLine}" +
+                $"Records with journal but unresolved JCR tags: {unresolvedEntries}{Environment.NewLine}" +
+                $"Records with other errors: {errorEntries}";
+
+            string resolved = BuildReportList(resolvedRecordDetails, resolvedHeader);
+            string unresolved = BuildReportList(unresolvedRecordDetails, "These records have journal but JCR tags could not be created or resolved");
+            string missingJournal = BuildReportList(missingJournalRecordDetails, "These records do not have journal, so JCR tags cannot be created");
+            string errors = BuildReportList(errorRecordDetails, "These records failed with another error");
+
+            if (string.IsNullOrWhiteSpace(resolved) == false)
+                details += Environment.NewLine + Environment.NewLine + resolved;
+            if (string.IsNullOrWhiteSpace(unresolved) == false)
+                details += Environment.NewLine + Environment.NewLine + unresolved;
+            if (string.IsNullOrWhiteSpace(missingJournal) == false)
+                details += Environment.NewLine + Environment.NewLine + missingJournal;
+            if (string.IsNullOrWhiteSpace(errors) == false)
+                details += Environment.NewLine + Environment.NewLine + errors;
+
+            return details;
+        }
+
+        private static string BuildJcrRecordDetail(string recordLabel, string journalName, string reasonOrDetails)
+        {
+            string detail = recordLabel ?? "<unnamed record>";
+
+            if (string.IsNullOrWhiteSpace(journalName) == false)
+                detail += $" | journal: {journalName.Trim()}";
+
+            if (string.IsNullOrWhiteSpace(reasonOrDetails) == false)
+                detail += $" | {reasonOrDetails.Trim()}";
+
+            return detail;
+        }
+
+        private static string GetRecordDisplayLabel(BibtexEntry entry)
+        {
+            if (entry == null)
+                return "<null>";
+
+            string title = entry.GetTagValue("title");
+            if (string.IsNullOrWhiteSpace(title) == false)
+                return BibtexUtils.RemoveLatex(title).Trim();
+
+            if (string.IsNullOrWhiteSpace(entry.Key) == false)
+                return entry.Key.Trim();
+
+            return "<unnamed record>";
         }
 
         private async void excludeEntriesToolStripMenuItem_Click(object sender, EventArgs e)

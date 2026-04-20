@@ -20,9 +20,24 @@ namespace ScientificReviews.Helpers
     public sealed class JcrUpdateResult
     {
         public int MissingJournalCount { get; set; }
+        public int ResolvedJournalCount { get; set; }
         public int AddedJournalCount { get; set; }
         public int NotFoundJournalCount { get; set; }
         public List<string> NotFoundJournals { get; set; } = new List<string>();
+        public List<string> ResolvedJournals { get; set; } = new List<string>();
+        public List<JcrJournalLookupIssue> LookupIssues { get; set; } = new List<JcrJournalLookupIssue>();
+    }
+
+    public sealed class JcrJournalLookupIssue
+    {
+        public string JournalName { get; set; }
+        public string Reason { get; set; }
+    }
+
+    internal sealed class JcrJournalLookupResult
+    {
+        public JournalReportsDto Report { get; set; }
+        public string FailureReason { get; set; }
     }
 
     public sealed class JcrUpdateService
@@ -46,9 +61,12 @@ namespace ScientificReviews.Helpers
 
             JcrApiClient jcrApiClient = new JcrApiClient(apiKey);
             List<string> missingJournals = new List<string>();
+            Dictionary<string, string> missingJournalDisplayNames = new Dictionary<string, string>();
             Dictionary<string, JournalReportsDto> reportsByName = journalReports
                 .Where(report => report?.Journal?.Name != null)
-                .ToDictionary(report => report.Journal.Name.ToLower());
+                .GroupBy(report => NormalizeJournalKey(report.Journal.Name))
+                .Where(group => string.IsNullOrWhiteSpace(group.Key) == false)
+                .ToDictionary(group => group.Key, group => group.First());
 
             foreach (var entry in entries)
             {
@@ -59,12 +77,21 @@ namespace ScientificReviews.Helpers
                 if (string.IsNullOrWhiteSpace(journalValue))
                     continue;
 
-                string journalName = BibtexUtils.RemoveLatex(journalValue).ToLower();
-                if (reportsByName.ContainsKey(journalName) == false && missingJournals.Contains(journalName) == false)
-                    missingJournals.Add(journalName);
+                string journalName = BibtexUtils.RemoveLatex(journalValue).Trim();
+                string journalKey = NormalizeJournalKey(journalName);
+                if (string.IsNullOrWhiteSpace(journalKey))
+                    continue;
+
+                if (reportsByName.ContainsKey(journalKey) == false && missingJournals.Contains(journalKey) == false)
+                {
+                    missingJournals.Add(journalKey);
+                    missingJournalDisplayNames[journalKey] = journalName;
+                }
             }
 
-            missingJournals.Sort();
+            missingJournals = missingJournals
+                .OrderBy(key => missingJournalDisplayNames[key], StringComparer.OrdinalIgnoreCase)
+                .ToList();
             if (missingJournals.Count == 0)
             {
                 progress?.Report(new JcrUpdateProgress
@@ -79,16 +106,20 @@ namespace ScientificReviews.Helpers
             }
 
             var notFoundJournals = new List<string>();
+            var resolvedJournalNames = new List<string>();
+            var lookupIssues = new List<JcrJournalLookupIssue>();
             int addedJournals = 0;
+            int resolvedJournals = 0;
 
             for (int journalIndex = 0; journalIndex < missingJournals.Count; journalIndex++)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                string missingJournal = missingJournals[journalIndex];
+                string missingJournalKey = missingJournals[journalIndex];
+                string missingJournal = missingJournalDisplayNames[missingJournalKey];
                 progress?.Report(new JcrUpdateProgress
                 {
-                    Summary = $"{journalIndex + 1}/{missingJournals.Count}",
-                    Details = missingJournal,
+                    Summary = "Checking missing journals",
+                    Details = $"{journalIndex + 1}/{missingJournals.Count}: {missingJournal}",
                     Completed = journalIndex + 1,
                     Total = missingJournals.Count
                 });
@@ -96,47 +127,43 @@ namespace ScientificReviews.Helpers
                 try
                 {
                     var response = await jcrApiClient.GetJournalsAsync(missingJournal.Replace("&", "").Replace("-", " "));
-                    bool foundAnyReport = false;
+                    JcrJournalLookupResult lookupResult = await FindBestJournalReportAsync(
+                        jcrApiClient,
+                        response?.Hits,
+                        missingJournalKey,
+                        fromYear,
+                        cancellationToken);
 
-                    foreach (var hit in response.Hits)
+                    JournalReportsDto report = lookupResult?.Report;
+                    if (report == null)
                     {
-                        cancellationToken.ThrowIfCancellationRequested();
-                        JournalReportsDto report = null;
-                        for (int currentYear = fromYear; currentYear > 2020; currentYear--)
+                        notFoundJournals.Add(missingJournal);
+                        lookupIssues.Add(new JcrJournalLookupIssue
                         {
-                            cancellationToken.ThrowIfCancellationRequested();
-                            try
-                            {
-                                report = await jcrApiClient.GetJournalReportsAsync(hit.Id, currentYear);
-                                break;
-                            }
-                            catch (OperationCanceledException)
-                            {
-                                throw;
-                            }
-                            catch (Exception)
-                            {
-                                continue;
-                            }
-                        }
-
-                        if (report == null)
-                            continue;
-
-                        foundAnyReport = true;
-                        string reportKey = report.Journal.Name.ToLower();
-                        if (journalReports.Any(existing => string.Equals(existing?.Journal?.Name, report.Journal.Name, StringComparison.OrdinalIgnoreCase)) == false)
-                        {
-                            journalReports.Add(report);
-                            addedJournals++;
-                            saveJournalDatabase?.Invoke();
-                        }
-
-                        reportsByName[reportKey] = report;
+                            JournalName = missingJournal,
+                            Reason = lookupResult?.FailureReason ?? "Journal could not be resolved in JCR."
+                        });
+                        continue;
                     }
 
-                    if (!foundAnyReport)
+                    string reportKey = NormalizeJournalKey(report.Journal?.Name);
+                    if (string.IsNullOrWhiteSpace(reportKey))
+                    {
                         notFoundJournals.Add(missingJournal);
+                        continue;
+                    }
+
+                    resolvedJournals++;
+                    resolvedJournalNames.Add(missingJournal);
+                    if (journalReports.Any(existing =>
+                        string.Equals(NormalizeJournalKey(existing?.Journal?.Name), reportKey, StringComparison.Ordinal)) == false)
+                    {
+                        journalReports.Add(report);
+                        addedJournals++;
+                        saveJournalDatabase?.Invoke();
+                    }
+
+                    reportsByName[reportKey] = report;
                 }
                 catch (OperationCanceledException)
                 {
@@ -145,6 +172,11 @@ namespace ScientificReviews.Helpers
                 catch (Exception ex)
                 {
                     notFoundJournals.Add(missingJournal);
+                    lookupIssues.Add(new JcrJournalLookupIssue
+                    {
+                        JournalName = missingJournal,
+                        Reason = $"Unexpected JCR lookup error: {ex.Message}"
+                    });
                     logError?.Invoke($"JCR update failed for journal '{missingJournal}': {ex.Message}");
                 }
             }
@@ -155,7 +187,7 @@ namespace ScientificReviews.Helpers
 
             progress?.Report(new JcrUpdateProgress
             {
-                Summary = $"Added {addedJournals}",
+                Summary = $"Resolved {resolvedJournals}/{missingJournals.Count}",
                 Details = details,
                 Completed = missingJournals.Count,
                 Total = missingJournals.Count
@@ -164,10 +196,123 @@ namespace ScientificReviews.Helpers
             return new JcrUpdateResult
             {
                 MissingJournalCount = missingJournals.Count,
+                ResolvedJournalCount = resolvedJournals,
                 AddedJournalCount = addedJournals,
                 NotFoundJournalCount = notFoundJournals.Count,
-                NotFoundJournals = notFoundJournals
+                NotFoundJournals = notFoundJournals,
+                ResolvedJournals = resolvedJournalNames,
+                LookupIssues = lookupIssues
             };
+        }
+
+        private async Task<JcrJournalLookupResult> FindBestJournalReportAsync(
+            JcrApiClient jcrApiClient,
+            IEnumerable<JournalHitDto> hits,
+            string missingJournalKey,
+            int fromYear,
+            CancellationToken cancellationToken)
+        {
+            JournalReportsDto looseMatch = null;
+            List<JournalHitDto> hitList = (hits ?? Enumerable.Empty<JournalHitDto>())
+                .Where(item => item != null && string.IsNullOrWhiteSpace(item.Id) == false)
+                .OrderByDescending(item => JournalKeyMatches(item.Name, missingJournalKey))
+                .ThenBy(item => item.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (hitList.Count == 0)
+            {
+                return new JcrJournalLookupResult
+                {
+                    FailureReason = "Journal was not found in Clarivate journal search."
+                };
+            }
+
+            foreach (JournalHitDto hit in hitList)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                JournalReportsDto report = await TryGetLatestJournalReportAsync(jcrApiClient, hit.Id, fromYear, cancellationToken);
+                if (report == null)
+                    continue;
+
+                string reportKey = NormalizeJournalKey(report.Journal?.Name);
+                if (string.IsNullOrWhiteSpace(reportKey))
+                    continue;
+
+                if (string.Equals(reportKey, missingJournalKey, StringComparison.Ordinal))
+                {
+                    return new JcrJournalLookupResult
+                    {
+                        Report = report
+                    };
+                }
+
+                if (looseMatch == null && JournalKeyMatches(report.Journal?.Name, missingJournalKey))
+                    looseMatch = report;
+            }
+
+            if (looseMatch != null)
+            {
+                return new JcrJournalLookupResult
+                {
+                    Report = looseMatch
+                };
+            }
+
+            return new JcrJournalLookupResult
+            {
+                FailureReason = "Journal search returned candidates, but no usable JCR annual report could be resolved."
+            };
+        }
+
+        private async Task<JournalReportsDto> TryGetLatestJournalReportAsync(
+            JcrApiClient jcrApiClient,
+            string journalId,
+            int fromYear,
+            CancellationToken cancellationToken)
+        {
+            for (int currentYear = fromYear; currentYear > 2020; currentYear--)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                try
+                {
+                    return await jcrApiClient.GetJournalReportsAsync(journalId, currentYear);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception)
+                {
+                    continue;
+                }
+            }
+
+            return null;
+        }
+
+        private static string NormalizeJournalKey(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            char[] normalized = BibtexUtils.RemoveLatex(value)
+                .Trim()
+                .ToLowerInvariant()
+                .Where(char.IsLetterOrDigit)
+                .ToArray();
+
+            return normalized.Length == 0 ? null : new string(normalized);
+        }
+
+        private static bool JournalKeyMatches(string candidateName, string expectedKey)
+        {
+            string candidateKey = NormalizeJournalKey(candidateName);
+            if (string.IsNullOrWhiteSpace(candidateKey) || string.IsNullOrWhiteSpace(expectedKey))
+                return false;
+
+            return string.Equals(candidateKey, expectedKey, StringComparison.Ordinal) ||
+                candidateKey.Contains(expectedKey) ||
+                expectedKey.Contains(candidateKey);
         }
     }
 }
