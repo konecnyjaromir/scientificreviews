@@ -261,6 +261,9 @@ namespace ScientificReviews.Forms
 
         private void ApplyRecordPanelLayout()
         {
+            SuspendLayout();
+            try
+            {
             if (_isRecordPanelCollapsed)
             {
                 panel1.Visible = false;
@@ -268,6 +271,7 @@ namespace ScientificReviews.Forms
                 panelRecordPanelToggle.Dock = DockStyle.Right;
                 btnToggleRecordPanel.Text = "<";
                 dataGridView1.Dock = DockStyle.Fill;
+                RestoreCollapsedRecordPanelDockOrder();
                 panelRecordPanelToggle.BringToFront();
                 return;
             }
@@ -279,6 +283,26 @@ namespace ScientificReviews.Forms
             panel1.Visible = true;
             panel1.Dock = DockStyle.Fill;
             btnToggleRecordPanel.Text = ">";
+            RestoreExpandedRecordPanelDockOrder();
+            }
+            finally
+            {
+                ResumeLayout(true);
+            }
+        }
+
+        private void RestoreExpandedRecordPanelDockOrder()
+        {
+            Controls.SetChildIndex(panel1, 0);
+            Controls.SetChildIndex(panelRecordPanelToggle, 1);
+            Controls.SetChildIndex(splitter1, 2);
+            Controls.SetChildIndex(dataGridView1, 3);
+        }
+
+        private void RestoreCollapsedRecordPanelDockOrder()
+        {
+            Controls.SetChildIndex(panelRecordPanelToggle, 0);
+            Controls.SetChildIndex(dataGridView1, 1);
         }
 
         private int CalculateExpandedGridWidth()
