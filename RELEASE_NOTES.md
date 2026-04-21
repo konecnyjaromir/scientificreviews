@@ -82,6 +82,13 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Added `Rename tag` for selected records from the `Database` menu
 - Added `Rename tag` for the current record from the record panel and `Record` menu
 - Rename-tag dialog now supports autocomplete and prefills the new value as `<original>_copy`
+- Added `Record -> Flags` submenu and matching row context-menu submenu with `Green`, `Orange`, `Purple`, `Red`, and `No flag`
+- Records can now be visually flagged through the `flag` tag, and flagged rows are highlighted directly in the main grid
+- Added quick flagging shortcuts:
+  - `F3` = Green
+  - `F4` = Orange
+  - `F5` = Purple
+  - `F6` = Red
 - Moved `Custom columns` management into `Settings` while keeping `Window -> Columns` as a familiar shortcut
 
 ### PDF Pairing and Full-Text Workflow
@@ -246,6 +253,7 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - JCR tag generation now updates existing tags instead of duplicating them
 - Added `Remove duplicate tags` database action
 - Duplicate-tag cleanup preserves the newest value for the same tag key
+- Added `Clear flags` database action for removing all record flags from the current archive at once
 - Added `Normalize page-tag` into the `Autofix` pipeline
 - Added database refresh usage across lightweight edit actions instead of unnecessary full reloads
 

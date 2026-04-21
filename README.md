@@ -30,6 +30,8 @@ Scientific Reviews is a Windows desktop tool for researchers who work with BibTe
 - Duplicate, delete, and bulk-clean records directly from the grid
 - Double-click a record to open its paired PDF
 - Record menu and row context menu expose fast actions such as copy, duplicate, PDF rebind, and PDF unbind
+- Records can be flagged with `Green`, `Orange`, `Purple`, or `Red`, which stores a `flag` tag and highlights the row in the grid
+- `Record -> Flags` and the row context menu both support `No flag` plus quick flagging shortcuts `F3` to `F6`
 
 ### Search modes
 
@@ -275,6 +277,7 @@ The export dialog lets you configure:
   - `All records`
 - Remove duplicate records by title or DOI
 - Remove duplicate tags while preserving the newest value
+- `Database -> Clear flags` removes all `flag` tags from the current archive in one bulk action
 - Remove records without DOI
 - Exclude records by title pattern
 - Exclude records using another BibTeX file
