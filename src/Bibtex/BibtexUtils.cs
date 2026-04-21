@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
+using ScientificReviews.Helpers;
 
 namespace ScientificReviews.Bibtex
 {
@@ -47,6 +48,8 @@ namespace ScientificReviews.Bibtex
 
             foreach (var entry in entries)
             {
+                BibtexTagService.RemoveDuplicateTags(entry);
+
                 var tag = entry.Tags.FirstOrDefault(t =>
                     t.Key.Equals(tagName, StringComparison.OrdinalIgnoreCase));
 
@@ -66,6 +69,8 @@ namespace ScientificReviews.Bibtex
                 else
                 {
                     Merge(entry, existing);
+                    BibtexTagService.RemoveDuplicateTags(entry);
+                    BibtexTagService.RemoveDuplicateTags(existing);
                 }
             }
 
@@ -105,20 +110,33 @@ namespace ScientificReviews.Bibtex
 
         private static void Merge(BibtexEntry entry1, BibtexEntry entry2)
         {
-            List<BibtexTag> mergedTags = entry1.Tags.ToList();
-            Dictionary<string, BibtexTag> tagsDictionary = mergedTags.ToDictionary(tag => tag.Key);
+            List<BibtexTag> mergedTags = new List<BibtexTag>();
+            HashSet<string> seenKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            foreach (var tag in entry2.Tags)
-            {
-                if (!tagsDictionary.ContainsKey(tag.Key))
-                {
-                    mergedTags.Add(tag);
-                }
-            }
+            AppendMissingTags(mergedTags, seenKeys, entry1?.Tags);
+            AppendMissingTags(mergedTags, seenKeys, entry2?.Tags);
 
             entry1.Tags = mergedTags.ToArray();
             entry2.Tags = mergedTags.ToArray();
+        }
 
+        private static void AppendMissingTags(List<BibtexTag> destination, HashSet<string> seenKeys, IEnumerable<BibtexTag> source)
+        {
+            foreach (BibtexTag tag in source ?? Enumerable.Empty<BibtexTag>())
+            {
+                if (tag == null)
+                    continue;
+
+                string key = (tag.Key ?? string.Empty).Trim();
+                if (key.Length == 0)
+                {
+                    destination.Add(tag);
+                    continue;
+                }
+
+                if (seenKeys.Add(key))
+                    destination.Add(tag);
+            }
         }
 
         public static int UpdatePages(List<BibtexEntry> entries)

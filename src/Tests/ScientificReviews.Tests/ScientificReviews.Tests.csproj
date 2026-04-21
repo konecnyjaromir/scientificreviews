@@ -38,6 +38,7 @@
     <Reference Include="Microsoft.CSharp" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="BibtexUtilsTests.cs" />
     <Compile Include="DoiNormalizationHelperTests.cs" />
     <Compile Include="PasteAnythingServiceTests.cs" />
     <Compile Include="Program.cs" />
