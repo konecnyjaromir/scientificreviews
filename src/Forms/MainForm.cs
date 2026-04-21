@@ -870,21 +870,24 @@ namespace ScientificReviews.Forms
                     lblStatus.Text = "Autoupdate JCR started.";
 
                     JcrUpdateResult updateResult;
+                    string updateSummary;
+                    string updateDetails;
+                    OperationReportSeverity updateSeverity;
                     using (ReportScopeContext updateScope = BeginReportScope(
                         "Update Journals Database",
                         "Update Journals Database started.",
                         "Subtask 1/2"))
                     {
-                        operation.Report("Update Journals Database", "Subtask 1/2", 1, 2, false);
-                        updateResult = await RunUpdateJcrAsync(operation, cancellation.Token, 1, 2);
+                        operation.Report("Update Journals Database", "Subtask 1/2 running as visible task.", 1, 2, false);
+                        updateResult = await RunVisibleAutoupdateJcrUpdateSubtaskAsync(cancellation.Token, cancellation.Cancel);
 
                         Dictionary<string, JournalReportsDto> updatedReportsByName = BuildJcrReportsByName();
                         Dictionary<string, string> lookupReasonsByJournal = BuildJcrLookupReasonsByJournal(updateResult);
                         JcrCoverageReport updateCoverageReport = BuildJcrCoverageReport(entries.ToArray(), updatedReportsByName, lookupReasonsByJournal);
-                        string updateSummary = updateResult.MissingJournalCount == 0
+                        updateSummary = updateResult.MissingJournalCount == 0
                             ? "No missing journals."
                             : $"Resolved {updateResult.ResolvedJournalCount}/{updateResult.MissingJournalCount} missing journals.";
-                        string updateDetails = BuildJcrCoverageDetails(
+                        updateDetails = BuildJcrCoverageDetails(
                             updateCoverageReport.ResolvedEntries,
                             updateCoverageReport.MissingJcrTagEntries,
                             updateCoverageReport.MissingJournalEntries,
@@ -895,13 +898,16 @@ namespace ScientificReviews.Forms
                             updateCoverageReport.MissingJournalRecordDetails,
                             updateCoverageReport.ErrorRecordDetails,
                             "These records have journal and their JCR data is now available");
+                        updateSeverity =
+                            updateResult.NotFoundJournalCount > 0 || updateCoverageReport.ErrorEntries > 0
+                                ? OperationReportSeverity.Warning
+                                : OperationReportSeverity.Info;
 
                         updateScope.Complete(
                             updateSummary,
                             updateDetails,
-                            updateResult.NotFoundJournalCount > 0 || updateCoverageReport.ErrorEntries > 0
-                                ? OperationReportSeverity.Warning
-                                : OperationReportSeverity.Info);
+                            updateSeverity);
+                        operation.Report("Update Journals Database", "Subtask 1/2 completed.", 1, 2, false);
                         LogProcessProgress(log, "Update Journals Database completed.");
                     }
 
@@ -915,37 +921,11 @@ namespace ScientificReviews.Forms
                         "Create extra JCR tags started.",
                         "Subtask 2/2"))
                     {
-                        operation.Report("Create extra JCR tags", "Subtask 2/2", 2, 2, false);
-                        Dictionary<string, JournalReportsDto> reportsByName = BuildJcrReportsByName();
-                        EntryChangeSnapshot tagChangeSnapshot = CaptureEntryChanges(entries.ToArray());
-                        tagResult = CreateExtraJcrTags(entries.ToArray(), reportsByName);
-                        changeReport = BuildEntryChangeReport(tagChangeSnapshot);
-
-                        if (tagResult.UpdatedEntries > 0)
-                        {
-                            RefreshGrid();
-                            Changed();
-                        }
-
-                        tagSummary = tagResult.UpdatedEntries > 0
-                            ? $"Create extra JCR tags finished. Updated {tagResult.UpdatedEntries} record(s)."
-                            : "Create extra JCR tags finished. No records required JCR tag changes.";
-                        tagDetails = BuildJcrCoverageDetails(
-                            tagResult.MatchedJournalEntries,
-                            tagResult.MissingJcrTagEntries,
-                            tagResult.MissingJournalTagEntries,
-                            tagResult.MissingJcrReportEntries + tagResult.InvalidJcrDataEntries,
-                            tagResult.ErrorEntries,
-                            tagResult.ResolvedRecordDetails,
-                            tagResult.UnresolvedRecordDetails,
-                            tagResult.MissingJournalRecordDetails,
-                            tagResult.ErrorRecordDetails,
-                            "These records have journal and JCR tags were created or confirmed.");
-                        tagSeverity = tagResult.InvalidJcrDataEntries > 0 || tagResult.MissingJcrReportEntries > 0 || tagResult.ErrorEntries > 0
-                            ? OperationReportSeverity.Warning
-                            : OperationReportSeverity.Info;
+                        operation.Report("Create extra JCR tags", "Subtask 2/2 running as visible task.", 2, 2, false);
+                        (tagResult, changeReport, tagSummary, tagDetails, tagSeverity) = await RunVisibleAutoupdateCreateExtraJcrTagsSubtaskAsync(cancellation.Token, cancellation.Cancel);
 
                         createScope.Complete(tagSummary, tagDetails, tagSeverity, changeReport);
+                        operation.Report("Create extra JCR tags", "Subtask 2/2 completed.", 2, 2, false);
                         LogProcessProgress(log, "Create extra JCR tags completed.");
                     }
 
@@ -989,6 +969,109 @@ namespace ScientificReviews.Forms
                 {
                     log.Dispose();
                 }
+            }
+        }
+
+        private async Task<JcrUpdateResult> RunVisibleAutoupdateJcrUpdateSubtaskAsync(CancellationToken cancellationToken, Action cancelAction)
+        {
+            StatusStripOperationHandle childOperation = StartTrackedOperation(
+                "update-jcr",
+                "Update Journals Database",
+                "Subtask 1/2 of Autoupdate JCR",
+                silentIfAlreadyRunning: true);
+            if (childOperation == null)
+                throw new InvalidOperationException("Update Journals Database is already running.");
+
+            childOperation.RegisterCancellation(cancelAction);
+
+            try
+            {
+                childOperation.Report("Update Journals Database", "Subtask 1/2 of Autoupdate JCR", null, null, true);
+                JcrUpdateResult result = await RunUpdateJcrAsync(childOperation, cancellationToken);
+                string summary = result.MissingJournalCount == 0
+                    ? "No missing journals."
+                    : $"Resolved {result.ResolvedJournalCount}/{result.MissingJournalCount} missing journals.";
+                childOperation.Complete(summary, "Click to see details.");
+                return result;
+            }
+            catch (OperationCanceledException)
+            {
+                childOperation.Cancel("Cancelled", "Update Journals Database was stopped by user.");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                childOperation.Fail(ex, "Failed");
+                throw;
+            }
+        }
+
+        private async Task<(JcrTagCreationResult Result, EntryChangeReport ChangeReport, string Summary, string Details, OperationReportSeverity Severity)> RunVisibleAutoupdateCreateExtraJcrTagsSubtaskAsync(CancellationToken cancellationToken, Action cancelAction)
+        {
+            StatusStripOperationHandle childOperation = StartTrackedOperation(
+                "create-extra-jcr-tags",
+                "Create extra JCR tags",
+                "Subtask 2/2 of Autoupdate JCR",
+                silentIfAlreadyRunning: true);
+            if (childOperation == null)
+                throw new InvalidOperationException("Create extra JCR tags is already running.");
+
+            childOperation.RegisterCancellation(cancelAction);
+
+            try
+            {
+                BibtexEntry[] targetEntries = entries.ToArray();
+                Dictionary<string, JournalReportsDto> reportsByName = BuildJcrReportsByName();
+                EntryChangeSnapshot tagChangeSnapshot = CaptureEntryChanges(targetEntries);
+
+                childOperation.Report("Create extra JCR tags", "Matching records against local JCR data", null, null, true);
+                await Task.Yield();
+                JcrTagCreationResult result = await Task.Run(() =>
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    return CreateExtraJcrTags(targetEntries, reportsByName);
+                }, cancellationToken);
+
+                EntryChangeReport changeReport = BuildEntryChangeReport(tagChangeSnapshot);
+
+                if (result.UpdatedEntries > 0)
+                {
+                    RefreshGrid();
+                    Changed();
+                }
+
+                string summary = result.UpdatedEntries > 0
+                    ? $"Create extra JCR tags finished. Updated {result.UpdatedEntries} record(s)."
+                    : "Create extra JCR tags finished. No records required JCR tag changes.";
+                string details = BuildJcrCoverageDetails(
+                    result.MatchedJournalEntries,
+                    result.MissingJcrTagEntries,
+                    result.MissingJournalTagEntries,
+                    result.MissingJcrReportEntries + result.InvalidJcrDataEntries,
+                    result.ErrorEntries,
+                    result.ResolvedRecordDetails,
+                    result.UnresolvedRecordDetails,
+                    result.MissingJournalRecordDetails,
+                    result.ErrorRecordDetails,
+                    "These records have journal and JCR tags were created or confirmed.");
+
+                OperationReportSeverity severity =
+                    result.InvalidJcrDataEntries > 0 || result.MissingJcrReportEntries > 0 || result.ErrorEntries > 0
+                        ? OperationReportSeverity.Warning
+                        : OperationReportSeverity.Info;
+
+                childOperation.Complete(summary, "Click to see details.");
+                return (result, changeReport, summary, details, severity);
+            }
+            catch (OperationCanceledException)
+            {
+                childOperation.Cancel("Cancelled", "Create extra JCR tags was stopped by user.");
+                throw;
+            }
+            catch (Exception ex)
+            {
+                childOperation.Fail(ex, "Failed");
+                throw;
             }
         }
 

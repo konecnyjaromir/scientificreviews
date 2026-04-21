@@ -1521,6 +1521,12 @@ namespace ScientificReviews.Forms
                 return;
             }
 
+            if (_operationManager.IsActive("create-extra-jcr-tags"))
+            {
+                lblStatus.Text = "Create extra JCR tags is already running.";
+                return;
+            }
+
             ProcessLogScope log = BeginProcessLog("Create extra JCR tags", $"Records: {entries.Count}");
             try
             {
