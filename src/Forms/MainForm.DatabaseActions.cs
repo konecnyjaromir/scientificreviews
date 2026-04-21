@@ -115,22 +115,52 @@ namespace ScientificReviews.Forms
             frm.SetSelection(Program.AppSettings.Data.SelectedTags);
             if (frm.ShowDialog(this) == DialogResult.OK)
             {
+                ProcessLogScope log = BeginProcessLog("Remove tags", $"Records: {entries.Count}");
                 List<string> tagsToLeave = frm.GetSelected().ToList();
-                Program.AppSettings.Data.SelectedTags = tagsToLeave.ToArray();
-                foreach (BibtexEntry entry in entries)
+                try
                 {
-                    List<BibtexTag> list = new List<BibtexTag>();
-                    foreach (BibtexTag tag in entry.Tags)
+                    EntryChangeSnapshot changeSnapshot = CaptureEntryChanges(entries.ToArray());
+                    Program.AppSettings.Data.SelectedTags = tagsToLeave.ToArray();
+                    foreach (BibtexEntry entry in entries)
                     {
-                        if (tagsToLeave.Contains(tag.Key))
-                            list.Add(tag);
+                        List<BibtexTag> list = new List<BibtexTag>();
+                        foreach (BibtexTag tag in entry.Tags)
+                        {
+                            if (tagsToLeave.Contains(tag.Key))
+                                list.Add(tag);
+                        }
+
+                        entry.Tags = list.ToArray();
                     }
 
-                    entry.Tags = list.ToArray();
-                }
+                    EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot);
+                    string summary = changeReport != null && changeReport.HasChanges
+                        ? $"Remove tags finished. Updated {changeReport.TotalChangedEntries} record(s)."
+                        : "Remove tags finished. No tags required removal.";
+                    string details = tagsToLeave.Count > 0
+                        ? "Kept tags: " + string.Join(", ", tagsToLeave.OrderBy(item => item, StringComparer.OrdinalIgnoreCase))
+                        : "Kept tags: none";
 
-                RefreshGrid();
-                Changed();
+                    if (changeReport != null && changeReport.HasChanges)
+                    {
+                        RefreshGrid();
+                        Changed();
+                    }
+
+                    log.Complete(summary);
+                    lblStatus.Text = summary;
+                    PublishReport("Remove tags", summary, details, OperationReportSeverity.Info, changeReport);
+                }
+                catch (Exception ex)
+                {
+                    lblStatus.Text = ex.Message;
+                    log.Fail(ex, "Remove tags failed.");
+                    PublishReport("Remove tags", "Remove tags failed.", ex.Message, OperationReportSeverity.Error);
+                }
+                finally
+                {
+                    log.Dispose();
+                }
             }
         }
 
@@ -148,18 +178,46 @@ namespace ScientificReviews.Forms
             frm.SetSelection(Program.AppSettings.Data.SelectedTypes);
             if (frm.ShowDialog(this) == DialogResult.OK)
             {
-                List<string> typesToLeave = frm.GetSelected().ToList();
-                Program.AppSettings.Data.SelectedTypes = typesToLeave.ToArray();
-                List<BibtexEntry> list = new List<BibtexEntry>();
-                foreach (BibtexEntry entry in entries)
+                ProcessLogScope log = BeginProcessLog("Remove types", $"Records: {entries.Count}");
+                try
                 {
-                    if (typesToLeave.Contains(entry.Type))
-                        list.Add(entry);
-                }
+                    EntryChangeSnapshot changeSnapshot = CaptureEntryChanges(entries.ToArray());
+                    List<string> typesToLeave = frm.GetSelected().ToList();
+                    Program.AppSettings.Data.SelectedTypes = typesToLeave.ToArray();
+                    List<BibtexEntry> list = new List<BibtexEntry>();
+                    foreach (BibtexEntry entry in entries)
+                    {
+                        if (typesToLeave.Contains(entry.Type))
+                            list.Add(entry);
+                    }
 
-                entries = list;
-                LoadData(entries.ToArray());
-                Changed();
+                    entries = list;
+                    EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot);
+                    string summary = changeReport != null && changeReport.HasChanges
+                        ? $"Remove types finished. Removed {changeReport.RemovedEntries} record(s)."
+                        : "Remove types finished. No record types required removal.";
+                    string details = typesToLeave.Count > 0
+                        ? "Kept types: " + string.Join(", ", typesToLeave.OrderBy(item => item, StringComparer.OrdinalIgnoreCase))
+                        : "Kept types: none";
+
+                    LoadData(entries.ToArray());
+                    if (changeReport != null && changeReport.HasChanges)
+                        Changed();
+
+                    log.Complete(summary);
+                    lblStatus.Text = summary;
+                    PublishReport("Remove types", summary, details, changeReport != null && changeReport.RemovedEntries > 0 ? OperationReportSeverity.Warning : OperationReportSeverity.Info, changeReport);
+                }
+                catch (Exception ex)
+                {
+                    lblStatus.Text = ex.Message;
+                    log.Fail(ex, "Remove types failed.");
+                    PublishReport("Remove types", "Remove types failed.", ex.Message, OperationReportSeverity.Error);
+                }
+                finally
+                {
+                    log.Dispose();
+                }
             }
         }
 
@@ -648,16 +706,46 @@ namespace ScientificReviews.Forms
 
         private void removeWithoutDOIToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            List<BibtexEntry> list = new List<BibtexEntry>();
-            foreach (BibtexEntry entry in entries)
+            ProcessLogScope log = BeginProcessLog("Remove without DOI", $"Records: {entries.Count}");
+            try
             {
-                if (entry.GetTagValue("doi") != null)
-                    list.Add(entry);
-            }
+                EntryChangeSnapshot changeSnapshot = CaptureEntryChanges(entries.ToArray());
+                List<BibtexEntry> list = new List<BibtexEntry>();
+                foreach (BibtexEntry entry in entries)
+                {
+                    if (entry.GetTagValue("doi") != null)
+                        list.Add(entry);
+                }
 
-            entries = list;
-            LoadData(entries.ToArray());
-            Changed();
+                entries = list;
+                EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot);
+                string summary = changeReport != null && changeReport.RemovedEntries > 0
+                    ? $"Remove without DOI finished. Removed {changeReport.RemovedEntries} record(s)."
+                    : "Remove without DOI finished. No records without DOI were found.";
+
+                LoadData(entries.ToArray());
+                if (changeReport != null && changeReport.HasChanges)
+                    Changed();
+
+                log.Complete(summary);
+                lblStatus.Text = summary;
+                PublishReport(
+                    "Remove without DOI",
+                    summary,
+                    "Criteria: missing doi tag",
+                    changeReport != null && changeReport.RemovedEntries > 0 ? OperationReportSeverity.Warning : OperationReportSeverity.Info,
+                    changeReport);
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+                log.Fail(ex, "Remove without DOI failed.");
+                PublishReport("Remove without DOI", "Remove without DOI failed.", ex.Message, OperationReportSeverity.Error);
+            }
+            finally
+            {
+                log.Dispose();
+            }
         }
 
         private void removeDuplicitiesByDOIToolStripMenuItem_Click(object sender, EventArgs e)
@@ -1490,29 +1578,54 @@ namespace ScientificReviews.Forms
 
         private void removeDuplicateTagsToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            int changedEntries = 0;
-            int removedTags = 0;
-
-            foreach (BibtexEntry entry in entries)
+            ProcessLogScope log = BeginProcessLog("Remove duplicate tags", $"Records: {entries.Count}");
+            try
             {
-                int removedForEntry = BibtexTagService.RemoveDuplicateTags(entry);
-                if (removedForEntry > 0)
+                EntryChangeSnapshot changeSnapshot = CaptureEntryChanges(entries.ToArray());
+                int changedEntries = 0;
+                int removedTags = 0;
+
+                foreach (BibtexEntry entry in entries)
                 {
-                    changedEntries++;
-                    removedTags += removedForEntry;
+                    int removedForEntry = BibtexTagService.RemoveDuplicateTags(entry);
+                    if (removedForEntry > 0)
+                    {
+                        changedEntries++;
+                        removedTags += removedForEntry;
+                    }
                 }
-            }
 
-            RefreshGrid();
+                EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot);
+                string summary = removedTags > 0
+                    ? $"Removed {removedTags} duplicate tag(s) in {changedEntries} record(s)."
+                    : "No duplicate tags found.";
+                string details =
+                    $"Changed records: {changedEntries}{Environment.NewLine}" +
+                    $"Removed duplicate tags: {removedTags}";
 
-            if (removedTags > 0)
-            {
-                Changed();
-                lblStatus.Text = $"Removed {removedTags} duplicate tag(s) in {changedEntries} record(s).";
+                RefreshGrid();
+
+                if (removedTags > 0)
+                    Changed();
+
+                log.Complete(summary);
+                lblStatus.Text = summary;
+                PublishReport(
+                    "Remove duplicate tags",
+                    summary,
+                    details,
+                    removedTags > 0 ? OperationReportSeverity.Warning : OperationReportSeverity.Info,
+                    changeReport);
             }
-            else
+            catch (Exception ex)
             {
-                lblStatus.Text = "No duplicate tags found.";
+                lblStatus.Text = ex.Message;
+                log.Fail(ex, "Remove duplicate tags failed.");
+                PublishReport("Remove duplicate tags", "Remove duplicate tags failed.", ex.Message, OperationReportSeverity.Error);
+            }
+            finally
+            {
+                log.Dispose();
             }
         }
 
@@ -1901,6 +2014,7 @@ namespace ScientificReviews.Forms
 
         private async void excludeEntriesToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            ProcessLogScope log = BeginProcessLog("Exclude entries", $"Records: {entries.Count}");
             try
             {
                 OpenFileDialog ofd = new OpenFileDialog()
@@ -1914,20 +2028,49 @@ namespace ScientificReviews.Forms
                 if (ofd.ShowDialog(this) == DialogResult.OK)
                 {
                     string fileName = ofd.FileName;
+                    EntryChangeSnapshot changeSnapshot = CaptureEntryChanges(entries.ToArray());
                     await Task.Run(() =>
                     {
                         BibtexParser parser = new BibtexParser();
                         toExclude.AddRange(parser.ParseFile(File.ReadAllText(fileName)));
                     });
+
+                    entries = BibtexUtils.ExcludeEntries(entries, toExclude);
+                    EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot);
+                    string summary = changeReport != null && changeReport.RemovedEntries > 0
+                        ? $"Exclude entries finished. Removed {changeReport.RemovedEntries} record(s)."
+                        : "Exclude entries finished. No matching records were removed.";
+                    string details =
+                        $"Source file: {fileName}{Environment.NewLine}" +
+                        $"Exclude candidates: {toExclude.Count}";
+
+                    LoadData(entries.ToArray());
+                    if (changeReport != null && changeReport.HasChanges)
+                        Changed();
+
+                    log.Complete(summary);
+                    lblStatus.Text = summary;
+                    PublishReport(
+                        "Exclude entries",
+                        summary,
+                        details,
+                        changeReport != null && changeReport.RemovedEntries > 0 ? OperationReportSeverity.Warning : OperationReportSeverity.Info,
+                        changeReport);
+                    return;
                 }
 
-                entries = BibtexUtils.ExcludeEntries(entries, toExclude);
-                LoadData(entries.ToArray());
-                Changed();
+                log.Step("Cancelled by user.");
+                log.Complete("Exclude entries cancelled.");
             }
             catch (Exception ex)
             {
                 lblStatus.Text = ex.Message;
+                log.Fail(ex, "Exclude entries failed.");
+                PublishReport("Exclude entries", "Exclude entries failed.", ex.Message, OperationReportSeverity.Error);
+            }
+            finally
+            {
+                log.Dispose();
             }
         }
 
@@ -1936,22 +2079,64 @@ namespace ScientificReviews.Forms
             InputBoxForm frm = InputBoxForm.Show("Enter a pattern to filter items:", this);
             if (frm.DialogResult == DialogResult.OK)
             {
-                string[] patterns = frm.GetText().Split(',');
-                foreach (string item in patterns)
+                ProcessLogScope log = BeginProcessLog("Exclude entries by title", $"Records: {entries.Count}");
+                try
                 {
-                    string pattern = item.Trim().ToLower();
-                    List<BibtexEntry> filtered = new List<BibtexEntry>();
-                    foreach (BibtexEntry entry in entries)
+                    EntryChangeSnapshot changeSnapshot = CaptureEntryChanges(entries.ToArray());
+                    string[] patterns = frm.GetText().Split(',');
+                    foreach (string item in patterns)
                     {
-                        if (entry.GetTagValue("title").ToLower().Contains(pattern) == false)
-                            filtered.Add(entry);
+                        string pattern = item.Trim().ToLower();
+                        if (string.IsNullOrWhiteSpace(pattern))
+                            continue;
+
+                        List<BibtexEntry> filtered = new List<BibtexEntry>();
+                        foreach (BibtexEntry entry in entries)
+                        {
+                            string title = entry.GetTagValue("title") ?? string.Empty;
+                            if (title.ToLower().Contains(pattern) == false)
+                                filtered.Add(entry);
+                        }
+
+                        entries = filtered;
                     }
 
-                    entries = filtered;
-                }
+                    EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot);
+                    string summary = changeReport != null && changeReport.RemovedEntries > 0
+                        ? $"Exclude entries by title finished. Removed {changeReport.RemovedEntries} record(s)."
+                        : "Exclude entries by title finished. No matching records were removed.";
+                    string[] normalizedPatterns = (patterns ?? Array.Empty<string>())
+                        .Select(item => (item ?? string.Empty).Trim())
+                        .Where(item => item.Length > 0)
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToArray();
+                    string details = normalizedPatterns.Length > 0
+                        ? "Patterns: " + string.Join(", ", normalizedPatterns)
+                        : "Patterns: none";
 
-                LoadData(entries.ToArray());
-                Changed();
+                    LoadData(entries.ToArray());
+                    if (changeReport != null && changeReport.HasChanges)
+                        Changed();
+
+                    log.Complete(summary);
+                    lblStatus.Text = summary;
+                    PublishReport(
+                        "Exclude entries by title",
+                        summary,
+                        details,
+                        changeReport != null && changeReport.RemovedEntries > 0 ? OperationReportSeverity.Warning : OperationReportSeverity.Info,
+                        changeReport);
+                }
+                catch (Exception ex)
+                {
+                    lblStatus.Text = ex.Message;
+                    log.Fail(ex, "Exclude entries by title failed.");
+                    PublishReport("Exclude entries by title", "Exclude entries by title failed.", ex.Message, OperationReportSeverity.Error);
+                }
+                finally
+                {
+                    log.Dispose();
+                }
             }
         }
 
