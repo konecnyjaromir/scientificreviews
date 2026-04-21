@@ -3,6 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
+using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace ScientificReviews.Forms
@@ -18,6 +21,9 @@ namespace ScientificReviews.Forms
         private const int LeftPanelMinimumWidth = 240;
         private const int RightPanelMinimumWidth = 420;
         private const int PreferredLeftPanelWidth = 300;
+        private const int AsyncRenderLineThreshold = 150;
+        private const int AsyncRenderCharacterThreshold = 12000;
+        private const string ReportLoadingPlaceholder = "Please wait, processing report for you...";
 
         private readonly OperationReportCenter _reportCenter;
         private bool _isRefreshing;
@@ -34,6 +40,7 @@ namespace ScientificReviews.Forms
         private Font _detailBoldFont;
         private Font _titleFont;
         private Font _sectionFont;
+        private CancellationTokenSource _detailRenderCts;
 
         public ReportCenterForm(OperationReportCenter reportCenter)
         {
@@ -264,10 +271,11 @@ namespace ScientificReviews.Forms
         private void RenderSelectedReport()
         {
             OperationReportItem report = _treeReports.SelectedNode?.Tag as OperationReportItem;
-            _rtbDetails.Clear();
 
             if (report == null)
             {
+                _detailRenderCts?.Cancel();
+                _rtbDetails.Clear();
                 AppendPlainLine("No report selected.", SystemColors.ControlText);
                 _btnMarkRead.Enabled = false;
                 return;
@@ -275,6 +283,14 @@ namespace ScientificReviews.Forms
 
             List<OperationReportItem> descendants = GetDescendants(report.Id) ?? new List<OperationReportItem>();
             _btnMarkRead.Enabled = !report.IsRead || descendants.Any(item => !item.IsRead);
+            if (ShouldRenderAsynchronously(report, descendants))
+            {
+                StartAsyncDetailsRender(report, descendants);
+                return;
+            }
+
+            _detailRenderCts?.Cancel();
+            _rtbDetails.Clear();
 
             AppendTitle(report.Title ?? "Report");
             AppendSeparator();
@@ -324,6 +340,94 @@ namespace ScientificReviews.Forms
                 }
             }
 
+            _rtbDetails.SelectionStart = 0;
+            _rtbDetails.SelectionLength = 0;
+        }
+
+        private bool ShouldRenderAsynchronously(OperationReportItem report, List<OperationReportItem> descendants)
+        {
+            if (report == null)
+                return false;
+
+            int estimatedLineCount = CountLines(report.Details) + CountChanges(report.Changes);
+            int estimatedCharacterCount = (report.Summary ?? string.Empty).Length + (report.Details ?? string.Empty).Length;
+
+            foreach (OperationReportItem child in descendants ?? new List<OperationReportItem>())
+            {
+                estimatedLineCount += CountLines(child.Summary) + CountLines(child.Details) + CountChanges(child.Changes) + 3;
+                estimatedCharacterCount += (child.Title ?? string.Empty).Length + (child.Summary ?? string.Empty).Length + (child.Details ?? string.Empty).Length;
+            }
+
+            return estimatedLineCount >= AsyncRenderLineThreshold || estimatedCharacterCount >= AsyncRenderCharacterThreshold;
+        }
+
+        private void StartAsyncDetailsRender(OperationReportItem report, List<OperationReportItem> descendants)
+        {
+            _detailRenderCts?.Cancel();
+            _detailRenderCts?.Dispose();
+            _detailRenderCts = new CancellationTokenSource();
+            CancellationToken token = _detailRenderCts.Token;
+            Guid reportId = report.Id;
+            List<OperationReportItem> descendantsSnapshot = descendants?
+                .Where(item => item != null)
+                .ToList()
+                ?? new List<OperationReportItem>();
+            List<OperationReportItem> snapshotCopy = (_snapshot ?? new List<OperationReportItem>())
+                .Where(item => item != null)
+                .ToList();
+
+            ShowLoadingPlaceholder();
+
+            Task.Run(() =>
+            {
+                return BuildPlainTextReport(report, descendantsSnapshot, snapshotCopy, token);
+            }, token).ContinueWith(task =>
+            {
+                if (IsDisposed || token.IsCancellationRequested)
+                    return;
+
+                if (task.IsFaulted)
+                {
+                    ShowRenderError(task.Exception?.GetBaseException()?.Message);
+                    return;
+                }
+
+                OperationReportItem selectedReport = _treeReports.SelectedNode?.Tag as OperationReportItem;
+                if (selectedReport == null || selectedReport.Id != reportId)
+                    return;
+
+                ApplyPlainTextDetails(task.Result);
+            }, TaskScheduler.FromCurrentSynchronizationContext());
+        }
+
+        private void ShowLoadingPlaceholder()
+        {
+            _rtbDetails.Clear();
+            _rtbDetails.ForeColor = SystemColors.GrayText;
+            _rtbDetails.SelectionFont = new Font(_detailFont, FontStyle.Italic);
+            _rtbDetails.Text = ReportLoadingPlaceholder;
+            _rtbDetails.SelectionStart = 0;
+            _rtbDetails.SelectionLength = 0;
+        }
+
+        private void ShowRenderError(string message)
+        {
+            _rtbDetails.Clear();
+            _rtbDetails.ForeColor = Color.FromArgb(176, 32, 37);
+            _rtbDetails.SelectionFont = _detailFont;
+            _rtbDetails.Text = string.IsNullOrWhiteSpace(message)
+                ? "Report rendering failed."
+                : "Report rendering failed." + Environment.NewLine + Environment.NewLine + message;
+            _rtbDetails.SelectionStart = 0;
+            _rtbDetails.SelectionLength = 0;
+        }
+
+        private void ApplyPlainTextDetails(string text)
+        {
+            _rtbDetails.Clear();
+            _rtbDetails.ForeColor = SystemColors.ControlText;
+            _rtbDetails.Font = _detailFont;
+            _rtbDetails.Text = text ?? string.Empty;
             _rtbDetails.SelectionStart = 0;
             _rtbDetails.SelectionLength = 0;
         }
@@ -390,6 +494,142 @@ namespace ScientificReviews.Forms
                 .Where(report => report != null && report.ParentId.HasValue)
                 .GroupBy(report => report.ParentId.Value)
                 .ToDictionary(group => group.Key, group => group.OrderBy(item => item.CreatedAt).ToList());
+        }
+
+        private static string BuildPlainTextReport(
+            OperationReportItem report,
+            List<OperationReportItem> descendants,
+            List<OperationReportItem> snapshot,
+            CancellationToken cancellationToken)
+        {
+            StringBuilder builder = new StringBuilder();
+
+            cancellationToken.ThrowIfCancellationRequested();
+            builder.AppendLine(report?.Title ?? "Report");
+            builder.AppendLine(new string('-', 72));
+            builder.AppendLine("Created: " + report.CreatedAt.ToString("G"));
+            builder.AppendLine("Severity: " + report.Severity);
+            builder.AppendLine("Status: " + (report.IsRead ? "Read" : "Unread"));
+            if ((descendants?.Count ?? 0) > 0)
+                builder.AppendLine("Child reports: " + descendants.Count);
+
+            if (string.IsNullOrWhiteSpace(report.Summary) == false)
+            {
+                builder.AppendLine();
+                builder.AppendLine("Summary");
+                builder.AppendLine(report.Summary.Trim());
+            }
+
+            if (string.IsNullOrWhiteSpace(report.Details) == false)
+            {
+                builder.AppendLine();
+                builder.AppendLine("Details");
+                builder.AppendLine(report.Details.Trim());
+            }
+
+            cancellationToken.ThrowIfCancellationRequested();
+            if ((descendants?.Count ?? 0) > 0)
+            {
+                builder.AppendLine();
+                builder.AppendLine("Pipeline");
+                Dictionary<Guid, List<OperationReportItem>> lookup = BuildChildrenLookup(snapshot);
+                AppendPipelinePlainText(builder, report.Id, lookup, 0, cancellationToken);
+            }
+
+            if (report.Changes.Count > 0)
+            {
+                builder.AppendLine();
+                builder.AppendLine((descendants?.Count ?? 0) > 0
+                    ? $"Aggregated changes ({report.Changes.Count})"
+                    : $"Changes ({report.Changes.Count})");
+                AppendChangesPlainText(builder, report.Changes, cancellationToken);
+            }
+
+            List<OperationReportItem> changeChildren = (descendants ?? new List<OperationReportItem>())
+                .Where(item => item != null && item.Changes.Count > 0)
+                .ToList();
+            if (changeChildren.Count > 0)
+            {
+                builder.AppendLine();
+                builder.AppendLine("Subprocess changes");
+                foreach (OperationReportItem child in changeChildren)
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    builder.AppendLine($"{child.Title}  [{child.CreatedAt:HH:mm:ss}]  {child.Severity}");
+                    if (string.IsNullOrWhiteSpace(child.Summary) == false)
+                        builder.AppendLine(child.Summary.Trim());
+                    builder.AppendLine();
+                    AppendChangesPlainText(builder, child.Changes, cancellationToken);
+                }
+            }
+
+            return builder.ToString().TrimEnd();
+        }
+
+        private static void AppendPipelinePlainText(
+            StringBuilder builder,
+            Guid parentId,
+            Dictionary<Guid, List<OperationReportItem>> lookup,
+            int depth,
+            CancellationToken cancellationToken)
+        {
+            if (!lookup.TryGetValue(parentId, out List<OperationReportItem> children))
+                return;
+
+            foreach (OperationReportItem child in children)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                string indent = new string(' ', depth * 2);
+                string line = $"{indent}- {child.Title}: {child.Summary}";
+                builder.AppendLine(line.TrimEnd(' ', ':'));
+                AppendPipelinePlainText(builder, child.Id, lookup, depth + 1, cancellationToken);
+            }
+        }
+
+        private static void AppendChangesPlainText(
+            StringBuilder builder,
+            IEnumerable<OperationReportChange> changes,
+            CancellationToken cancellationToken)
+        {
+            foreach (OperationReportChange change in changes ?? Enumerable.Empty<OperationReportChange>())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                builder.AppendLine(new string('=', 72));
+                builder.AppendLine(change.RecordLabel ?? "<unnamed record>");
+                if (string.IsNullOrWhiteSpace(change.Summary) == false)
+                    builder.AppendLine(change.Summary);
+                if (string.IsNullOrWhiteSpace(change.Details) == false)
+                    builder.AppendLine(change.Details);
+                builder.AppendLine();
+            }
+        }
+
+        private static int CountChanges(IEnumerable<OperationReportChange> changes)
+        {
+            int total = 0;
+            foreach (OperationReportChange change in changes ?? Enumerable.Empty<OperationReportChange>())
+            {
+                total += 3;
+                total += CountLines(change?.Summary);
+                total += CountLines(change?.Details);
+            }
+
+            return total;
+        }
+
+        private static int CountLines(string text)
+        {
+            if (string.IsNullOrWhiteSpace(text))
+                return 0;
+
+            int lineCount = 1;
+            foreach (char character in text)
+            {
+                if (character == '\n')
+                    lineCount++;
+            }
+
+            return lineCount;
         }
 
         private void AppendChanges(IEnumerable<OperationReportChange> changes)
@@ -594,6 +834,17 @@ namespace ScientificReviews.Forms
 
             if (_splitContainer.Panel2MinSize != minimumRight)
                 _splitContainer.Panel2MinSize = minimumRight;
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _detailRenderCts?.Cancel();
+                _detailRenderCts?.Dispose();
+            }
+
+            base.Dispose(disposing);
         }
     }
 }
