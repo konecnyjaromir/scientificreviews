@@ -39,6 +39,23 @@ namespace ScientificReviews.Forms
             _contextUnbindPdfMenuItem = new ToolStripMenuItem("Unbind PDF");
             _contextUnbindPdfMenuItem.Click += (sender, e) => UnbindPdfForCurrentEntry();
 
+            _contextNoFlagMenuItem = CreateContextFlagMenuItem("No flag", null);
+            _contextFlagGreenMenuItem = CreateContextFlagMenuItem("Green", Color.LightGreen);
+            _contextFlagOrangeMenuItem = CreateContextFlagMenuItem("Orange", Color.Moccasin);
+            _contextFlagPurpleMenuItem = CreateContextFlagMenuItem("Purple", Color.Plum);
+            _contextFlagRedMenuItem = CreateContextFlagMenuItem("Red", Color.LightCoral);
+
+            _contextFlagsMenuItem = new ToolStripMenuItem("Flags");
+            _contextFlagsMenuItem.DropDownItems.AddRange(new ToolStripItem[]
+            {
+                _contextNoFlagMenuItem,
+                new ToolStripSeparator(),
+                _contextFlagGreenMenuItem,
+                _contextFlagOrangeMenuItem,
+                _contextFlagPurpleMenuItem,
+                _contextFlagRedMenuItem
+            });
+
             _recordContextMenu = new ContextMenuStrip();
             _recordContextMenu.Items.AddRange(new ToolStripItem[]
             {
@@ -50,7 +67,9 @@ namespace ScientificReviews.Forms
                 _contextDuplicateMenuItem,
                 new ToolStripSeparator(),
                 _contextRebindPdfMenuItem,
-                _contextUnbindPdfMenuItem
+                _contextUnbindPdfMenuItem,
+                new ToolStripSeparator(),
+                _contextFlagsMenuItem
             });
             _recordContextMenu.Opening += recordContextMenu_Opening;
 
@@ -75,6 +94,248 @@ namespace ScientificReviews.Forms
             _contextDuplicateMenuItem.Enabled = hasSelection;
             _contextRebindPdfMenuItem.Enabled = hasCurrentEntry;
             _contextUnbindPdfMenuItem.Enabled = canUnbindPdf;
+            _contextFlagsMenuItem.Enabled = hasSelection;
+            UpdateFlagMenuCheckStates();
+        }
+
+        private void recordToolStripMenuItem_DropDownOpening(object sender, EventArgs e)
+        {
+            UpdateFlagMenuCheckStates();
+        }
+
+        private ToolStripMenuItem CreateContextFlagMenuItem(string text, Color? flagColor)
+        {
+            ToolStripMenuItem item = new ToolStripMenuItem(text)
+            {
+                Tag = flagColor.HasValue ? flagColor.Value.Name : string.Empty
+            };
+            item.Click += flagToolStripMenuItem_Click;
+            return item;
+        }
+
+        private void flagToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            ToolStripMenuItem menuItem = sender as ToolStripMenuItem;
+            string colorName = menuItem?.Tag as string;
+            if (string.IsNullOrWhiteSpace(colorName))
+            {
+                ClearFlagFromSelectedRecords();
+                return;
+            }
+
+            if (TryGetSupportedFlagColor(colorName, out Color flagColor) == false)
+            {
+                lblStatus.Text = "Flag color is not supported.";
+                return;
+            }
+
+            ApplyFlagToSelectedRecords(flagColor);
+        }
+
+        private void ApplyFlagToSelectedRecords(Color flagColor)
+        {
+            BibtexEntry[] selectedEntries = GetSelectedEntriesOrCurrent();
+            if (selectedEntries == null || selectedEntries.Length == 0)
+            {
+                lblStatus.Text = "No records selected.";
+                return;
+            }
+
+            int changedEntries = 0;
+            foreach (BibtexEntry entry in selectedEntries)
+            {
+                if (entry == null)
+                    continue;
+
+                string currentFlag = BibtexTagService.GetTagValueIgnoreCase(entry, "flag");
+                if (string.Equals(currentFlag, flagColor.Name, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                BibtexTagService.SetSingleTagValue(entry, "flag", flagColor.Name);
+                changedEntries++;
+            }
+
+            RefreshGrid(selectedEntries);
+            if (changedEntries > 0)
+                Changed();
+
+            string flagLabel = GetFlagMenuLabel(flagColor);
+            lblStatus.Text = changedEntries > 0
+                ? $"Flagged {changedEntries} record(s) as {flagLabel}."
+                : $"{flagLabel} flag is already set for selected record(s).";
+        }
+
+        private void ClearFlagFromSelectedRecords()
+        {
+            BibtexEntry[] selectedEntries = GetSelectedEntriesOrCurrent();
+            if (selectedEntries == null || selectedEntries.Length == 0)
+            {
+                lblStatus.Text = "No records selected.";
+                return;
+            }
+
+            int changedEntries = 0;
+            foreach (BibtexEntry entry in selectedEntries)
+            {
+                if (entry == null)
+                    continue;
+
+                if (string.IsNullOrWhiteSpace(BibtexTagService.GetTagValueIgnoreCase(entry, "flag")))
+                    continue;
+
+                BibtexTagService.RemoveAllTagsByKey(entry, "flag");
+                changedEntries++;
+            }
+
+            RefreshGrid(selectedEntries);
+            if (changedEntries > 0)
+                Changed();
+
+            lblStatus.Text = changedEntries > 0
+                ? $"Cleared flag from {changedEntries} record(s)."
+                : "Selected record(s) already have no flag.";
+        }
+
+        private void UpdateFlagMenuCheckStates()
+        {
+            BibtexEntry[] selectedEntries = GetSelectedEntriesOrCurrent();
+            bool hasEntries = selectedEntries != null && selectedEntries.Length > 0;
+            string uniformFlagValue = GetUniformSelectedFlagValue(selectedEntries);
+
+            flagsToolStripMenuItem.Enabled = hasEntries;
+            SetFlagMenuChecks(noFlagToolStripMenuItem, greenFlagToolStripMenuItem, orangeFlagToolStripMenuItem, purpleFlagToolStripMenuItem, redFlagToolStripMenuItem, hasEntries, uniformFlagValue);
+            SetFlagMenuChecks(_contextNoFlagMenuItem, _contextFlagGreenMenuItem, _contextFlagOrangeMenuItem, _contextFlagPurpleMenuItem, _contextFlagRedMenuItem, hasEntries, uniformFlagValue);
+        }
+
+        private static void SetFlagMenuChecks(ToolStripMenuItem noFlagItem, ToolStripMenuItem greenItem, ToolStripMenuItem orangeItem, ToolStripMenuItem purpleItem, ToolStripMenuItem redItem, bool hasEntries, string uniformFlagValue)
+        {
+            if (noFlagItem == null || greenItem == null || orangeItem == null || purpleItem == null || redItem == null)
+                return;
+
+            noFlagItem.Checked = hasEntries && uniformFlagValue == string.Empty;
+            greenItem.Checked = hasEntries && string.Equals(uniformFlagValue, greenItem.Tag as string, StringComparison.OrdinalIgnoreCase);
+            orangeItem.Checked = hasEntries && string.Equals(uniformFlagValue, orangeItem.Tag as string, StringComparison.OrdinalIgnoreCase);
+            purpleItem.Checked = hasEntries && string.Equals(uniformFlagValue, purpleItem.Tag as string, StringComparison.OrdinalIgnoreCase);
+            redItem.Checked = hasEntries && string.Equals(uniformFlagValue, redItem.Tag as string, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string GetUniformSelectedFlagValue(IEnumerable<BibtexEntry> entries)
+        {
+            if (entries == null)
+                return null;
+
+            bool hasAny = false;
+            string firstValue = null;
+
+            foreach (BibtexEntry entry in entries)
+            {
+                if (entry == null)
+                    continue;
+
+                string currentValue = NormalizeFlagValue(BibtexTagService.GetTagValueIgnoreCase(entry, "flag"));
+                if (hasAny == false)
+                {
+                    firstValue = currentValue;
+                    hasAny = true;
+                    continue;
+                }
+
+                if (string.Equals(firstValue, currentValue, StringComparison.OrdinalIgnoreCase) == false)
+                    return null;
+            }
+
+            return hasAny ? firstValue : null;
+        }
+
+        private static string NormalizeFlagValue(string flagValue)
+        {
+            return string.IsNullOrWhiteSpace(flagValue) ? string.Empty : flagValue.Trim();
+        }
+
+        private void dataGridView1_DataBindingComplete(object sender, DataGridViewBindingCompleteEventArgs e)
+        {
+            ApplyFlagStylesToGridRows();
+        }
+
+        private void ApplyFlagStylesToGridRows()
+        {
+            foreach (DataGridViewRow row in dataGridView1.Rows)
+            {
+                BibtexEntry entry = null;
+                if (row?.DataBoundItem is DataRowView drv && drv.Row != null)
+                    entry = drv.Row["Entry"] as BibtexEntry;
+
+                ApplyFlagStyleToRow(row, entry);
+            }
+        }
+
+        private void ApplyFlagStyleToRow(DataGridViewRow row, BibtexEntry entry)
+        {
+            if (row == null)
+                return;
+
+            if (TryGetFlagColor(entry, out Color flagColor))
+            {
+                row.DefaultCellStyle.BackColor = flagColor;
+                row.DefaultCellStyle.ForeColor = Color.Black;
+                row.DefaultCellStyle.SelectionBackColor = GetFlagSelectionColor(flagColor);
+                row.DefaultCellStyle.SelectionForeColor = Color.Black;
+                return;
+            }
+
+            row.DefaultCellStyle.BackColor = Color.Empty;
+            row.DefaultCellStyle.ForeColor = Color.Empty;
+            row.DefaultCellStyle.SelectionBackColor = Color.Empty;
+            row.DefaultCellStyle.SelectionForeColor = Color.Empty;
+        }
+
+        private bool TryGetFlagColor(BibtexEntry entry, out Color flagColor)
+        {
+            return TryGetSupportedFlagColor(BibtexTagService.GetTagValueIgnoreCase(entry, "flag"), out flagColor);
+        }
+
+        private static bool TryGetSupportedFlagColor(string colorName, out Color flagColor)
+        {
+            switch ((colorName ?? string.Empty).Trim())
+            {
+                case "LightGreen":
+                    flagColor = Color.LightGreen;
+                    return true;
+                case "Moccasin":
+                    flagColor = Color.Moccasin;
+                    return true;
+                case "Plum":
+                    flagColor = Color.Plum;
+                    return true;
+                case "LightCoral":
+                    flagColor = Color.LightCoral;
+                    return true;
+                default:
+                    flagColor = Color.Empty;
+                    return false;
+            }
+        }
+
+        private static string GetFlagMenuLabel(Color flagColor)
+        {
+            if (flagColor.ToArgb() == Color.LightGreen.ToArgb())
+                return "Green";
+            if (flagColor.ToArgb() == Color.Moccasin.ToArgb())
+                return "Orange";
+            if (flagColor.ToArgb() == Color.Plum.ToArgb())
+                return "Purple";
+            if (flagColor.ToArgb() == Color.LightCoral.ToArgb())
+                return "Red";
+
+            return flagColor.Name;
+        }
+
+        private static Color GetFlagSelectionColor(Color flagColor)
+        {
+            int red = Math.Max(0, flagColor.R - 18);
+            int green = Math.Max(0, flagColor.G - 18);
+            int blue = Math.Max(0, flagColor.B - 18);
+            return Color.FromArgb(red, green, blue);
         }
 
         private void dataGridView1_CellMouseDown(object sender, DataGridViewCellMouseEventArgs e)

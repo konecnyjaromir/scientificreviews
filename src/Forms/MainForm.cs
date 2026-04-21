@@ -50,6 +50,7 @@ namespace ScientificReviews.Forms
             dataGridView1.CellMouseDoubleClick += dataGridView1_CellMouseDoubleClick;
             dataGridView1.CellMouseDown += dataGridView1_CellMouseDown;
             dataGridView1.ColumnHeaderMouseClick += dataGridView1_ColumnHeaderMouseClick;
+            dataGridView1.DataBindingComplete += dataGridView1_DataBindingComplete;
             dataGridView1.MouseDown += dataGridView1_MouseDown;
             splitter1.SplitterMoved += splitter1_SplitterMoved;
         }
@@ -191,6 +192,12 @@ namespace ScientificReviews.Forms
         private ToolStripMenuItem _contextDuplicateMenuItem;
         private ToolStripMenuItem _contextRebindPdfMenuItem;
         private ToolStripMenuItem _contextUnbindPdfMenuItem;
+        private ToolStripMenuItem _contextFlagsMenuItem;
+        private ToolStripMenuItem _contextNoFlagMenuItem;
+        private ToolStripMenuItem _contextFlagGreenMenuItem;
+        private ToolStripMenuItem _contextFlagOrangeMenuItem;
+        private ToolStripMenuItem _contextFlagPurpleMenuItem;
+        private ToolStripMenuItem _contextFlagRedMenuItem;
         private ToolStripMenuItem _contextRefreshMenuItem;
 
         private int GetConfiguredThreadCount()

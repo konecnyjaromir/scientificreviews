@@ -69,6 +69,7 @@
             this.renameTagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.removeTagsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.removeDuplicateTagsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.clearFlagsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.removeTypesToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator5 = new System.Windows.Forms.ToolStripSeparator();
             this.excludeEntriesByTitleToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -85,6 +86,13 @@
             this.toolStripSeparator10 = new System.Windows.Forms.ToolStripSeparator();
             this.rebindPdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.unbindPdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.toolStripSeparator13 = new System.Windows.Forms.ToolStripSeparator();
+            this.flagsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.noFlagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.greenFlagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.orangeFlagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.purpleFlagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.redFlagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.copyToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.copyRecordToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.cutRecordToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -337,6 +345,7 @@
             this.renameTagToolStripMenuItem,
             this.removeTagsToolStripMenuItem,
             this.removeDuplicateTagsToolStripMenuItem,
+            this.clearFlagsToolStripMenuItem,
             this.removeTypesToolStripMenuItem,
             this.toolStripSeparator5,
             this.excludeEntriesByTitleToolStripMenuItem,
@@ -482,6 +491,13 @@
             this.removeDuplicateTagsToolStripMenuItem.Text = "Remove duplicate tags";
             this.removeDuplicateTagsToolStripMenuItem.Click += new System.EventHandler(this.removeDuplicateTagsToolStripMenuItem_Click);
             // 
+            // clearFlagsToolStripMenuItem
+            // 
+            this.clearFlagsToolStripMenuItem.Name = "clearFlagsToolStripMenuItem";
+            this.clearFlagsToolStripMenuItem.Size = new System.Drawing.Size(344, 26);
+            this.clearFlagsToolStripMenuItem.Text = "Clear flags";
+            this.clearFlagsToolStripMenuItem.Click += new System.EventHandler(this.clearFlagsToolStripMenuItem_Click);
+            // 
             // removeTypesToolStripMenuItem
             // 
             this.removeTypesToolStripMenuItem.Name = "removeTypesToolStripMenuItem";
@@ -539,7 +555,10 @@
             this.removeTagsToolStripMenuItem1,
             this.toolStripSeparator10,
             this.rebindPdfToolStripMenuItem,
-            this.unbindPdfToolStripMenuItem});
+            this.unbindPdfToolStripMenuItem,
+            this.toolStripSeparator13,
+            this.flagsToolStripMenuItem});
+            this.recordToolStripMenuItem.DropDownOpening += new System.EventHandler(this.recordToolStripMenuItem_DropDownOpening);
             this.recordToolStripMenuItem.Name = "recordToolStripMenuItem";
             this.recordToolStripMenuItem.Size = new System.Drawing.Size(70, 24);
             this.recordToolStripMenuItem.Text = "Record";
@@ -596,6 +615,67 @@
             this.unbindPdfToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
             this.unbindPdfToolStripMenuItem.Text = "Unbind PDF";
             this.unbindPdfToolStripMenuItem.Click += new System.EventHandler(this.unbindPdfToolStripMenuItem_Click);
+            // 
+            // toolStripSeparator13
+            // 
+            this.toolStripSeparator13.Name = "toolStripSeparator13";
+            this.toolStripSeparator13.Size = new System.Drawing.Size(221, 6);
+            // 
+            // flagsToolStripMenuItem
+            // 
+            this.flagsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.noFlagToolStripMenuItem,
+            new System.Windows.Forms.ToolStripSeparator(),
+            this.greenFlagToolStripMenuItem,
+            this.orangeFlagToolStripMenuItem,
+            this.purpleFlagToolStripMenuItem,
+            this.redFlagToolStripMenuItem});
+            this.flagsToolStripMenuItem.Name = "flagsToolStripMenuItem";
+            this.flagsToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
+            this.flagsToolStripMenuItem.Text = "Flags";
+            // 
+            // noFlagToolStripMenuItem
+            // 
+            this.noFlagToolStripMenuItem.Name = "noFlagToolStripMenuItem";
+            this.noFlagToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
+            this.noFlagToolStripMenuItem.Text = "No flag";
+            this.noFlagToolStripMenuItem.Click += new System.EventHandler(this.flagToolStripMenuItem_Click);
+            // 
+            // greenFlagToolStripMenuItem
+            // 
+            this.greenFlagToolStripMenuItem.Name = "greenFlagToolStripMenuItem";
+            this.greenFlagToolStripMenuItem.ShortcutKeys = System.Windows.Forms.Keys.F3;
+            this.greenFlagToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
+            this.greenFlagToolStripMenuItem.Tag = "LightGreen";
+            this.greenFlagToolStripMenuItem.Text = "Green";
+            this.greenFlagToolStripMenuItem.Click += new System.EventHandler(this.flagToolStripMenuItem_Click);
+            // 
+            // orangeFlagToolStripMenuItem
+            // 
+            this.orangeFlagToolStripMenuItem.Name = "orangeFlagToolStripMenuItem";
+            this.orangeFlagToolStripMenuItem.ShortcutKeys = System.Windows.Forms.Keys.F4;
+            this.orangeFlagToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
+            this.orangeFlagToolStripMenuItem.Tag = "Moccasin";
+            this.orangeFlagToolStripMenuItem.Text = "Orange";
+            this.orangeFlagToolStripMenuItem.Click += new System.EventHandler(this.flagToolStripMenuItem_Click);
+            // 
+            // purpleFlagToolStripMenuItem
+            // 
+            this.purpleFlagToolStripMenuItem.Name = "purpleFlagToolStripMenuItem";
+            this.purpleFlagToolStripMenuItem.ShortcutKeys = System.Windows.Forms.Keys.F5;
+            this.purpleFlagToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
+            this.purpleFlagToolStripMenuItem.Tag = "Plum";
+            this.purpleFlagToolStripMenuItem.Text = "Purple";
+            this.purpleFlagToolStripMenuItem.Click += new System.EventHandler(this.flagToolStripMenuItem_Click);
+            // 
+            // redFlagToolStripMenuItem
+            // 
+            this.redFlagToolStripMenuItem.Name = "redFlagToolStripMenuItem";
+            this.redFlagToolStripMenuItem.ShortcutKeys = System.Windows.Forms.Keys.F6;
+            this.redFlagToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
+            this.redFlagToolStripMenuItem.Tag = "LightCoral";
+            this.redFlagToolStripMenuItem.Text = "Red";
+            this.redFlagToolStripMenuItem.Click += new System.EventHandler(this.flagToolStripMenuItem_Click);
             // 
             // copyToolStripMenuItem
             // 
@@ -1183,6 +1263,7 @@
         private System.Windows.Forms.ToolStripMenuItem excludeEntriesToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem excludeEntriesByTitleToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem removeDuplicateTagsToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem clearFlagsToolStripMenuItem;
         private System.Windows.Forms.BindingSource bindingSource1;
         private System.Windows.Forms.ToolStrip toolStrip1;
         private System.Windows.Forms.ToolStripLabel toolStripLabel1;
@@ -1215,6 +1296,13 @@
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator10;
         private System.Windows.Forms.ToolStripMenuItem rebindPdfToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem unbindPdfToolStripMenuItem;
+        private System.Windows.Forms.ToolStripSeparator toolStripSeparator13;
+        private System.Windows.Forms.ToolStripMenuItem flagsToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem noFlagToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem greenFlagToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem orangeFlagToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem purpleFlagToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem redFlagToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem pdfToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem renameToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem checkPdfToolStripMenuItem;

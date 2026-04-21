@@ -1629,6 +1629,60 @@ namespace ScientificReviews.Forms
             }
         }
 
+        private void clearFlagsToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            ProcessLogScope log = BeginProcessLog("Clear flags", $"Records: {entries.Count}");
+            try
+            {
+                EntryChangeSnapshot changeSnapshot = CaptureEntryChanges(entries.ToArray());
+                int changedEntries = 0;
+
+                foreach (BibtexEntry entry in entries)
+                {
+                    if (entry == null)
+                        continue;
+
+                    if (string.IsNullOrWhiteSpace(BibtexTagService.GetTagValueIgnoreCase(entry, "flag")))
+                        continue;
+
+                    BibtexTagService.RemoveAllTagsByKey(entry, "flag");
+                    changedEntries++;
+                }
+
+                EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot);
+                string summary = changedEntries > 0
+                    ? $"Cleared flags from {changedEntries} record(s)."
+                    : "No flags found.";
+                string details =
+                    $"Changed records: {changedEntries}{Environment.NewLine}" +
+                    "Removed tag: flag";
+
+                RefreshGrid();
+
+                if (changedEntries > 0)
+                    Changed();
+
+                log.Complete(summary);
+                lblStatus.Text = summary;
+                PublishReport(
+                    "Clear flags",
+                    summary,
+                    details,
+                    changedEntries > 0 ? OperationReportSeverity.Warning : OperationReportSeverity.Info,
+                    changeReport);
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+                log.Fail(ex, "Clear flags failed.");
+                PublishReport("Clear flags", "Clear flags failed.", ex.Message, OperationReportSeverity.Error);
+            }
+            finally
+            {
+                log.Dispose();
+            }
+        }
+
         private void removeQ3Q4ToolStripMenuItem_Click(object sender, EventArgs e)
         {
             if (entries.Count == 0)
