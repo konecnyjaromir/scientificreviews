@@ -190,6 +190,8 @@ namespace ScientificReviews.Forms
         private ToolStripMenuItem _contextCutMenuItem;
         private ToolStripMenuItem _contextPasteMenuItem;
         private ToolStripMenuItem _contextDuplicateMenuItem;
+        private ToolStripMenuItem _contextPdfActionsMenuItem;
+        private ToolStripMenuItem _contextTryAutopairPdfMenuItem;
         private ToolStripMenuItem _contextRebindPdfMenuItem;
         private ToolStripMenuItem _contextUnbindPdfMenuItem;
         private ToolStripMenuItem _contextFlagsMenuItem;

@@ -33,11 +33,22 @@ namespace ScientificReviews.Forms
             _contextDuplicateMenuItem.ShortcutKeyDisplayString = "Ctrl+D";
             _contextDuplicateMenuItem.Click += (sender, e) => DuplicateSelectedRecords();
 
+            _contextTryAutopairPdfMenuItem = new ToolStripMenuItem("Try autopair the PDF");
+            _contextTryAutopairPdfMenuItem.Click += async (sender, e) => await TryAutoPairPdfForSelectedRecordsAsync();
+
             _contextRebindPdfMenuItem = new ToolStripMenuItem("Change PDF");
             _contextRebindPdfMenuItem.Click += (sender, e) => RebindPdfForCurrentEntry();
 
             _contextUnbindPdfMenuItem = new ToolStripMenuItem("Unbind PDF");
             _contextUnbindPdfMenuItem.Click += (sender, e) => UnbindPdfForCurrentEntry();
+
+            _contextPdfActionsMenuItem = new ToolStripMenuItem("PDF Actions");
+            _contextPdfActionsMenuItem.DropDownItems.AddRange(new ToolStripItem[]
+            {
+                _contextTryAutopairPdfMenuItem,
+                _contextRebindPdfMenuItem,
+                _contextUnbindPdfMenuItem
+            });
 
             _contextNoFlagMenuItem = CreateContextFlagMenuItem("No flag", null);
             _contextFlagGreenMenuItem = CreateContextFlagMenuItem("Green", Color.LightGreen);
@@ -66,8 +77,7 @@ namespace ScientificReviews.Forms
                 _contextPasteMenuItem,
                 _contextDuplicateMenuItem,
                 new ToolStripSeparator(),
-                _contextRebindPdfMenuItem,
-                _contextUnbindPdfMenuItem,
+                _contextPdfActionsMenuItem,
                 new ToolStripSeparator(),
                 _contextFlagsMenuItem
             });
@@ -92,6 +102,8 @@ namespace ScientificReviews.Forms
             _contextCutMenuItem.Enabled = hasSelection;
             _contextPasteMenuItem.Enabled = Clipboard.ContainsText() && string.IsNullOrWhiteSpace(Clipboard.GetText()) == false;
             _contextDuplicateMenuItem.Enabled = hasSelection;
+            _contextPdfActionsMenuItem.Enabled = hasSelection;
+            _contextTryAutopairPdfMenuItem.Enabled = hasSelection;
             _contextRebindPdfMenuItem.Enabled = hasCurrentEntry;
             _contextUnbindPdfMenuItem.Enabled = canUnbindPdf;
             _contextFlagsMenuItem.Enabled = hasSelection;
@@ -100,6 +112,7 @@ namespace ScientificReviews.Forms
 
         private void recordToolStripMenuItem_DropDownOpening(object sender, EventArgs e)
         {
+            UpdatePdfActionUi();
             UpdateFlagMenuCheckStates();
         }
 

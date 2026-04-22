@@ -97,9 +97,9 @@ namespace ScientificReviews.Forms
             return EntryChangeTracker.Capture(sourceEntries);
         }
 
-        private EntryChangeReport BuildEntryChangeReport(EntryChangeSnapshot snapshot)
+        private EntryChangeReport BuildEntryChangeReport(EntryChangeSnapshot snapshot, IEnumerable<BibtexEntry> currentEntries = null)
         {
-            return snapshot?.Build(entries);
+            return snapshot?.Build(currentEntries ?? entries);
         }
 
         private void PublishReport(

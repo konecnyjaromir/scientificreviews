@@ -84,6 +84,8 @@
             this.renameCurrentTagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.removeTagsToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator10 = new System.Windows.Forms.ToolStripSeparator();
+            this.pdfActionsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.tryAutopairThePDFToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.rebindPdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.unbindPdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator13 = new System.Windows.Forms.ToolStripSeparator();
@@ -554,8 +556,7 @@
             this.renameCurrentTagToolStripMenuItem,
             this.removeTagsToolStripMenuItem1,
             this.toolStripSeparator10,
-            this.rebindPdfToolStripMenuItem,
-            this.unbindPdfToolStripMenuItem,
+            this.pdfActionsToolStripMenuItem,
             this.toolStripSeparator13,
             this.flagsToolStripMenuItem});
             this.recordToolStripMenuItem.DropDownOpening += new System.EventHandler(this.recordToolStripMenuItem_DropDownOpening);
@@ -602,17 +603,34 @@
             this.toolStripSeparator10.Name = "toolStripSeparator10";
             this.toolStripSeparator10.Size = new System.Drawing.Size(221, 6);
             // 
+            // pdfActionsToolStripMenuItem
+            // 
+            this.pdfActionsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.tryAutopairThePDFToolStripMenuItem,
+            this.rebindPdfToolStripMenuItem,
+            this.unbindPdfToolStripMenuItem});
+            this.pdfActionsToolStripMenuItem.Name = "pdfActionsToolStripMenuItem";
+            this.pdfActionsToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
+            this.pdfActionsToolStripMenuItem.Text = "PDF Actions";
+            // 
+            // tryAutopairThePDFToolStripMenuItem
+            // 
+            this.tryAutopairThePDFToolStripMenuItem.Name = "tryAutopairThePDFToolStripMenuItem";
+            this.tryAutopairThePDFToolStripMenuItem.Size = new System.Drawing.Size(230, 26);
+            this.tryAutopairThePDFToolStripMenuItem.Text = "Try autopair the PDF";
+            this.tryAutopairThePDFToolStripMenuItem.Click += new System.EventHandler(this.tryAutopairThePDFToolStripMenuItem_Click);
+            // 
             // rebindPdfToolStripMenuItem
             // 
             this.rebindPdfToolStripMenuItem.Name = "rebindPdfToolStripMenuItem";
-            this.rebindPdfToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
+            this.rebindPdfToolStripMenuItem.Size = new System.Drawing.Size(230, 26);
             this.rebindPdfToolStripMenuItem.Text = "Change PDF";
             this.rebindPdfToolStripMenuItem.Click += new System.EventHandler(this.rebindPdfToolStripMenuItem_Click);
             // 
             // unbindPdfToolStripMenuItem
             // 
             this.unbindPdfToolStripMenuItem.Name = "unbindPdfToolStripMenuItem";
-            this.unbindPdfToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
+            this.unbindPdfToolStripMenuItem.Size = new System.Drawing.Size(230, 26);
             this.unbindPdfToolStripMenuItem.Text = "Unbind PDF";
             this.unbindPdfToolStripMenuItem.Click += new System.EventHandler(this.unbindPdfToolStripMenuItem_Click);
             // 
@@ -1294,6 +1312,8 @@
         private System.Windows.Forms.ToolStripButton btnRemoveTags;
         private System.Windows.Forms.ToolStripMenuItem removeTagToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator10;
+        private System.Windows.Forms.ToolStripMenuItem pdfActionsToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem tryAutopairThePDFToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem rebindPdfToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem unbindPdfToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripSeparator13;
