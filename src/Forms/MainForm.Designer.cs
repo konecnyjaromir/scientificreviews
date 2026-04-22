@@ -108,7 +108,7 @@
             this.refreshToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.columnsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.pdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.renameToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.autoPairWithPdfsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripMenuItem3 = new System.Windows.Forms.ToolStripSeparator();
             this.exportSelectedPDFToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.journalCitationReportsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -795,21 +795,20 @@
             // pdfToolStripMenuItem
             // 
             this.pdfToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.renameToolStripMenuItem,
+            this.autoPairWithPdfsToolStripMenuItem,
             this.toolStripMenuItem3,
             this.exportSelectedPDFToolStripMenuItem});
             this.pdfToolStripMenuItem.Name = "pdfToolStripMenuItem";
             this.pdfToolStripMenuItem.Size = new System.Drawing.Size(49, 24);
             this.pdfToolStripMenuItem.Text = "PDF";
             // 
-            // renameToolStripMenuItem
+            // autoPairWithPdfsToolStripMenuItem
             // 
-            this.renameToolStripMenuItem.Name = "renameToolStripMenuItem";
-            this.renameToolStripMenuItem.ShortcutKeys = ((System.Windows.Forms.Keys)(((System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift) 
-            | System.Windows.Forms.Keys.P)));
-            this.renameToolStripMenuItem.Size = new System.Drawing.Size(314, 26);
-            this.renameToolStripMenuItem.Text = "Auto-pair with PDFs";
-            this.renameToolStripMenuItem.Click += new System.EventHandler(this.autoPairWithPdfsToolStripMenuItem_Click);
+            this.autoPairWithPdfsToolStripMenuItem.Name = "autoPairWithPdfsToolStripMenuItem";
+            this.autoPairWithPdfsToolStripMenuItem.ShortcutKeys = ((System.Windows.Forms.Keys)((System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.P)));
+            this.autoPairWithPdfsToolStripMenuItem.Size = new System.Drawing.Size(314, 26);
+            this.autoPairWithPdfsToolStripMenuItem.Text = "Auto-pair with PDFs";
+            this.autoPairWithPdfsToolStripMenuItem.Click += new System.EventHandler(this.autoPairWithPdfsToolStripMenuItem_Click);
             // 
             // toolStripMenuItem3
             // 
@@ -819,7 +818,8 @@
             // exportSelectedPDFToolStripMenuItem
             // 
             this.exportSelectedPDFToolStripMenuItem.Name = "exportSelectedPDFToolStripMenuItem";
-            this.exportSelectedPDFToolStripMenuItem.ShortcutKeys = ((System.Windows.Forms.Keys)((System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.P)));
+            this.exportSelectedPDFToolStripMenuItem.ShortcutKeys = ((System.Windows.Forms.Keys)(((System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift) 
+            | System.Windows.Forms.Keys.P)));
             this.exportSelectedPDFToolStripMenuItem.Size = new System.Drawing.Size(314, 26);
             this.exportSelectedPDFToolStripMenuItem.Text = "Export PDFs";
             this.exportSelectedPDFToolStripMenuItem.Click += new System.EventHandler(this.exportPdfsToolStripMenuItem_Click);
@@ -1324,7 +1324,7 @@
         private System.Windows.Forms.ToolStripMenuItem purpleFlagToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem redFlagToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem pdfToolStripMenuItem;
-        private System.Windows.Forms.ToolStripMenuItem renameToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem autoPairWithPdfsToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem checkPdfToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripMenuItem3;
         private System.Windows.Forms.ToolStripMenuItem exportSelectedPDFToolStripMenuItem;
