@@ -29,8 +29,8 @@ Scientific Reviews is a Windows desktop tool for researchers who work with BibTe
 - Generate standardized BibTeX keys from author + year
 - Duplicate, delete, and bulk-clean records directly from the grid
 - Double-click a record to open its paired PDF
-- Record menu and row context menu expose fast actions such as copy, duplicate, PDF rebind, and PDF unbind
-- Records can be flagged with `Green`, `Orange`, `Purple`, or `Red`, which stores a `flag` tag and highlights the row in the grid
+- Record menu and row context menu expose fast actions such as copy, duplicate, and `PDF Actions`
+- Records can be flagged with `Green`, `Orange`, `Purple`, or `Red`, which stores a human-readable `flag` tag value and highlights the row in the grid
 - `Record -> Flags` and the row context menu both support `No flag` plus quick flagging shortcuts `F3` to `F6`
 
 ### Search modes
@@ -181,7 +181,9 @@ Scientific Reviews can pair records with local PDFs and store the pairing inside
 - Manual PDF pairing updates the record in place and refreshes the grid while preserving the current sort and selection
 - `Record -> Rebind PDF` lets the user pick a new PDF for the current record
 - `Record -> Unbind PDF` removes `path_to_pdf` / `pdf_file` and sets `has_pdf = no`
-- The same `Rebind PDF` and `Unbind PDF` actions are also available from the row right-click menu
+- `Record -> PDF Actions` groups `Try autopair the PDF`, `Change PDF`, and `Unbind PDF` in one submenu
+- `Try autopair the PDF` runs the automatic PDF matching logic only for the selected/current record instead of the whole archive
+- The same `PDF Actions` submenu is also available from the row right-click menu
 
 ### Automatic PDF pairing
 
@@ -288,6 +290,7 @@ The export dialog lets you configure:
 - Long-running tasks run through a status-strip operation manager
 - The operation manager supports both regular background tasks and blocking tasks
 - Blocking tasks lock the main window, suppress shortcuts, and prevent closing the main form until the operation completes, fails, or is cancelled
+- `Autoupdate JCR` now exposes its internal `Update Journals Database` and `Create extra JCR tags` steps as visible subtasks in the status strip
 - Process logging is written next to the executable into the `logs` folder
 - Log files are text `.log` files separated by date
 - Major workflows such as load, save, export, PDF auto-pair, metadata fetch, and JCR update are logged
@@ -314,6 +317,7 @@ The settings dialog contains the main workflow switches and defaults, including:
 - `Standard columns`
 - `Allow unsafe saving`
 - `Allow unsafe closing`
+- `Performance Optimization`
 - backup settings
 
 These settings affect both the UI and long-running background processes.
@@ -322,6 +326,22 @@ Additional clipboard and metadata-related settings include:
 
 - `Enable Paste Anything`
 - `Paste Anything mode`
+
+### Notifications performance optimization
+
+The notifications/report viewer uses a hybrid rendering strategy for very large reports.
+
+- `Performance Optimization`
+  - `Optimize For Performance`
+    - switches large reports to async plain-text rendering at `50` estimated lines or `4000` characters
+  - `Optimize For Quality / Performance ratio`
+    - balanced default mode using async plain-text rendering at `150` estimated lines or `12000` characters
+  - `Optimize For Quality (!)`
+    - delays the optimization until `300` estimated lines or `24000` characters
+  - `No optimization (not recommended)`
+    - disables the async/plain-text optimization completely
+
+When the optimization is triggered, Notifications first shows `Please wait, processing report for you...` and then loads the report as plain text to avoid UI freezes on very large change reports.
 
 ### Importing settings
 

@@ -83,7 +83,7 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Added `Rename tag` for the current record from the record panel and `Record` menu
 - Rename-tag dialog now supports autocomplete and prefills the new value as `<original>_copy`
 - Added `Record -> Flags` submenu and matching row context-menu submenu with `Green`, `Orange`, `Purple`, `Red`, and `No flag`
-- Records can now be visually flagged through the `flag` tag, and flagged rows are highlighted directly in the main grid
+- Records can now be visually flagged through the `flag` tag using human-readable values such as `Green`, `Orange`, `Purple`, and `Red`, and flagged rows are highlighted directly in the main grid
 - Added quick flagging shortcuts:
   - `F3` = Green
   - `F4` = Orange
@@ -104,6 +104,8 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Added double-click on a record to open its paired PDF
 - Unified PDF matching across open, auto-pair, and export
 - Manual PDF rebind/attach now refreshes the grid while preserving selection and active sort order
+- Moved record-level PDF actions into a dedicated `Record -> PDF Actions` submenu and matching row context submenu
+- Added `Try autopair the PDF` for selected/current records, which runs the auto-pair logic only for the local record scope
 - Added `Autoopening PDF when attach` setting with default `True`
 - Current PDF matching rules:
   - use stored `path_to_pdf` / `pdf_file` when still valid
@@ -226,10 +228,17 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Added support for multiple parallel background operations in the main window
 - Added general blocking/non-blocking task support to the operation manager
 - Blocking tasks are now tracked centrally, automatically labeled with `(blocking)`, and can temporarily lock the main window while still using async execution
+- `Autoupdate JCR` now exposes `Update Journals Database` and `Create extra JCR tags` as visible child tasks in the status strip instead of hiding them inside the parent task
 - Added shared `Threads` setting with default value `4`
 - Multi-threaded operations now use the configured `Threads` value
 - `Auto-pair with PDFs` now runs asynchronously and in parallel
 - PDF export now runs asynchronously and in parallel
+- Large Notifications reports now switch to async plain-text rendering with a loading placeholder to avoid UI stalls on very long change reports
+- Added general `Performance Optimization` setting for report rendering with these modes:
+  - `Optimize For Performance`
+  - `Optimize For Quality / Performance ratio`
+  - `Optimize For Quality (!)`
+  - `No optimization (not recommended)`
 - Open/add operations now use continuous progress when completion percentage cannot be estimated reliably
 - Added live status dialog when clicking a running background operation in the status strip
 - Added `Stop` support for cancellable subtasks and their child processes from the status dialog
