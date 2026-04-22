@@ -45,6 +45,14 @@ namespace ScientificReviews
         AllRecords
     }
 
+    public enum PerformanceOptimizationMode
+    {
+        OptimizeForPerformance,
+        OptimizeForQualityPerformanceRatio,
+        OptimizeForQuality,
+        NoOptimization
+    }
+
     public class LastExportSettingsData
     {
         public string Scope { get; set; } = "All";
@@ -56,7 +64,7 @@ namespace ScientificReviews
 
     public class AppSettingsData
     {
-        public const int CURRENT_SETTINGS_VERSION = 5;
+        public const int CURRENT_SETTINGS_VERSION = 6;
 
         private const string APPLICATION_CAT = "0: Application";
         private const string PDF_CAT = "1: PDFs";
@@ -108,6 +116,13 @@ namespace ScientificReviews
         [DisplayName("Enable Paste Anything")]
         [Description("If enabled, pasting non-BibTeX text into the record grid can create records from DOI, URL, or title-like text.")]
         public bool EnablePasteAnything { get; set; } = true;
+
+        [Browsable(true)]
+        [Category(APPLICATION_CAT)]
+        [DisplayName("Performance Optimization")]
+        [Description("Controls UI performance optimizations used by the application. Optimize For Performance switches large report rendering to async plain-text earlier, Optimize For Quality / Performance ratio keeps the balanced default behavior, Optimize For Quality delays that optimization, and No optimization disables it completely (not recommended).")]
+        [TypeConverter(typeof(PerformanceOptimizationModeConverter))]
+        public PerformanceOptimizationMode PerformanceOptimizationMode { get; set; } = PerformanceOptimizationMode.OptimizeForQualityPerformanceRatio;
 
         [Browsable(true)]
         [Category(APPLICATION_CAT)]

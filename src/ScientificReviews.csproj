@@ -264,6 +264,7 @@
     <Compile Include="Settings\Editors\AutoPreprocessingModeConverter.cs" />
     <Compile Include="Settings\Editors\LowQuantileDeletingModeConverter.cs" />
     <Compile Include="Settings\Editors\OpenAddModeConverter.cs" />
+    <Compile Include="Settings\Editors\PerformanceOptimizationModeConverter.cs" />
     <Compile Include="Settings\Editors\StringArrayEditor.cs" />
     <Compile Include="Settings\Editors\PathEditor.cs" />
     <Compile Include="Settings\JournalsDatabase.cs" />

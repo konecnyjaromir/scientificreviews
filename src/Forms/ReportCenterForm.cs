@@ -21,8 +21,6 @@ namespace ScientificReviews.Forms
         private const int LeftPanelMinimumWidth = 240;
         private const int RightPanelMinimumWidth = 420;
         private const int PreferredLeftPanelWidth = 300;
-        private const int AsyncRenderLineThreshold = 150;
-        private const int AsyncRenderCharacterThreshold = 12000;
         private const string ReportLoadingPlaceholder = "Please wait, processing report for you...";
 
         private readonly OperationReportCenter _reportCenter;
@@ -349,6 +347,10 @@ namespace ScientificReviews.Forms
             if (report == null)
                 return false;
 
+            ReportRenderOptimizationSettings optimizationSettings = GetReportRenderOptimizationSettings();
+            if (optimizationSettings.DisableAsyncOptimization)
+                return false;
+
             int estimatedLineCount = CountLines(report.Details) + CountChanges(report.Changes);
             int estimatedCharacterCount = (report.Summary ?? string.Empty).Length + (report.Details ?? string.Empty).Length;
 
@@ -358,7 +360,8 @@ namespace ScientificReviews.Forms
                 estimatedCharacterCount += (child.Title ?? string.Empty).Length + (child.Summary ?? string.Empty).Length + (child.Details ?? string.Empty).Length;
             }
 
-            return estimatedLineCount >= AsyncRenderLineThreshold || estimatedCharacterCount >= AsyncRenderCharacterThreshold;
+            return estimatedLineCount >= optimizationSettings.LineThreshold
+                || estimatedCharacterCount >= optimizationSettings.CharacterThreshold;
         }
 
         private void StartAsyncDetailsRender(OperationReportItem report, List<OperationReportItem> descendants)
@@ -604,6 +607,25 @@ namespace ScientificReviews.Forms
             }
         }
 
+        private static ReportRenderOptimizationSettings GetReportRenderOptimizationSettings()
+        {
+            PerformanceOptimizationMode mode = Program.AppSettings?.Data?.PerformanceOptimizationMode
+                ?? PerformanceOptimizationMode.OptimizeForQualityPerformanceRatio;
+
+            switch (mode)
+            {
+                case PerformanceOptimizationMode.OptimizeForPerformance:
+                    return new ReportRenderOptimizationSettings(50, 4000, false);
+                case PerformanceOptimizationMode.OptimizeForQuality:
+                    return new ReportRenderOptimizationSettings(300, 24000, false);
+                case PerformanceOptimizationMode.NoOptimization:
+                    return new ReportRenderOptimizationSettings(int.MaxValue, int.MaxValue, true);
+                case PerformanceOptimizationMode.OptimizeForQualityPerformanceRatio:
+                default:
+                    return new ReportRenderOptimizationSettings(150, 12000, false);
+            }
+        }
+
         private static int CountChanges(IEnumerable<OperationReportChange> changes)
         {
             int total = 0;
@@ -630,6 +652,20 @@ namespace ScientificReviews.Forms
             }
 
             return lineCount;
+        }
+
+        private readonly struct ReportRenderOptimizationSettings
+        {
+            public ReportRenderOptimizationSettings(int lineThreshold, int characterThreshold, bool disableAsyncOptimization)
+            {
+                LineThreshold = lineThreshold;
+                CharacterThreshold = characterThreshold;
+                DisableAsyncOptimization = disableAsyncOptimization;
+            }
+
+            public int LineThreshold { get; }
+            public int CharacterThreshold { get; }
+            public bool DisableAsyncOptimization { get; }
         }
 
         private void AppendChanges(IEnumerable<OperationReportChange> changes)
