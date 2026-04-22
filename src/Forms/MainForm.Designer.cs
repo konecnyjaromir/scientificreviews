@@ -664,7 +664,7 @@
             this.greenFlagToolStripMenuItem.Name = "greenFlagToolStripMenuItem";
             this.greenFlagToolStripMenuItem.ShortcutKeys = System.Windows.Forms.Keys.F3;
             this.greenFlagToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
-            this.greenFlagToolStripMenuItem.Tag = "LightGreen";
+            this.greenFlagToolStripMenuItem.Tag = "Green";
             this.greenFlagToolStripMenuItem.Text = "Green";
             this.greenFlagToolStripMenuItem.Click += new System.EventHandler(this.flagToolStripMenuItem_Click);
             // 
@@ -673,7 +673,7 @@
             this.orangeFlagToolStripMenuItem.Name = "orangeFlagToolStripMenuItem";
             this.orangeFlagToolStripMenuItem.ShortcutKeys = System.Windows.Forms.Keys.F4;
             this.orangeFlagToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
-            this.orangeFlagToolStripMenuItem.Tag = "Moccasin";
+            this.orangeFlagToolStripMenuItem.Tag = "Orange";
             this.orangeFlagToolStripMenuItem.Text = "Orange";
             this.orangeFlagToolStripMenuItem.Click += new System.EventHandler(this.flagToolStripMenuItem_Click);
             // 
@@ -682,7 +682,7 @@
             this.purpleFlagToolStripMenuItem.Name = "purpleFlagToolStripMenuItem";
             this.purpleFlagToolStripMenuItem.ShortcutKeys = System.Windows.Forms.Keys.F5;
             this.purpleFlagToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
-            this.purpleFlagToolStripMenuItem.Tag = "Plum";
+            this.purpleFlagToolStripMenuItem.Tag = "Purple";
             this.purpleFlagToolStripMenuItem.Text = "Purple";
             this.purpleFlagToolStripMenuItem.Click += new System.EventHandler(this.flagToolStripMenuItem_Click);
             // 
@@ -691,7 +691,7 @@
             this.redFlagToolStripMenuItem.Name = "redFlagToolStripMenuItem";
             this.redFlagToolStripMenuItem.ShortcutKeys = System.Windows.Forms.Keys.F6;
             this.redFlagToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
-            this.redFlagToolStripMenuItem.Tag = "LightCoral";
+            this.redFlagToolStripMenuItem.Tag = "Red";
             this.redFlagToolStripMenuItem.Text = "Red";
             this.redFlagToolStripMenuItem.Click += new System.EventHandler(this.flagToolStripMenuItem_Click);
             // 

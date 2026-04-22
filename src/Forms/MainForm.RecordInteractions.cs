@@ -12,6 +12,14 @@ namespace ScientificReviews.Forms
 {
     public partial class MainForm
     {
+        private static readonly Dictionary<string, Color> SupportedFlagColors = new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "Green", Color.LightGreen },
+            { "Orange", Color.Moccasin },
+            { "Purple", Color.Plum },
+            { "Red", Color.LightCoral }
+        };
+
         private void InitializeRecordContextMenu()
         {
             _contextEditMenuItem = new ToolStripMenuItem("Edit");
@@ -51,10 +59,10 @@ namespace ScientificReviews.Forms
             });
 
             _contextNoFlagMenuItem = CreateContextFlagMenuItem("No flag", null);
-            _contextFlagGreenMenuItem = CreateContextFlagMenuItem("Green", Color.LightGreen);
-            _contextFlagOrangeMenuItem = CreateContextFlagMenuItem("Orange", Color.Moccasin);
-            _contextFlagPurpleMenuItem = CreateContextFlagMenuItem("Purple", Color.Plum);
-            _contextFlagRedMenuItem = CreateContextFlagMenuItem("Red", Color.LightCoral);
+            _contextFlagGreenMenuItem = CreateContextFlagMenuItem("Green", "Green");
+            _contextFlagOrangeMenuItem = CreateContextFlagMenuItem("Orange", "Orange");
+            _contextFlagPurpleMenuItem = CreateContextFlagMenuItem("Purple", "Purple");
+            _contextFlagRedMenuItem = CreateContextFlagMenuItem("Red", "Red");
 
             _contextFlagsMenuItem = new ToolStripMenuItem("Flags");
             _contextFlagsMenuItem.DropDownItems.AddRange(new ToolStripItem[]
@@ -116,11 +124,11 @@ namespace ScientificReviews.Forms
             UpdateFlagMenuCheckStates();
         }
 
-        private ToolStripMenuItem CreateContextFlagMenuItem(string text, Color? flagColor)
+        private ToolStripMenuItem CreateContextFlagMenuItem(string text, string flagValue)
         {
             ToolStripMenuItem item = new ToolStripMenuItem(text)
             {
-                Tag = flagColor.HasValue ? flagColor.Value.Name : string.Empty
+                Tag = flagValue ?? string.Empty
             };
             item.Click += flagToolStripMenuItem_Click;
             return item;
@@ -129,24 +137,25 @@ namespace ScientificReviews.Forms
         private void flagToolStripMenuItem_Click(object sender, EventArgs e)
         {
             ToolStripMenuItem menuItem = sender as ToolStripMenuItem;
-            string colorName = menuItem?.Tag as string;
-            if (string.IsNullOrWhiteSpace(colorName))
+            string flagValue = menuItem?.Tag as string;
+            if (string.IsNullOrWhiteSpace(flagValue))
             {
                 ClearFlagFromSelectedRecords();
                 return;
             }
 
-            if (TryGetSupportedFlagColor(colorName, out Color flagColor) == false)
+            if (TryGetSupportedFlagColor(flagValue, out Color flagColor) == false)
             {
                 lblStatus.Text = "Flag color is not supported.";
                 return;
             }
 
-            ApplyFlagToSelectedRecords(flagColor);
+            ApplyFlagToSelectedRecords(flagValue, flagColor);
         }
 
-        private void ApplyFlagToSelectedRecords(Color flagColor)
+        private void ApplyFlagToSelectedRecords(string flagValue, Color flagColor)
         {
+            string normalizedFlagValue = NormalizeFlagValue(flagValue);
             BibtexEntry[] selectedEntries = GetSelectedEntriesOrCurrent();
             if (selectedEntries == null || selectedEntries.Length == 0)
             {
@@ -160,11 +169,11 @@ namespace ScientificReviews.Forms
                 if (entry == null)
                     continue;
 
-                string currentFlag = BibtexTagService.GetTagValueIgnoreCase(entry, "flag");
-                if (string.Equals(currentFlag, flagColor.Name, StringComparison.OrdinalIgnoreCase))
+                string currentFlag = NormalizeFlagValue(BibtexTagService.GetTagValueIgnoreCase(entry, "flag"));
+                if (string.Equals(currentFlag, normalizedFlagValue, StringComparison.OrdinalIgnoreCase))
                     continue;
 
-                BibtexTagService.SetSingleTagValue(entry, "flag", flagColor.Name);
+                BibtexTagService.SetSingleTagValue(entry, "flag", normalizedFlagValue);
                 changedEntries++;
             }
 
@@ -172,7 +181,7 @@ namespace ScientificReviews.Forms
             if (changedEntries > 0)
                 Changed();
 
-            string flagLabel = GetFlagMenuLabel(flagColor);
+            string flagLabel = GetFlagMenuLabel(normalizedFlagValue, flagColor);
             lblStatus.Text = changedEntries > 0
                 ? $"Flagged {changedEntries} record(s) as {flagLabel}."
                 : $"{flagLabel} flag is already set for selected record(s).";
@@ -262,7 +271,22 @@ namespace ScientificReviews.Forms
 
         private static string NormalizeFlagValue(string flagValue)
         {
-            return string.IsNullOrWhiteSpace(flagValue) ? string.Empty : flagValue.Trim();
+            if (string.IsNullOrWhiteSpace(flagValue))
+                return string.Empty;
+
+            switch (flagValue.Trim())
+            {
+                case "LightGreen":
+                    return "Green";
+                case "Moccasin":
+                    return "Orange";
+                case "Plum":
+                    return "Purple";
+                case "LightCoral":
+                    return "Red";
+                default:
+                    return flagValue.Trim();
+            }
         }
 
         private void dataGridView1_DataBindingComplete(object sender, DataGridViewBindingCompleteEventArgs e)
@@ -309,36 +333,15 @@ namespace ScientificReviews.Forms
 
         private static bool TryGetSupportedFlagColor(string colorName, out Color flagColor)
         {
-            switch ((colorName ?? string.Empty).Trim())
-            {
-                case "LightGreen":
-                    flagColor = Color.LightGreen;
-                    return true;
-                case "Moccasin":
-                    flagColor = Color.Moccasin;
-                    return true;
-                case "Plum":
-                    flagColor = Color.Plum;
-                    return true;
-                case "LightCoral":
-                    flagColor = Color.LightCoral;
-                    return true;
-                default:
-                    flagColor = Color.Empty;
-                    return false;
-            }
+            string normalizedValue = NormalizeFlagValue(colorName);
+            return SupportedFlagColors.TryGetValue(normalizedValue, out flagColor);
         }
 
-        private static string GetFlagMenuLabel(Color flagColor)
+        private static string GetFlagMenuLabel(string flagValue, Color flagColor)
         {
-            if (flagColor.ToArgb() == Color.LightGreen.ToArgb())
-                return "Green";
-            if (flagColor.ToArgb() == Color.Moccasin.ToArgb())
-                return "Orange";
-            if (flagColor.ToArgb() == Color.Plum.ToArgb())
-                return "Purple";
-            if (flagColor.ToArgb() == Color.LightCoral.ToArgb())
-                return "Red";
+            string normalizedValue = NormalizeFlagValue(flagValue);
+            if (string.IsNullOrWhiteSpace(normalizedValue) == false)
+                return normalizedValue;
 
             return flagColor.Name;
         }
