@@ -1,4 +1,6 @@
+using ScientificReviews.Pipelines;
 using ScientificReviews.Settings.Editors;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Drawing.Design;
 
@@ -64,7 +66,7 @@ namespace ScientificReviews
 
     public class AppSettingsData
     {
-        public const int CURRENT_SETTINGS_VERSION = 6;
+        public const int CURRENT_SETTINGS_VERSION = 7;
 
         private const string APPLICATION_CAT = "0: Application";
         private const string PDF_CAT = "1: PDFs";
@@ -245,6 +247,9 @@ namespace ScientificReviews
 
         [Browsable(false)]
         public bool UseSmartSearch { get; set; } = true;
+
+        [Browsable(false)]
+        public List<CustomPipelineDefinition> CustomPipelines { get; set; } = new List<CustomPipelineDefinition>();
 
         [Browsable(false)]
         public int SettingsVersion { get; set; } = CURRENT_SETTINGS_VERSION;

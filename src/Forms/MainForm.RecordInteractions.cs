@@ -85,9 +85,9 @@ namespace ScientificReviews.Forms
                 _contextPasteMenuItem,
                 _contextDuplicateMenuItem,
                 new ToolStripSeparator(),
-                _contextPdfActionsMenuItem,
+                _contextFlagsMenuItem,
                 new ToolStripSeparator(),
-                _contextFlagsMenuItem
+                _contextPdfActionsMenuItem
             });
             _recordContextMenu.Opening += recordContextMenu_Opening;
 

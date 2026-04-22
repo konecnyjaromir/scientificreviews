@@ -151,6 +151,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Forms\ExportPdfsModels.cs" />
     <Compile Include="Helpers\BibtexAutosaveManager.cs" />
     <Compile Include="Helpers\BibtexLoadService.cs" />
     <Compile Include="Helpers\DatabaseExportService.cs" />
@@ -174,7 +175,9 @@
     <Compile Include="Forms\EditColumnsForm.Designer.cs">
       <DependentUpon>EditColumnsForm.cs</DependentUpon>
     </Compile>
-    <Compile Include="Forms\ExportPdfsForm.cs" />
+    <Compile Include="Forms\ExportPdfsForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Forms\InputBoxForm.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -186,6 +189,9 @@
     </Compile>
     <Compile Include="Forms\InputGridForm.Designer.cs">
       <DependentUpon>InputGridForm.cs</DependentUpon>
+    </Compile>
+    <Compile Include="Forms\PipelineBuilderForm.cs">
+      <SubType>Form</SubType>
     </Compile>
     <Compile Include="Forms\ReportCenterForm.cs">
       <SubType>Form</SubType>
@@ -208,6 +214,7 @@
     <Compile Include="JCR\Dto\JournalReportsDto.cs" />
     <Compile Include="JCR\Dto\JournalsListDto.cs" />
     <Compile Include="JCR\JcrApliClient.cs" />
+    <Compile Include="Pipelines\PipelineDefinitions.cs" />
     <Compile Include="Settings\AppSettingsData.cs" />
     <Compile Include="Bibtex\BibtexEntry.cs" />
     <Compile Include="Bibtex\BibtexExporter.cs" />
@@ -225,6 +232,10 @@
       <SubType>Form</SubType>
     </Compile>
     <Compile Include="Forms\MainForm.PdfActions.cs">
+      <DependentUpon>MainForm.cs</DependentUpon>
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="Forms\MainForm.Pipelines.cs">
       <DependentUpon>MainForm.cs</DependentUpon>
       <SubType>Form</SubType>
     </Compile>

@@ -41,6 +41,7 @@ namespace ScientificReviews.Forms
             InitializeOpenAddModeUi();
             InitializeAutofixModeUi();
             InitializeSearchUi();
+            InitializePipelinesUi();
             _operationManager = new StatusStripOperationManager(statusStrip1, toolStripStatusLabel1, this);
             _operationManager.BlockingOperationsChanged += OperationManager_BlockingOperationsChanged;
             InitializeReportCenter();
@@ -1209,6 +1210,7 @@ namespace ScientificReviews.Forms
             UpdateOpenAddModeUi();
             UpdateAutofixModeUi();
             UpdateSearchModeUi();
+            RefreshPipelinesRunMenu();
             RefreshGrid(statusMessage: statusMessage);
             UpdateSearchValidationStatus(statusMessage);
         }

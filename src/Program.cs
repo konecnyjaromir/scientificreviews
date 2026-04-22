@@ -1,5 +1,6 @@
 ﻿using ScientificReviews.Bibtex;
 using ScientificReviews.Logs;
+using ScientificReviews.Pipelines;
 using ScientificReviews.Settings;
 using Newtonsoft.Json;
 using System;
@@ -255,6 +256,12 @@ namespace ScientificReviews
                 changed = true;
             }
 
+            if (settings.SettingsVersion < 7)
+            {
+                settings.CustomPipelines = PipelineDefinitionHelper.NormalizeCustomPipelines(settings.CustomPipelines);
+                changed = true;
+            }
+
             if (settings.SettingsVersion != AppSettingsData.CURRENT_SETTINGS_VERSION)
             {
                 settings.SettingsVersion = AppSettingsData.CURRENT_SETTINGS_VERSION;
@@ -311,6 +318,13 @@ namespace ScientificReviews
             else
             {
                 changed |= NormalizeLastExportSettings(settings.LastExportSettings);
+            }
+
+            List<CustomPipelineDefinition> normalizedCustomPipelines = PipelineDefinitionHelper.NormalizeCustomPipelines(settings.CustomPipelines);
+            if (AreCustomPipelinesEqual(settings.CustomPipelines, normalizedCustomPipelines) == false)
+            {
+                settings.CustomPipelines = normalizedCustomPipelines;
+                changed = true;
             }
 
             if (settings.Threads <= 0)
@@ -435,6 +449,14 @@ namespace ScientificReviews
         {
             return (left ?? Array.Empty<string>())
                 .SequenceEqual(right ?? Array.Empty<string>(), StringComparer.Ordinal);
+        }
+
+        private static bool AreCustomPipelinesEqual(List<CustomPipelineDefinition> left, List<CustomPipelineDefinition> right)
+        {
+            return string.Equals(
+                JsonConvert.SerializeObject(left ?? new List<CustomPipelineDefinition>()),
+                JsonConvert.SerializeObject(right ?? new List<CustomPipelineDefinition>()),
+                StringComparison.Ordinal);
         }
 
         private static AppSettingsData LoadSettingsDataFromFile(string filePath)

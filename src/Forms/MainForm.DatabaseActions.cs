@@ -2,6 +2,7 @@ using ScientificReviews.Bibtex;
 using ScientificReviews.Helpers;
 using ScientificReviews.JCR.Dto;
 using ScientificReviews.Logs;
+using ScientificReviews.Pipelines;
 using ScientificReviews.Reports;
 using System;
 using System.Collections.Generic;
@@ -818,182 +819,15 @@ namespace ScientificReviews.Forms
             string operationKey,
             string operationName)
         {
-            if (mode == AutoPreprocessingMode.Off)
+            CustomPipelineDefinition pipeline = CreateBuiltInPreprocessingPipeline(mode);
+            if (pipeline == null)
                 return;
 
-            if (entries.Count == 0)
-            {
-                if (!startedAutomatically)
-                    lblStatus.Text = $"No records available for {operationName.ToLowerInvariant()}.";
-                return;
-            }
-
-            StatusStripOperationHandle operation = StartTrackedOperation(
+            await StartPipelineOperationAsync(
+                pipeline,
+                startedAutomatically,
                 operationKey,
-                operationName,
-                BuildPreprocessingSummary(mode),
-                startedAutomatically);
-            if (operation == null)
-                return;
-
-            ProcessLogScope log = BeginProcessLog(operationName, $"Records: {entries.Count}, mode: {mode}");
-            List<string> skippedSteps = new List<string>();
-            int totalSteps = GetPreprocessingStepCount(mode);
-            int currentStep = 0;
-            EntryChangeSnapshot overallChangeSnapshot = CaptureEntryChanges(entries.ToArray());
-            using (CancellationTokenSource cancellation = new CancellationTokenSource())
-            using (ReportScopeContext reportScope = BeginReportScope(
-                operationName,
-                $"{operationName} started.",
-                $"Records: {entries.Count}{Environment.NewLine}Mode: {mode}"))
-            {
-                operation.RegisterCancellation(cancellation.Cancel);
-
-                try
-                {
-                    bool runFullPipeline = RequiresFullPreprocessingPipeline(mode);
-                    MetadataScreenMode? metadataScreenModeOverride = mode == AutoPreprocessingMode.Deep
-                        ? MetadataScreenMode.All
-                        : (MetadataScreenMode?)null;
-
-                    currentStep++;
-                    operation.Report("Normalize DOI", "Preparing DOI values", currentStep, totalSteps, false);
-                    cancellation.Token.ThrowIfCancellationRequested();
-                    RunNormalizeDoiOperation(entries.ToArray());
-                    LogProcessProgress(log, "Normalize DOI completed.");
-
-                    if (runFullPipeline)
-                    {
-                        currentStep++;
-                        operation.Report("Fetch missing metadata", "Querying metadata services", currentStep, totalSteps, false);
-                        await StartFetchMissingMetadataOperationAsync(false, metadataScreenModeOverride, cancellation.Token);
-                        LogProcessProgress(log, "Fetch missing metadata completed.");
-
-                        currentStep++;
-                        operation.Report("Remove duplicates by title", "Removing records with duplicate titles", currentStep, totalSteps, false);
-                        cancellation.Token.ThrowIfCancellationRequested();
-                        RunRemoveDuplicateEntriesByTagOperation("title");
-                        LogProcessProgress(log, "Remove duplicates by title completed.");
-
-                        currentStep++;
-                        operation.Report("Remove duplicates by DOI", "Removing records with duplicate DOI values", currentStep, totalSteps, false);
-                        cancellation.Token.ThrowIfCancellationRequested();
-                        RunRemoveDuplicateEntriesByTagOperation("doi");
-                        LogProcessProgress(log, "Remove duplicates by DOI completed.");
-                    }
-
-                    currentStep++;
-                    operation.Report("Normalize page-tag", "Normalizing pages ranges", currentStep, totalSteps, false);
-                    cancellation.Token.ThrowIfCancellationRequested();
-                    RunNormalizePageTagOperation(entries.ToArray());
-                    LogProcessProgress(log, "Normalize page-tag completed.");
-
-                    currentStep++;
-                    operation.Report("Create entry keys", "Generating keys from updated metadata", currentStep, totalSteps, false);
-                    cancellation.Token.ThrowIfCancellationRequested();
-                    RunCreateEntryKeysOperation(entries.ToArray());
-                    LogProcessProgress(log, "Create entry keys completed.");
-
-                    currentStep++;
-                    if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.PdfFolder))
-                    {
-                        skippedSteps.Add("Auto-pair PDFs");
-                        operation.Report("Auto-pair PDFs", "Skipped: PDF folder is not set.", currentStep, totalSteps, false);
-                        LogProcessProgress(log, "Skipped Auto-pair PDFs", "PDF folder is not set.");
-                    }
-                    else
-                    {
-                        operation.Report("Auto-pair PDFs", "Matching records with PDFs", currentStep, totalSteps, false);
-                        await StartAutoPairOperationAsync(startedAutomatically, cancellation.Token);
-                        LogProcessProgress(log, "Auto-pair PDFs completed.");
-                    }
-
-                    if (runFullPipeline)
-                    {
-                        currentStep++;
-                        if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.JcrApiKey))
-                        {
-                            skippedSteps.Add("Autoupdate JCR");
-                            operation.Report("Autoupdate JCR", "Skipped: JCR API key is not set.", currentStep, totalSteps, false);
-                            LogProcessProgress(log, "Skipped Autoupdate JCR", "JCR API key is not set.");
-                        }
-                        else
-                        {
-                            operation.Report("Autoupdate JCR", "Running as a separate visible subtask.", currentStep, totalSteps, false);
-                            await StartAutoupdateJcrOperationAsync(cancellation.Token);
-                            LogProcessProgress(log, "Autoupdate JCR completed.");
-                        }
-                    }
-
-                    string details = skippedSteps.Count == 0
-                        ? $"All {operationName.ToLowerInvariant()} steps completed."
-                        : "Skipped: " + string.Join(", ", skippedSteps) + ".";
-                    EntryChangeReport overallChangeReport = BuildEntryChangeReport(overallChangeSnapshot);
-
-                    operation.Complete($"{operationName} finished.", details);
-                    log.Complete(details);
-                    lblStatus.Text = skippedSteps.Count == 0
-                        ? $"{operationName} finished."
-                        : $"{operationName} finished. Skipped: {string.Join(", ", skippedSteps)}.";
-                    reportScope.Complete(
-                        $"{operationName} finished.",
-                        details,
-                        skippedSteps.Count == 0 ? OperationReportSeverity.Info : OperationReportSeverity.Warning,
-                        overallChangeReport);
-                }
-                catch (OperationCanceledException)
-                {
-                    operation.Cancel("Cancelled", $"{operationName} was stopped by user.");
-                    lblStatus.Text = $"{operationName} cancelled.";
-                    log.Complete($"{operationName} cancelled.");
-                    reportScope.Complete($"{operationName} cancelled.", null, OperationReportSeverity.Warning);
-                }
-                catch (Exception ex)
-                {
-                    operation.Fail(ex, "Failed");
-                    lblStatus.Text = ex.Message;
-                    log.Fail(ex, $"{operationName} failed.");
-                    reportScope.Complete($"{operationName} failed.", ex.Message, OperationReportSeverity.Error);
-                }
-                finally
-                {
-                    log.Dispose();
-                }
-            }
-        }
-
-        private static int GetPreprocessingStepCount(AutoPreprocessingMode mode)
-        {
-            switch (mode)
-            {
-                case AutoPreprocessingMode.Deep:
-                case AutoPreprocessingMode.Normal:
-                    return 8;
-                case AutoPreprocessingMode.Fast:
-                    return 4;
-                default:
-                    return 0;
-            }
-        }
-
-        private static string BuildPreprocessingSummary(AutoPreprocessingMode mode)
-        {
-            switch (mode)
-            {
-                case AutoPreprocessingMode.Deep:
-                    return "Normalize DOI -> Fetch metadata (forced All) -> Remove duplicates by title -> Remove duplicates by DOI -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs -> Autoupdate JCR";
-                case AutoPreprocessingMode.Normal:
-                    return "Normalize DOI -> Fetch metadata (settings) -> Remove duplicates by title -> Remove duplicates by DOI -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs -> Autoupdate JCR";
-                case AutoPreprocessingMode.Fast:
-                    return "Normalize DOI -> Normalize page-tag -> Create entry keys -> Auto-pair PDFs";
-                default:
-                    return "No preprocessing";
-            }
-        }
-
-        private static bool RequiresFullPreprocessingPipeline(AutoPreprocessingMode mode)
-        {
-            return mode == AutoPreprocessingMode.Normal || mode == AutoPreprocessingMode.Deep;
+                operationName);
         }
 
         private async Task StartFetchMissingMetadataOperationAsync(

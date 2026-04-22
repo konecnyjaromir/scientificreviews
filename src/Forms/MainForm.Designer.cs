@@ -84,10 +84,6 @@
             this.renameCurrentTagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.removeTagsToolStripMenuItem1 = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator10 = new System.Windows.Forms.ToolStripSeparator();
-            this.pdfActionsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.tryAutopairThePDFToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.rebindPdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
-            this.unbindPdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripSeparator13 = new System.Windows.Forms.ToolStripSeparator();
             this.flagsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.noFlagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -95,6 +91,10 @@
             this.orangeFlagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.purpleFlagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.redFlagToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.pdfActionsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.tryAutopairThePDFToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.rebindPdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.unbindPdfToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.copyToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.copyRecordToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.cutRecordToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -396,7 +396,7 @@
             // autofixModeOffToolStripMenuItem
             // 
             this.autofixModeOffToolStripMenuItem.Name = "autofixModeOffToolStripMenuItem";
-            this.autofixModeOffToolStripMenuItem.Size = new System.Drawing.Size(145, 26);
+            this.autofixModeOffToolStripMenuItem.Size = new System.Drawing.Size(142, 26);
             this.autofixModeOffToolStripMenuItem.Tag = "Off";
             this.autofixModeOffToolStripMenuItem.Text = "Off";
             this.autofixModeOffToolStripMenuItem.Click += new System.EventHandler(this.autofixModeToolStripMenuItem_Click);
@@ -404,7 +404,7 @@
             // autofixModeFastToolStripMenuItem
             // 
             this.autofixModeFastToolStripMenuItem.Name = "autofixModeFastToolStripMenuItem";
-            this.autofixModeFastToolStripMenuItem.Size = new System.Drawing.Size(145, 26);
+            this.autofixModeFastToolStripMenuItem.Size = new System.Drawing.Size(142, 26);
             this.autofixModeFastToolStripMenuItem.Tag = "Fast";
             this.autofixModeFastToolStripMenuItem.Text = "Fast";
             this.autofixModeFastToolStripMenuItem.Click += new System.EventHandler(this.autofixModeToolStripMenuItem_Click);
@@ -412,7 +412,7 @@
             // autofixModeNormalToolStripMenuItem
             // 
             this.autofixModeNormalToolStripMenuItem.Name = "autofixModeNormalToolStripMenuItem";
-            this.autofixModeNormalToolStripMenuItem.Size = new System.Drawing.Size(145, 26);
+            this.autofixModeNormalToolStripMenuItem.Size = new System.Drawing.Size(142, 26);
             this.autofixModeNormalToolStripMenuItem.Tag = "Normal";
             this.autofixModeNormalToolStripMenuItem.Text = "Normal";
             this.autofixModeNormalToolStripMenuItem.Click += new System.EventHandler(this.autofixModeToolStripMenuItem_Click);
@@ -420,7 +420,7 @@
             // autofixModeDeepToolStripMenuItem
             // 
             this.autofixModeDeepToolStripMenuItem.Name = "autofixModeDeepToolStripMenuItem";
-            this.autofixModeDeepToolStripMenuItem.Size = new System.Drawing.Size(145, 26);
+            this.autofixModeDeepToolStripMenuItem.Size = new System.Drawing.Size(142, 26);
             this.autofixModeDeepToolStripMenuItem.Tag = "Deep";
             this.autofixModeDeepToolStripMenuItem.Text = "Deep";
             this.autofixModeDeepToolStripMenuItem.Click += new System.EventHandler(this.autofixModeToolStripMenuItem_Click);
@@ -556,13 +556,13 @@
             this.renameCurrentTagToolStripMenuItem,
             this.removeTagsToolStripMenuItem1,
             this.toolStripSeparator10,
-            this.pdfActionsToolStripMenuItem,
+            this.flagsToolStripMenuItem,
             this.toolStripSeparator13,
-            this.flagsToolStripMenuItem});
-            this.recordToolStripMenuItem.DropDownOpening += new System.EventHandler(this.recordToolStripMenuItem_DropDownOpening);
+            this.pdfActionsToolStripMenuItem});
             this.recordToolStripMenuItem.Name = "recordToolStripMenuItem";
             this.recordToolStripMenuItem.Size = new System.Drawing.Size(70, 24);
             this.recordToolStripMenuItem.Text = "Record";
+            this.recordToolStripMenuItem.DropDownOpening += new System.EventHandler(this.recordToolStripMenuItem_DropDownOpening);
             // 
             // allowEditToolStripMenuItem
             // 
@@ -603,37 +603,6 @@
             this.toolStripSeparator10.Name = "toolStripSeparator10";
             this.toolStripSeparator10.Size = new System.Drawing.Size(221, 6);
             // 
-            // pdfActionsToolStripMenuItem
-            // 
-            this.pdfActionsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
-            this.tryAutopairThePDFToolStripMenuItem,
-            this.rebindPdfToolStripMenuItem,
-            this.unbindPdfToolStripMenuItem});
-            this.pdfActionsToolStripMenuItem.Name = "pdfActionsToolStripMenuItem";
-            this.pdfActionsToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
-            this.pdfActionsToolStripMenuItem.Text = "PDF Actions";
-            // 
-            // tryAutopairThePDFToolStripMenuItem
-            // 
-            this.tryAutopairThePDFToolStripMenuItem.Name = "tryAutopairThePDFToolStripMenuItem";
-            this.tryAutopairThePDFToolStripMenuItem.Size = new System.Drawing.Size(230, 26);
-            this.tryAutopairThePDFToolStripMenuItem.Text = "Try autopair the PDF";
-            this.tryAutopairThePDFToolStripMenuItem.Click += new System.EventHandler(this.tryAutopairThePDFToolStripMenuItem_Click);
-            // 
-            // rebindPdfToolStripMenuItem
-            // 
-            this.rebindPdfToolStripMenuItem.Name = "rebindPdfToolStripMenuItem";
-            this.rebindPdfToolStripMenuItem.Size = new System.Drawing.Size(230, 26);
-            this.rebindPdfToolStripMenuItem.Text = "Change PDF";
-            this.rebindPdfToolStripMenuItem.Click += new System.EventHandler(this.rebindPdfToolStripMenuItem_Click);
-            // 
-            // unbindPdfToolStripMenuItem
-            // 
-            this.unbindPdfToolStripMenuItem.Name = "unbindPdfToolStripMenuItem";
-            this.unbindPdfToolStripMenuItem.Size = new System.Drawing.Size(230, 26);
-            this.unbindPdfToolStripMenuItem.Text = "Unbind PDF";
-            this.unbindPdfToolStripMenuItem.Click += new System.EventHandler(this.unbindPdfToolStripMenuItem_Click);
-            // 
             // toolStripSeparator13
             // 
             this.toolStripSeparator13.Name = "toolStripSeparator13";
@@ -643,7 +612,6 @@
             // 
             this.flagsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
             this.noFlagToolStripMenuItem,
-            new System.Windows.Forms.ToolStripSeparator(),
             this.greenFlagToolStripMenuItem,
             this.orangeFlagToolStripMenuItem,
             this.purpleFlagToolStripMenuItem,
@@ -694,6 +662,37 @@
             this.redFlagToolStripMenuItem.Tag = "Red";
             this.redFlagToolStripMenuItem.Text = "Red";
             this.redFlagToolStripMenuItem.Click += new System.EventHandler(this.flagToolStripMenuItem_Click);
+            // 
+            // pdfActionsToolStripMenuItem
+            // 
+            this.pdfActionsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.tryAutopairThePDFToolStripMenuItem,
+            this.rebindPdfToolStripMenuItem,
+            this.unbindPdfToolStripMenuItem});
+            this.pdfActionsToolStripMenuItem.Name = "pdfActionsToolStripMenuItem";
+            this.pdfActionsToolStripMenuItem.Size = new System.Drawing.Size(224, 26);
+            this.pdfActionsToolStripMenuItem.Text = "PDF Actions";
+            // 
+            // tryAutopairThePDFToolStripMenuItem
+            // 
+            this.tryAutopairThePDFToolStripMenuItem.Name = "tryAutopairThePDFToolStripMenuItem";
+            this.tryAutopairThePDFToolStripMenuItem.Size = new System.Drawing.Size(226, 26);
+            this.tryAutopairThePDFToolStripMenuItem.Text = "Try autopair the PDF";
+            this.tryAutopairThePDFToolStripMenuItem.Click += new System.EventHandler(this.tryAutopairThePDFToolStripMenuItem_Click);
+            // 
+            // rebindPdfToolStripMenuItem
+            // 
+            this.rebindPdfToolStripMenuItem.Name = "rebindPdfToolStripMenuItem";
+            this.rebindPdfToolStripMenuItem.Size = new System.Drawing.Size(226, 26);
+            this.rebindPdfToolStripMenuItem.Text = "Change PDF";
+            this.rebindPdfToolStripMenuItem.Click += new System.EventHandler(this.rebindPdfToolStripMenuItem_Click);
+            // 
+            // unbindPdfToolStripMenuItem
+            // 
+            this.unbindPdfToolStripMenuItem.Name = "unbindPdfToolStripMenuItem";
+            this.unbindPdfToolStripMenuItem.Size = new System.Drawing.Size(226, 26);
+            this.unbindPdfToolStripMenuItem.Text = "Unbind PDF";
+            this.unbindPdfToolStripMenuItem.Click += new System.EventHandler(this.unbindPdfToolStripMenuItem_Click);
             // 
             // copyToolStripMenuItem
             // 
@@ -806,21 +805,21 @@
             // 
             this.autoPairWithPdfsToolStripMenuItem.Name = "autoPairWithPdfsToolStripMenuItem";
             this.autoPairWithPdfsToolStripMenuItem.ShortcutKeys = ((System.Windows.Forms.Keys)((System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.P)));
-            this.autoPairWithPdfsToolStripMenuItem.Size = new System.Drawing.Size(314, 26);
+            this.autoPairWithPdfsToolStripMenuItem.Size = new System.Drawing.Size(274, 26);
             this.autoPairWithPdfsToolStripMenuItem.Text = "Auto-pair with PDFs";
             this.autoPairWithPdfsToolStripMenuItem.Click += new System.EventHandler(this.autoPairWithPdfsToolStripMenuItem_Click);
             // 
             // toolStripMenuItem3
             // 
             this.toolStripMenuItem3.Name = "toolStripMenuItem3";
-            this.toolStripMenuItem3.Size = new System.Drawing.Size(311, 6);
+            this.toolStripMenuItem3.Size = new System.Drawing.Size(271, 6);
             // 
             // exportSelectedPDFToolStripMenuItem
             // 
             this.exportSelectedPDFToolStripMenuItem.Name = "exportSelectedPDFToolStripMenuItem";
             this.exportSelectedPDFToolStripMenuItem.ShortcutKeys = ((System.Windows.Forms.Keys)(((System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift) 
             | System.Windows.Forms.Keys.P)));
-            this.exportSelectedPDFToolStripMenuItem.Size = new System.Drawing.Size(314, 26);
+            this.exportSelectedPDFToolStripMenuItem.Size = new System.Drawing.Size(274, 26);
             this.exportSelectedPDFToolStripMenuItem.Text = "Export PDFs";
             this.exportSelectedPDFToolStripMenuItem.Click += new System.EventHandler(this.exportPdfsToolStripMenuItem_Click);
             // 
@@ -841,33 +840,33 @@
             this.autoupdateJCRToolStripMenuItem.Name = "autoupdateJCRToolStripMenuItem";
             this.autoupdateJCRToolStripMenuItem.ShortcutKeys = ((System.Windows.Forms.Keys)(((System.Windows.Forms.Keys.Control | System.Windows.Forms.Keys.Shift) 
             | System.Windows.Forms.Keys.U)));
-            this.autoupdateJCRToolStripMenuItem.Size = new System.Drawing.Size(298, 26);
+            this.autoupdateJCRToolStripMenuItem.Size = new System.Drawing.Size(290, 26);
             this.autoupdateJCRToolStripMenuItem.Text = "Autoupdate JCR";
             this.autoupdateJCRToolStripMenuItem.Click += new System.EventHandler(this.autoupdateJCRToolStripMenuItem_Click);
             // 
             // updateJournalsDatabaseToolStripMenuItem
             // 
             this.updateJournalsDatabaseToolStripMenuItem.Name = "updateJournalsDatabaseToolStripMenuItem";
-            this.updateJournalsDatabaseToolStripMenuItem.Size = new System.Drawing.Size(298, 26);
+            this.updateJournalsDatabaseToolStripMenuItem.Size = new System.Drawing.Size(290, 26);
             this.updateJournalsDatabaseToolStripMenuItem.Text = "Update Journals Database";
             this.updateJournalsDatabaseToolStripMenuItem.Click += new System.EventHandler(this.updateJournalsDatabaseToolStripMenuItem_Click);
             // 
             // toolStripSeparator7
             // 
             this.toolStripSeparator7.Name = "toolStripSeparator7";
-            this.toolStripSeparator7.Size = new System.Drawing.Size(295, 6);
+            this.toolStripSeparator7.Size = new System.Drawing.Size(287, 6);
             // 
             // createExtraJCRTagsToolStripMenuItem
             // 
             this.createExtraJCRTagsToolStripMenuItem.Name = "createExtraJCRTagsToolStripMenuItem";
-            this.createExtraJCRTagsToolStripMenuItem.Size = new System.Drawing.Size(298, 26);
+            this.createExtraJCRTagsToolStripMenuItem.Size = new System.Drawing.Size(290, 26);
             this.createExtraJCRTagsToolStripMenuItem.Text = "Create extra JCR tags";
             this.createExtraJCRTagsToolStripMenuItem.Click += new System.EventHandler(this.createExtraJCRTagsToolStripMenuItem_Click);
             // 
             // removeQ3Q4ToolStripMenuItem
             // 
             this.removeQ3Q4ToolStripMenuItem.Name = "removeQ3Q4ToolStripMenuItem";
-            this.removeQ3Q4ToolStripMenuItem.Size = new System.Drawing.Size(298, 26);
+            this.removeQ3Q4ToolStripMenuItem.Size = new System.Drawing.Size(290, 26);
             this.removeQ3Q4ToolStripMenuItem.Text = "Remove Q3 Q4";
             this.removeQ3Q4ToolStripMenuItem.Click += new System.EventHandler(this.removeQ3Q4ToolStripMenuItem_Click);
             // 
@@ -1000,7 +999,7 @@
             this.propertyGrid1.Location = new System.Drawing.Point(0, 27);
             this.propertyGrid1.Margin = new System.Windows.Forms.Padding(4);
             this.propertyGrid1.Name = "propertyGrid1";
-            this.propertyGrid1.Size = new System.Drawing.Size(764, 617);
+            this.propertyGrid1.Size = new System.Drawing.Size(746, 617);
             this.propertyGrid1.TabIndex = 6;
             this.propertyGrid1.ToolbarVisible = false;
             this.propertyGrid1.PropertyValueChanged += new System.Windows.Forms.PropertyValueChangedEventHandler(this.propertyGrid1_PropertyValueChanged);
@@ -1012,10 +1011,10 @@
             this.panel1.Controls.Add(this.propertyGrid1);
             this.panel1.Controls.Add(this.toolStrip2);
             this.panel1.Dock = System.Windows.Forms.DockStyle.Fill;
-            this.panel1.Location = new System.Drawing.Point(1076, 55);
+            this.panel1.Location = new System.Drawing.Point(1094, 55);
             this.panel1.Margin = new System.Windows.Forms.Padding(4);
             this.panel1.Name = "panel1";
-            this.panel1.Size = new System.Drawing.Size(764, 974);
+            this.panel1.Size = new System.Drawing.Size(746, 974);
             this.panel1.TabIndex = 7;
             // 
             // richTextBox1
@@ -1025,7 +1024,7 @@
             this.richTextBox1.Location = new System.Drawing.Point(0, 656);
             this.richTextBox1.Margin = new System.Windows.Forms.Padding(4);
             this.richTextBox1.Name = "richTextBox1";
-            this.richTextBox1.Size = new System.Drawing.Size(764, 318);
+            this.richTextBox1.Size = new System.Drawing.Size(746, 318);
             this.richTextBox1.TabIndex = 7;
             this.richTextBox1.Text = "";
             // 
@@ -1035,7 +1034,7 @@
             this.splitter2.Location = new System.Drawing.Point(0, 644);
             this.splitter2.Margin = new System.Windows.Forms.Padding(4);
             this.splitter2.Name = "splitter2";
-            this.splitter2.Size = new System.Drawing.Size(764, 12);
+            this.splitter2.Size = new System.Drawing.Size(746, 12);
             this.splitter2.TabIndex = 6;
             this.splitter2.TabStop = false;
             // 
@@ -1049,7 +1048,7 @@
             this.btnRemoveTags});
             this.toolStrip2.Location = new System.Drawing.Point(0, 0);
             this.toolStrip2.Name = "toolStrip2";
-            this.toolStrip2.Size = new System.Drawing.Size(764, 27);
+            this.toolStrip2.Size = new System.Drawing.Size(746, 27);
             this.toolStrip2.TabIndex = 8;
             this.toolStrip2.Text = "toolStrip2";
             // 
