@@ -13,6 +13,10 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Added `Project -> Import Settings` for restoring `settings.json` from an older installation or application version
 - Settings import now validates the selected JSON, normalizes missing defaults, migrates older settings versions, and only replaces the active settings file after verification succeeds
 - Settings import now creates an automatic backup of the current active settings file before replacing it
+- Added a new top-level `Pipelines` menu
+- Added `Pipelines -> Pipeline Builder` for creating, renaming, deleting, and reordering custom pipelines
+- Added dynamic `Pipelines -> Run` entries that are rebuilt from saved custom pipelines on startup and after closing the builder
+- Moved `Autofix` and `Autofix mode` from `Database` into `Pipelines`
 - Added `Project -> New` to launch a separate application window
 - Main window title now shows the active BibTeX file name from the current session
 - Opening a new empty project no longer shows the previous file name in the window title
@@ -154,13 +158,14 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Added `Fetch missing metadata` shortcut `Ctrl+Shift+M`
 - Added `Auto-pair with PDFs` shortcut `Ctrl+Shift+P`
 - Added manual `Autofix` with shortcut `Ctrl+Shift+A`
-- `Autofix` now runs the deep cleanup pipeline:
-  - Normalize DOI
-  - Fetch missing metadata
-  - Normalize page-tag
-  - Create entry keys
-  - Auto-pair PDFs
-  - Update JCR
+- `Autofix` is now implemented as a built-in pipeline workflow under `Pipelines`
+- `Autofix mode` is now managed separately from `Auto-preprocessing mode`
+- `Autofix` and preprocessing now support these built-in pipeline modes:
+  - `Fast`
+  - `Normal`
+  - `Deep`
+- `Normal` runs the full cleanup pipeline but respects the current per-feature settings instead of forcing the deepest metadata mode
+- `Autofix` in `Normal` and `Deep` now runs `Autoupdate JCR` as part of the pipeline, including `Create extra JCR tags`
 - `Normalize DOI` now preserves publisher DOI priority while also filling `eprint` when arXiv information is available
 
 ### Auto-Preprocessing
@@ -168,6 +173,7 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Added `Auto-preprocessing mode` setting with:
   - `Off`
   - `Fast`
+  - `Normal`
   - `Deep`
 - Default auto-preprocessing mode is now `Fast`
 - `Fast` preprocessing runs:
@@ -175,13 +181,16 @@ This development cycle focused on turning Scientific Reviews into a faster multi
   - Normalize page-tag
   - Create entry keys
   - Auto-pair PDFs
+- `Normal` preprocessing runs the full pipeline while using the current settings for individual operations
 - `Deep` preprocessing runs:
   - Normalize DOI
   - Fetch missing metadata
+  - Remove duplicates by title
+  - Remove duplicates by DOI
   - Normalize page-tag
   - Create entry keys
   - Auto-pair PDFs
-  - Update JCR
+  - Autoupdate JCR
 - Automatic preprocessing now runs after opening BibTeX archives according to the selected mode
 
 ### Metadata Enrichment
@@ -229,6 +238,7 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Added general blocking/non-blocking task support to the operation manager
 - Blocking tasks are now tracked centrally, automatically labeled with `(blocking)`, and can temporarily lock the main window while still using async execution
 - `Autoupdate JCR` now exposes `Update Journals Database` and `Create extra JCR tags` as visible child tasks in the status strip instead of hiding them inside the parent task
+- Custom pipelines, Autofix, and preprocessing now run through a shared pipeline executor with visible per-step progress
 - Added shared `Threads` setting with default value `4`
 - Multi-threaded operations now use the configured `Threads` value
 - `Auto-pair with PDFs` now runs asynchronously and in parallel

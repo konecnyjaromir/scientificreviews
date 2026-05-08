@@ -11,6 +11,9 @@ Scientific Reviews is a Windows desktop tool for researchers who work with BibTe
 - Add more BibTeX files or folders into the current archive from `Project -> Add file` / `Add folder`
 - `Project -> Raw Mode` turns open/add file/folder actions into raw import without post-load preprocessing
 - `Project -> Import Settings` lets you import a settings JSON from an older installation or version after an update
+- `Pipelines -> Pipeline Builder` lets you create and store custom multi-step processing pipelines
+- `Pipelines -> Run` lists saved custom pipelines dynamically for one-click execution
+- `Pipelines` also contains the built-in `Autofix` action and `Autofix mode` selector
 - Open a completely new application window from `Project -> New`
 - Show the currently opened BibTeX file in the main window title
 - Restore the latest autosave backup on startup when available
@@ -137,7 +140,9 @@ Metadata enrichment is designed as a multi-provider pipeline with fallback behav
   - `Only missing`
   - `All`
   - `Only missing + arXive DOIs`
-- `Autofix` always runs metadata fetch with scope `All`, regardless of the current setting
+- `Autofix` and preprocessing use the selected built-in pipeline mode:
+  - `Normal` respects the current metadata-fetch settings
+  - `Deep` uses the deepest built-in metadata scope
 - When an arXiv-based record is matched with a published version:
   - `doi` is upgraded to the publisher DOI
   - the arXiv identifier is preserved in `eprint`
@@ -145,26 +150,58 @@ Metadata enrichment is designed as a multi-provider pipeline with fallback behav
 
 This gives the archive a bibliographically correct DOI while still preserving arXiv information for future PDF acquisition and open-access workflows.
 
-## Auto-Preprocessing and Autofix
+## Pipelines, Auto-Preprocessing, and Autofix
 
-The application supports multi-step preprocessing pipelines for archive cleanup.
+The application supports reusable multi-step pipelines for cleanup and enrichment workflows.
+
+- `Pipelines -> Pipeline Builder` can create named custom pipelines from supported steps such as:
+  - `Normalize DOI`
+  - `Fetch metadata`
+  - `Remove duplicates by title`
+  - `Remove duplicates by DOI`
+  - `Normalize page-tag`
+  - `Create entry keys`
+  - `Auto-pair PDFs`
+  - `Autoupdate JCR`
+- Custom pipelines are stored in settings and can be launched from `Pipelines -> Run`
+- Pipeline execution uses the same task/report infrastructure as other long-running operations
+
+Built-in preprocessing and Autofix are now backed by the same pipeline mechanism.
 
 - `Auto-preprocessing mode` can be configured in settings:
   - `Off`
   - `Fast`
+  - `Normal`
+  - `Deep`
+- `Autofix mode` can be configured independently:
+  - `Off`
+  - `Fast`
+  - `Normal`
   - `Deep`
 - Fast preprocessing:
   - Normalize DOI
   - Normalize page tags
   - Create entry keys
   - Auto-pair PDFs
-- Deep preprocessing / `Autofix`:
+- Normal preprocessing / Autofix:
   - Normalize DOI
-  - Fetch metadata
+  - Fetch metadata using the current metadata settings
+  - Remove duplicates by title
+  - Remove duplicates by DOI
   - Normalize page tags
   - Create entry keys
   - Auto-pair PDFs
-  - Update JCR
+  - Autoupdate JCR
+- Deep preprocessing / Autofix:
+  - Normalize DOI
+  - Fetch metadata using the deepest built-in scope
+  - Remove duplicates by title
+  - Remove duplicates by DOI
+  - Normalize page tags
+  - Create entry keys
+  - Auto-pair PDFs
+  - Autoupdate JCR
+- `Autoupdate JCR` runs as a parent task with visible child subtasks in the status strip
 
 `Autofix` is a destructive workflow and shows a confirmation warning before execution because it can modify many records at once.
 
@@ -308,6 +345,7 @@ The settings dialog contains the main workflow switches and defaults, including:
 - `PDF source match mode`
 - `Worker threads`
 - `Auto-preprocessing mode`
+- `Autofix mode`
 - `Metadata contact email`
 - `Metadata fetch scope`
 - `Low Quantile (Q3,Q4) Deleting Mode`
@@ -358,7 +396,7 @@ When the optimization is triggered, Notifications first shows `Please wait, proc
    After updating the application, use `Project -> Import Settings` if you want to restore settings from an older installation.
 3. Import additional records by file, folder, or smart paste using `Ctrl+V` / `Ctrl+Shift+V`.
    Enable `Project -> Raw Mode` first when you want file/folder imports without automatic post-load preprocessing.
-4. Run `Autofix` or individual tools such as `Normalize DOI`, `Fetch missing metadata`, `Auto-pair PDFs`, or `Update JCR`.
+4. Run `Pipelines -> Autofix`, a custom pipeline from `Pipelines -> Run`, or individual tools such as `Normalize DOI`, `Fetch missing metadata`, `Auto-pair PDFs`, or `Update JCR`.
 5. Screen, edit, tag, bind or rebind PDFs, and search records in the main grid.
    Use smart search for WoS-like field queries and numeric filters, or switch back to classic full-record search when needed.
 6. Open PDFs by double-click or via DOI.
