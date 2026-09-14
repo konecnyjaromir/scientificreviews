@@ -1,6 +1,6 @@
 # Release Notes
 
-## Unreleased
+## v1.1.0.5
 
 This development cycle focused on turning Scientific Reviews into a faster multi-window workflow tool with stronger PDF handling, configurable preprocessing, safer save/close behavior, smarter search and filtering, unified export workflows, and better background-operation control.
 
