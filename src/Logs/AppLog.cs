@@ -1,14 +1,13 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text;
-using System.Threading.Tasks;
+using System.Windows.Forms;
 
 namespace ScientificReviews.Logs
 {
     public static class AppLog
     {
+        private static readonly object Sync = new object();
         private static string _extension = "log";
         /// <summary>
         /// Přípona souborů ErrorLogu
@@ -19,7 +18,7 @@ namespace ScientificReviews.Logs
             set { _extension = value; }
         }
 
-        private static string _errPath = "log\\";
+        private static string _errPath = "logs\\";
         /// <summary>
         /// Nastaví relativní cestu začíná bez lomítka končí lomítkem
         /// </summary>
@@ -51,7 +50,10 @@ namespace ScientificReviews.Logs
 
         public enum MessageType
         {
-            Error, Exclamation, Info
+            Error,
+            Exclamation,
+            Warning = Exclamation,
+            Info
         }
 
         public static string GetCurrentFile()
@@ -75,10 +77,6 @@ namespace ScientificReviews.Logs
             return fileName;
         }
 
-        /// <summary>
-        /// Zaloguje chybovou hlášku e do souboru.
-        /// </summary>
-        /// <param name="e">Chybová proměná Exception</param>
         public static string Log(string message, MessageType type)
         {
             try
@@ -93,22 +91,72 @@ namespace ScientificReviews.Logs
                         typeString = "ERROR";
                         break;
                     case MessageType.Exclamation:
-                        typeString = "EXCLAMATION";
+                        typeString = "WARNING";
                         break;
                     default:
                         typeString = "INFO";
                         break;
                 }
 
-                using (StreamWriter sw = new StreamWriter(fileName,
-                           append, new UnicodeEncoding(true, true)))
+                lock (Sync)
                 {
-                    sw.WriteLine(string.Format("{0} {1}: {2}", DateTime.Now.ToString(), typeString, message));
+                    using (StreamWriter sw = new StreamWriter(fileName,
+                               append, new UnicodeEncoding(true, true)))
+                    {
+                        sw.WriteLine(string.Format("{0} {1}: {2}", DateTime.Now.ToString(), typeString, message));
+                    }
                 }
                 return fileName;
             }
             catch
             { }
+            return null;
+        }
+
+        public static string Log(Exception exception, string message = null)
+        {
+            try
+            {
+                if (exception == null)
+                    return Log(message ?? "Unknown exception.", MessageType.Error);
+
+                string fileName = GetCurrentFile();
+                bool append = File.Exists(fileName);
+                string header = string.IsNullOrWhiteSpace(message)
+                    ? exception.Message
+                    : message.Trim();
+
+                lock (Sync)
+                {
+                    using (StreamWriter sw = new StreamWriter(fileName,
+                               append, new UnicodeEncoding(true, true)))
+                    {
+                        sw.WriteLine(string.Format("{0} ERROR: {1}", DateTime.Now, header));
+                        sw.WriteLine("*********************************************************************************");
+                        sw.WriteLine("Platform: " + (IntPtr.Size == 8 ? "x64" : "x86"));
+                        sw.WriteLine("AppVersion: " + Application.ProductVersion);
+                        sw.WriteLine();
+                        sw.WriteLine("Environment:");
+                        sw.WriteLine("------------");
+                        sw.WriteLine(string.Format("MachineName: {0}", Environment.MachineName));
+                        sw.WriteLine(string.Format("OSVersion: {0}", Environment.OSVersion));
+                        sw.WriteLine(string.Format("ProcessorCount: {0}", Environment.ProcessorCount));
+                        sw.WriteLine(string.Format("UserName: {0}", Environment.UserName));
+                        sw.WriteLine(string.Format("Version: {0}", Environment.Version));
+                        sw.WriteLine();
+                        sw.WriteLine("Exception:");
+                        sw.WriteLine("----------");
+                        sw.WriteLine(exception.ToString());
+                        sw.WriteLine();
+                    }
+                }
+
+                return fileName;
+            }
+            catch
+            {
+            }
+
             return null;
         }
     }

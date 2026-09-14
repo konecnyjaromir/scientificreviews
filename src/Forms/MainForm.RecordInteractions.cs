@@ -12,22 +12,68 @@ namespace ScientificReviews.Forms
 {
     public partial class MainForm
     {
+        private static readonly Dictionary<string, Color> SupportedFlagColors = new Dictionary<string, Color>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "Green", Color.LightGreen },
+            { "Orange", Color.Moccasin },
+            { "Purple", Color.Plum },
+            { "Red", Color.LightCoral }
+        };
+
         private void InitializeRecordContextMenu()
         {
             _contextEditMenuItem = new ToolStripMenuItem("Edit");
             _contextEditMenuItem.Click += (sender, e) => allowEditToolStripMenuItem_Click(sender, e);
 
             _contextCopyMenuItem = new ToolStripMenuItem("Copy");
+            _contextCopyMenuItem.ShortcutKeyDisplayString = "Ctrl+C";
             _contextCopyMenuItem.Click += (sender, e) => CopySelectedRecordsToClipboard();
 
             _contextCutMenuItem = new ToolStripMenuItem("Cut");
+            _contextCutMenuItem.ShortcutKeyDisplayString = "Ctrl+X";
             _contextCutMenuItem.Click += (sender, e) => CutSelectedRecordsToClipboard();
 
             _contextPasteMenuItem = new ToolStripMenuItem("Paste");
+            _contextPasteMenuItem.ShortcutKeyDisplayString = "Ctrl+V";
             _contextPasteMenuItem.Click += (sender, e) => PasteRecordsFromClipboard();
 
             _contextDuplicateMenuItem = new ToolStripMenuItem("Duplicate");
+            _contextDuplicateMenuItem.ShortcutKeyDisplayString = "Ctrl+D";
             _contextDuplicateMenuItem.Click += (sender, e) => DuplicateSelectedRecords();
+
+            _contextTryAutopairPdfMenuItem = new ToolStripMenuItem("Try autopair the PDF");
+            _contextTryAutopairPdfMenuItem.Click += async (sender, e) => await TryAutoPairPdfForSelectedRecordsAsync();
+
+            _contextRebindPdfMenuItem = new ToolStripMenuItem("Change PDF");
+            _contextRebindPdfMenuItem.Click += (sender, e) => RebindPdfForCurrentEntry();
+
+            _contextUnbindPdfMenuItem = new ToolStripMenuItem("Unbind PDF");
+            _contextUnbindPdfMenuItem.Click += (sender, e) => UnbindPdfForCurrentEntry();
+
+            _contextPdfActionsMenuItem = new ToolStripMenuItem("PDF Actions");
+            _contextPdfActionsMenuItem.DropDownItems.AddRange(new ToolStripItem[]
+            {
+                _contextTryAutopairPdfMenuItem,
+                _contextRebindPdfMenuItem,
+                _contextUnbindPdfMenuItem
+            });
+
+            _contextNoFlagMenuItem = CreateContextFlagMenuItem("No flag", null);
+            _contextFlagGreenMenuItem = CreateContextFlagMenuItem("Green", "Green");
+            _contextFlagOrangeMenuItem = CreateContextFlagMenuItem("Orange", "Orange");
+            _contextFlagPurpleMenuItem = CreateContextFlagMenuItem("Purple", "Purple");
+            _contextFlagRedMenuItem = CreateContextFlagMenuItem("Red", "Red");
+
+            _contextFlagsMenuItem = new ToolStripMenuItem("Flags");
+            _contextFlagsMenuItem.DropDownItems.AddRange(new ToolStripItem[]
+            {
+                _contextNoFlagMenuItem,
+                new ToolStripSeparator(),
+                _contextFlagGreenMenuItem,
+                _contextFlagOrangeMenuItem,
+                _contextFlagPurpleMenuItem,
+                _contextFlagRedMenuItem
+            });
 
             _recordContextMenu = new ContextMenuStrip();
             _recordContextMenu.Items.AddRange(new ToolStripItem[]
@@ -37,20 +83,275 @@ namespace ScientificReviews.Forms
                 _contextCopyMenuItem,
                 _contextCutMenuItem,
                 _contextPasteMenuItem,
-                _contextDuplicateMenuItem
+                _contextDuplicateMenuItem,
+                new ToolStripSeparator(),
+                _contextFlagsMenuItem,
+                new ToolStripSeparator(),
+                _contextPdfActionsMenuItem
             });
             _recordContextMenu.Opening += recordContextMenu_Opening;
+
+            _contextRefreshMenuItem = new ToolStripMenuItem("Refresh");
+            _contextRefreshMenuItem.Click += (sender, e) => RefreshGrid();
+
+            _gridBackgroundContextMenu = new ContextMenuStrip();
+            _gridBackgroundContextMenu.Items.Add(_contextRefreshMenuItem);
         }
 
         private void recordContextMenu_Opening(object sender, System.ComponentModel.CancelEventArgs e)
         {
             bool hasSelection = GetSelectedOrdered().Length > 0;
+            BibtexEntry currentEntry = GetCurrentEntry();
+            bool hasCurrentEntry = currentEntry != null;
+            bool canUnbindPdf = HasPdfTag(currentEntry);
 
             _contextEditMenuItem.Checked = allowEditToolStripMenuItem.Checked;
             _contextCopyMenuItem.Enabled = hasSelection;
             _contextCutMenuItem.Enabled = hasSelection;
             _contextPasteMenuItem.Enabled = Clipboard.ContainsText() && string.IsNullOrWhiteSpace(Clipboard.GetText()) == false;
             _contextDuplicateMenuItem.Enabled = hasSelection;
+            _contextPdfActionsMenuItem.Enabled = hasSelection;
+            _contextTryAutopairPdfMenuItem.Enabled = hasSelection;
+            _contextRebindPdfMenuItem.Enabled = hasCurrentEntry;
+            _contextUnbindPdfMenuItem.Enabled = canUnbindPdf;
+            _contextFlagsMenuItem.Enabled = hasSelection;
+            UpdateFlagMenuCheckStates();
+        }
+
+        private void recordToolStripMenuItem_DropDownOpening(object sender, EventArgs e)
+        {
+            UpdatePdfActionUi();
+            UpdateFlagMenuCheckStates();
+        }
+
+        private ToolStripMenuItem CreateContextFlagMenuItem(string text, string flagValue)
+        {
+            ToolStripMenuItem item = new ToolStripMenuItem(text)
+            {
+                Tag = flagValue ?? string.Empty
+            };
+            item.Click += flagToolStripMenuItem_Click;
+            return item;
+        }
+
+        private void flagToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            ToolStripMenuItem menuItem = sender as ToolStripMenuItem;
+            string flagValue = menuItem?.Tag as string;
+            if (string.IsNullOrWhiteSpace(flagValue))
+            {
+                ClearFlagFromSelectedRecords();
+                return;
+            }
+
+            if (TryGetSupportedFlagColor(flagValue, out Color flagColor) == false)
+            {
+                lblStatus.Text = "Flag color is not supported.";
+                return;
+            }
+
+            ApplyFlagToSelectedRecords(flagValue, flagColor);
+        }
+
+        private void ApplyFlagToSelectedRecords(string flagValue, Color flagColor)
+        {
+            string normalizedFlagValue = NormalizeFlagValue(flagValue);
+            BibtexEntry[] selectedEntries = GetSelectedEntriesOrCurrent();
+            if (selectedEntries == null || selectedEntries.Length == 0)
+            {
+                lblStatus.Text = "No records selected.";
+                return;
+            }
+
+            int changedEntries = 0;
+            foreach (BibtexEntry entry in selectedEntries)
+            {
+                if (entry == null)
+                    continue;
+
+                string currentFlag = NormalizeFlagValue(BibtexTagService.GetTagValueIgnoreCase(entry, "flag"));
+                if (string.Equals(currentFlag, normalizedFlagValue, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                BibtexTagService.SetSingleTagValue(entry, "flag", normalizedFlagValue);
+                changedEntries++;
+            }
+
+            RefreshGrid(selectedEntries);
+            if (changedEntries > 0)
+                Changed();
+
+            string flagLabel = GetFlagMenuLabel(normalizedFlagValue, flagColor);
+            lblStatus.Text = changedEntries > 0
+                ? $"Flagged {changedEntries} record(s) as {flagLabel}."
+                : $"{flagLabel} flag is already set for selected record(s).";
+        }
+
+        private void ClearFlagFromSelectedRecords()
+        {
+            BibtexEntry[] selectedEntries = GetSelectedEntriesOrCurrent();
+            if (selectedEntries == null || selectedEntries.Length == 0)
+            {
+                lblStatus.Text = "No records selected.";
+                return;
+            }
+
+            int changedEntries = 0;
+            foreach (BibtexEntry entry in selectedEntries)
+            {
+                if (entry == null)
+                    continue;
+
+                if (string.IsNullOrWhiteSpace(BibtexTagService.GetTagValueIgnoreCase(entry, "flag")))
+                    continue;
+
+                BibtexTagService.RemoveAllTagsByKey(entry, "flag");
+                changedEntries++;
+            }
+
+            RefreshGrid(selectedEntries);
+            if (changedEntries > 0)
+                Changed();
+
+            lblStatus.Text = changedEntries > 0
+                ? $"Cleared flag from {changedEntries} record(s)."
+                : "Selected record(s) already have no flag.";
+        }
+
+        private void UpdateFlagMenuCheckStates()
+        {
+            BibtexEntry[] selectedEntries = GetSelectedEntriesOrCurrent();
+            bool hasEntries = selectedEntries != null && selectedEntries.Length > 0;
+            string uniformFlagValue = GetUniformSelectedFlagValue(selectedEntries);
+
+            flagsToolStripMenuItem.Enabled = hasEntries;
+            SetFlagMenuChecks(noFlagToolStripMenuItem, greenFlagToolStripMenuItem, orangeFlagToolStripMenuItem, purpleFlagToolStripMenuItem, redFlagToolStripMenuItem, hasEntries, uniformFlagValue);
+            SetFlagMenuChecks(_contextNoFlagMenuItem, _contextFlagGreenMenuItem, _contextFlagOrangeMenuItem, _contextFlagPurpleMenuItem, _contextFlagRedMenuItem, hasEntries, uniformFlagValue);
+        }
+
+        private static void SetFlagMenuChecks(ToolStripMenuItem noFlagItem, ToolStripMenuItem greenItem, ToolStripMenuItem orangeItem, ToolStripMenuItem purpleItem, ToolStripMenuItem redItem, bool hasEntries, string uniformFlagValue)
+        {
+            if (noFlagItem == null || greenItem == null || orangeItem == null || purpleItem == null || redItem == null)
+                return;
+
+            noFlagItem.Checked = hasEntries && uniformFlagValue == string.Empty;
+            greenItem.Checked = hasEntries && string.Equals(uniformFlagValue, greenItem.Tag as string, StringComparison.OrdinalIgnoreCase);
+            orangeItem.Checked = hasEntries && string.Equals(uniformFlagValue, orangeItem.Tag as string, StringComparison.OrdinalIgnoreCase);
+            purpleItem.Checked = hasEntries && string.Equals(uniformFlagValue, purpleItem.Tag as string, StringComparison.OrdinalIgnoreCase);
+            redItem.Checked = hasEntries && string.Equals(uniformFlagValue, redItem.Tag as string, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string GetUniformSelectedFlagValue(IEnumerable<BibtexEntry> entries)
+        {
+            if (entries == null)
+                return null;
+
+            bool hasAny = false;
+            string firstValue = null;
+
+            foreach (BibtexEntry entry in entries)
+            {
+                if (entry == null)
+                    continue;
+
+                string currentValue = NormalizeFlagValue(BibtexTagService.GetTagValueIgnoreCase(entry, "flag"));
+                if (hasAny == false)
+                {
+                    firstValue = currentValue;
+                    hasAny = true;
+                    continue;
+                }
+
+                if (string.Equals(firstValue, currentValue, StringComparison.OrdinalIgnoreCase) == false)
+                    return null;
+            }
+
+            return hasAny ? firstValue : null;
+        }
+
+        private static string NormalizeFlagValue(string flagValue)
+        {
+            if (string.IsNullOrWhiteSpace(flagValue))
+                return string.Empty;
+
+            switch (flagValue.Trim())
+            {
+                case "LightGreen":
+                    return "Green";
+                case "Moccasin":
+                    return "Orange";
+                case "Plum":
+                    return "Purple";
+                case "LightCoral":
+                    return "Red";
+                default:
+                    return flagValue.Trim();
+            }
+        }
+
+        private void dataGridView1_DataBindingComplete(object sender, DataGridViewBindingCompleteEventArgs e)
+        {
+            ApplyFlagStylesToGridRows();
+        }
+
+        private void ApplyFlagStylesToGridRows()
+        {
+            foreach (DataGridViewRow row in dataGridView1.Rows)
+            {
+                BibtexEntry entry = null;
+                if (row?.DataBoundItem is DataRowView drv && drv.Row != null)
+                    entry = drv.Row["Entry"] as BibtexEntry;
+
+                ApplyFlagStyleToRow(row, entry);
+            }
+        }
+
+        private void ApplyFlagStyleToRow(DataGridViewRow row, BibtexEntry entry)
+        {
+            if (row == null)
+                return;
+
+            if (TryGetFlagColor(entry, out Color flagColor))
+            {
+                row.DefaultCellStyle.BackColor = flagColor;
+                row.DefaultCellStyle.ForeColor = Color.Black;
+                row.DefaultCellStyle.SelectionBackColor = GetFlagSelectionColor(flagColor);
+                row.DefaultCellStyle.SelectionForeColor = Color.Black;
+                return;
+            }
+
+            row.DefaultCellStyle.BackColor = Color.Empty;
+            row.DefaultCellStyle.ForeColor = Color.Empty;
+            row.DefaultCellStyle.SelectionBackColor = Color.Empty;
+            row.DefaultCellStyle.SelectionForeColor = Color.Empty;
+        }
+
+        private bool TryGetFlagColor(BibtexEntry entry, out Color flagColor)
+        {
+            return TryGetSupportedFlagColor(BibtexTagService.GetTagValueIgnoreCase(entry, "flag"), out flagColor);
+        }
+
+        private static bool TryGetSupportedFlagColor(string colorName, out Color flagColor)
+        {
+            string normalizedValue = NormalizeFlagValue(colorName);
+            return SupportedFlagColors.TryGetValue(normalizedValue, out flagColor);
+        }
+
+        private static string GetFlagMenuLabel(string flagValue, Color flagColor)
+        {
+            string normalizedValue = NormalizeFlagValue(flagValue);
+            if (string.IsNullOrWhiteSpace(normalizedValue) == false)
+                return normalizedValue;
+
+            return flagColor.Name;
+        }
+
+        private static Color GetFlagSelectionColor(Color flagColor)
+        {
+            int red = Math.Max(0, flagColor.R - 18);
+            int green = Math.Max(0, flagColor.G - 18);
+            int blue = Math.Max(0, flagColor.B - 18);
+            return Color.FromArgb(red, green, blue);
         }
 
         private void dataGridView1_CellMouseDown(object sender, DataGridViewCellMouseEventArgs e)
@@ -74,6 +375,18 @@ namespace ScientificReviews.Forms
             Rectangle cellBounds = dataGridView1.GetCellDisplayRectangle(e.ColumnIndex, e.RowIndex, false);
             Point menuLocation = new Point(cellBounds.Left + e.X, cellBounds.Top + e.Y);
             _recordContextMenu?.Show(dataGridView1, menuLocation);
+        }
+
+        private void dataGridView1_MouseDown(object sender, MouseEventArgs e)
+        {
+            if (e.Button != MouseButtons.Right)
+                return;
+
+            DataGridView.HitTestInfo hitTest = dataGridView1.HitTest(e.X, e.Y);
+            if (hitTest.RowIndex >= 0)
+                return;
+
+            _gridBackgroundContextMenu?.Show(dataGridView1, new Point(e.X, e.Y));
         }
 
         private void dataGridView1_CellMouseDoubleClick(object sender, DataGridViewCellMouseEventArgs e)
@@ -125,9 +438,25 @@ namespace ScientificReviews.Forms
                 return;
             }
 
+            if (e.Control && e.Shift && e.KeyCode == Keys.V)
+            {
+                PasteRecordsFromClipboard(true);
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                return;
+            }
+
             if (e.Control && e.KeyCode == Keys.V)
             {
                 PasteRecordsFromClipboard();
+                e.Handled = true;
+                e.SuppressKeyPress = true;
+                return;
+            }
+
+            if (e.Control && e.KeyCode == Keys.D)
+            {
+                DuplicateSelectedRecords();
                 e.Handled = true;
                 e.SuppressKeyPress = true;
                 return;
@@ -228,36 +557,47 @@ namespace ScientificReviews.Forms
             CutSelectedRecordsToClipboard();
         }
 
-        private void PasteRecordsFromClipboard()
+        private async void PasteRecordsFromClipboard(bool rawOnly = false)
         {
             try
             {
                 if (Clipboard.ContainsText() == false)
                 {
-                    lblStatus.Text = "Clipboard does not contain BibTeX records.";
+                    lblStatus.Text = "Clipboard does not contain text.";
                     return;
                 }
 
                 string clipboardText = Clipboard.GetText();
                 if (string.IsNullOrWhiteSpace(clipboardText))
                 {
-                    lblStatus.Text = "Clipboard does not contain BibTeX records.";
+                    lblStatus.Text = "Clipboard does not contain text.";
                     return;
                 }
 
-                BibtexParser parser = new BibtexParser();
-                BibtexEntry[] pastedEntries = parser.ParseFile(clipboardText);
-                if (pastedEntries == null || pastedEntries.Length == 0)
+                PasteAnythingParseResult parseResult = TryParseClipboardRecords(clipboardText);
+                if (parseResult == null || parseResult.Entries == null || parseResult.Entries.Length == 0)
                 {
-                    lblStatus.Text = "Clipboard does not contain valid BibTeX records.";
+                    lblStatus.Text = Program.AppSettings.Data.EnablePasteAnything
+                        ? "Clipboard does not contain valid BibTeX, DOI, URL, or title data."
+                        : "Clipboard does not contain valid BibTeX records.";
                     return;
                 }
 
-                entries.AddRange(pastedEntries);
-                LoadData(entries.ToArray(), txtSearch.Text);
-                SelectEntriesInGrid(pastedEntries);
+                entries.AddRange(parseResult.Entries);
+                RefreshGrid(parseResult.Entries);
                 Changed();
-                lblStatus.Text = $"Pasted {pastedEntries.Length} record(s).";
+
+                MetadataUpdateResult metadataResult = null;
+                if (!rawOnly && ShouldAutoFetchForPastedEntries(parseResult))
+                    metadataResult = await StartFetchMetadataOperationAsync(
+                        parseResult.Entries,
+                        true,
+                        "fetch-pasted-metadata",
+                        "Fetch pasted metadata",
+                        MetadataScreenMode.All,
+                        GetPasteMetadataOptions());
+
+                lblStatus.Text = BuildPasteStatusMessage(parseResult, metadataResult);
             }
             catch (Exception ex)
             {
@@ -268,6 +608,90 @@ namespace ScientificReviews.Forms
         private void btnPasteRecord_Click(object sender, EventArgs e)
         {
             PasteRecordsFromClipboard();
+        }
+
+        private PasteAnythingParseResult TryParseClipboardRecords(string clipboardText)
+        {
+            BibtexParser parser = new BibtexParser();
+            try
+            {
+                BibtexEntry[] pastedEntries = parser.ParseFile(clipboardText);
+                if (pastedEntries != null && pastedEntries.Length > 0)
+                {
+                    return new PasteAnythingParseResult
+                    {
+                        Entries = pastedEntries,
+                        EntryKinds = Enumerable.Repeat(PasteAnythingEntryKind.Bibtex, pastedEntries.Length).ToArray(),
+                        ParsedAsBibtex = true
+                    };
+                }
+            }
+            catch
+            {
+            }
+
+            if (Program.AppSettings.Data.EnablePasteAnything == false)
+                return null;
+
+            return _pasteAnythingService.Parse(clipboardText);
+        }
+
+        private bool ShouldAutoFetchForPastedEntries(PasteAnythingParseResult parseResult)
+        {
+            if (parseResult == null || parseResult.Entries == null || parseResult.Entries.Length == 0)
+                return false;
+
+            return Program.AppSettings.Data.EnablePasteAnything &&
+                Program.AppSettings.Data.PasteAnythingMode != PasteAnythingMode.Simple;
+        }
+
+        private MetadataUpdateOptions GetPasteMetadataOptions()
+        {
+            return new MetadataUpdateOptions
+            {
+                AllowUrlLookup = true,
+                AllowUrlDoiExtraction = Program.AppSettings.Data.PasteAnythingMode == PasteAnythingMode.Deep
+            };
+        }
+
+        private string BuildPasteStatusMessage(PasteAnythingParseResult parseResult, MetadataUpdateResult metadataResult)
+        {
+            if (parseResult == null)
+                return "Paste finished.";
+
+            if (parseResult.ParsedAsBibtex)
+            {
+                string bibtexSummary = $"Pasted {parseResult.Entries.Length} BibTeX record(s).";
+                if (metadataResult != null)
+                    bibtexSummary += $" Metadata updated {metadataResult.UpdatedEntries} record(s).";
+
+                return bibtexSummary;
+            }
+
+            List<string> parts = new List<string>();
+            if (parseResult.DoiEntries > 0)
+                parts.Add($"{parseResult.DoiEntries} DOI");
+            if (parseResult.UrlEntries > 0)
+                parts.Add($"{parseResult.UrlEntries} URL");
+            if (parseResult.TitleEntries > 0)
+                parts.Add($"{parseResult.TitleEntries} title");
+
+            string summary = parts.Count == 0
+                ? $"Pasted {parseResult.Entries.Length} record(s)."
+                : $"Pasted {parseResult.Entries.Length} record(s): {string.Join(", ", parts)}.";
+
+            if (parseResult.SkippedItems > 0)
+                summary += $" Skipped {parseResult.SkippedItems} item(s).";
+
+            if (metadataResult != null)
+                summary += $" Metadata updated {metadataResult.UpdatedEntries} record(s).";
+
+            return summary;
+        }
+
+        private void duplicateRecordToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            DuplicateSelectedRecords();
         }
 
         private void DuplicateSelectedRecords()
@@ -330,8 +754,9 @@ namespace ScientificReviews.Forms
                 row.Selected = true;
             }
 
-            if (matchingRows[0].Cells.Count > 0)
-                dataGridView1.CurrentCell = matchingRows[0].Cells[0];
+            bindingSource1.Position = matchingRows[0].Index;
+
+            SelectEntry();
         }
 
         private void dataGridView1_SelectionChanged(object sender, EventArgs e)
@@ -342,7 +767,10 @@ namespace ScientificReviews.Forms
         private void SelectEntry()
         {
             if (bindingSource1.Current is DataRowView == false)
+            {
+                UpdatePdfActionUi();
                 return;
+            }
 
             bool readOnly = allowEditToolStripMenuItem.Checked == false;
             DataRowView drv = (DataRowView)bindingSource1.Current;
@@ -365,6 +793,7 @@ namespace ScientificReviews.Forms
             }
 
             lblSelected.Text = $"({dataGridView1.SelectedRows.Count})";
+            UpdatePdfActionUi();
         }
 
         private void ShowEntry(BibtexEntry entry, string search = "")
@@ -443,6 +872,8 @@ namespace ScientificReviews.Forms
             if (entry == null)
                 return false;
 
+            bool shouldOpenAfterPair = openAfterPair && Program.AppSettings.Data.AutoOpenPdfWhenAttach;
+
             using (OpenFileDialog openFileDialog = new OpenFileDialog())
             {
                 openFileDialog.CheckFileExists = true;
@@ -455,12 +886,11 @@ namespace ScientificReviews.Forms
                     return false;
 
                 AssignPdfToEntry(entry, openFileDialog.FileName);
-                LoadData(entries.ToArray(), txtSearch.Text);
-                SelectEntriesInGrid(new[] { entry });
+                RefreshGrid(new[] { entry });
                 Changed();
                 lblStatus.Text = "PDF paired manually.";
 
-                if (openAfterPair)
+                if (shouldOpenAfterPair)
                     OpenPdf(openFileDialog.FileName);
 
                 return true;

@@ -1,10 +1,28 @@
 using System;
 using System.Collections.Generic;
+using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
 namespace ScientificReviews.Helpers
 {
+    internal sealed class StatusStripOperationSnapshot
+    {
+        public Guid Id { get; set; }
+        public string Name { get; set; }
+        public bool IsBlocking { get; set; }
+        public string Summary { get; set; }
+        public string Details { get; set; }
+        public string Status { get; set; }
+        public DateTime StartedAt { get; set; }
+        public int? Completed { get; set; }
+        public int? Total { get; set; }
+        public bool IsIndeterminate { get; set; }
+        public bool CanCancel { get; set; }
+        public bool IsFinished { get; set; }
+    }
+
     public sealed class StatusStripOperationUpdate
     {
         public string Summary { get; set; }
@@ -12,6 +30,12 @@ namespace ScientificReviews.Helpers
         public int? Completed { get; set; }
         public int? Total { get; set; }
         public bool? IsIndeterminate { get; set; }
+    }
+
+    public sealed class StatusStripBlockingOperationsChangedEventArgs : EventArgs
+    {
+        public bool HasBlockingOperations { get; set; }
+        public int ActiveBlockingOperationCount { get; set; }
     }
 
     public sealed class StatusStripOperationHandle : IDisposable
@@ -24,6 +48,14 @@ namespace ScientificReviews.Helpers
         {
             _manager = manager;
             _id = id;
+        }
+
+        public void RegisterCancellation(Action cancelAction)
+        {
+            if (_isFinished)
+                return;
+
+            _manager.RegisterCancellation(_id, cancelAction);
         }
 
         public void Report(string summary = null, string details = null, int? completed = null, int? total = null, bool? isIndeterminate = null)
@@ -70,6 +102,15 @@ namespace ScientificReviews.Helpers
             Fail(summary ?? "Failed", exception.Message);
         }
 
+        public void Cancel(string summary = null, string details = null)
+        {
+            if (_isFinished)
+                return;
+
+            _isFinished = true;
+            _manager.Cancel(_id, summary, details);
+        }
+
         public void Dispose()
         {
             if (_isFinished == false)
@@ -84,13 +125,19 @@ namespace ScientificReviews.Helpers
             public Guid Id { get; set; }
             public string Key { get; set; }
             public string Name { get; set; }
+            public bool IsBlocking { get; set; }
             public string Summary { get; set; }
             public string Details { get; set; }
             public DateTime StartedAt { get; set; }
             public string Status { get; set; }
             public ToolStripSeparator Separator { get; set; }
             public ToolStripStatusLabel Label { get; set; }
-            public ToolStripProgressBar ProgressBar { get; set; }
+            public StatusStripOperationIndicatorHost IndicatorHost { get; set; }
+            public int? Completed { get; set; }
+            public int? Total { get; set; }
+            public bool IsIndeterminate { get; set; }
+            public Action CancelAction { get; set; }
+            public bool CancellationRequested { get; set; }
         }
 
         private readonly object _sync = new object();
@@ -99,12 +146,26 @@ namespace ScientificReviews.Helpers
         private readonly IWin32Window _owner;
         private readonly Dictionary<Guid, OperationState> _operationsById = new Dictionary<Guid, OperationState>();
         private readonly HashSet<string> _activeKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private readonly HashSet<Guid> _activeBlockingOperationIds = new HashSet<Guid>();
+
+        public event EventHandler<StatusStripBlockingOperationsChangedEventArgs> BlockingOperationsChanged;
 
         public StatusStripOperationManager(StatusStrip statusStrip, ToolStripItem anchorItem, IWin32Window owner)
         {
             _statusStrip = statusStrip ?? throw new ArgumentNullException(nameof(statusStrip));
             _anchorItem = anchorItem ?? throw new ArgumentNullException(nameof(anchorItem));
             _owner = owner;
+        }
+
+        public bool HasBlockingOperations
+        {
+            get
+            {
+                lock (_sync)
+                {
+                    return _activeBlockingOperationIds.Count > 0;
+                }
+            }
         }
 
         public bool IsActive(string key)
@@ -118,7 +179,7 @@ namespace ScientificReviews.Helpers
             }
         }
 
-        public StatusStripOperationHandle StartOperation(string key, string name, string details = null)
+        public StatusStripOperationHandle StartOperation(string key, string name, string details = null, bool isBlocking = false)
         {
             if (string.IsNullOrWhiteSpace(key))
                 throw new ArgumentException("Operation key must not be empty.", nameof(key));
@@ -127,6 +188,7 @@ namespace ScientificReviews.Helpers
                 throw new ArgumentException("Operation name must not be empty.", nameof(name));
 
             OperationState state;
+            bool blockingStateChanged = false;
 
             lock (_sync)
             {
@@ -139,15 +201,26 @@ namespace ScientificReviews.Helpers
                     Id = Guid.NewGuid(),
                     Key = key,
                     Name = name,
+                    IsBlocking = isBlocking,
                     Summary = "Starting...",
                     Details = details,
                     StartedAt = DateTime.Now,
                     Status = "Running"
                 };
                 _operationsById[state.Id] = state;
+                if (state.IsBlocking)
+                {
+                    _activeBlockingOperationIds.Add(state.Id);
+                    blockingStateChanged = true;
+                }
             }
 
-            PostToUi(() => AddOperationUi(state));
+            PostToUi(() =>
+            {
+                AddOperationUi(state);
+                if (blockingStateChanged)
+                    RaiseBlockingOperationsChanged();
+            });
             return new StatusStripOperationHandle(this, state.Id);
         }
 
@@ -156,7 +229,7 @@ namespace ScientificReviews.Helpers
             PostToUi(() =>
             {
                 var state = GetState(operationId);
-                if (state == null || state.Label == null || state.ProgressBar == null)
+                if (state == null || state.Label == null || state.IndicatorHost == null)
                     return;
 
                 if (string.IsNullOrWhiteSpace(update?.Summary) == false)
@@ -180,9 +253,64 @@ namespace ScientificReviews.Helpers
             Finish(operationId, "Failed", summary, details, true);
         }
 
+        internal void Cancel(Guid operationId, string summary, string details)
+        {
+            Finish(operationId, "Cancelled", summary, details, false);
+        }
+
+        internal void RegisterCancellation(Guid operationId, Action cancelAction)
+        {
+            lock (_sync)
+            {
+                if (_operationsById.TryGetValue(operationId, out OperationState state))
+                    state.CancelAction = cancelAction;
+            }
+        }
+
+        internal bool RequestCancel(Guid operationId)
+        {
+            Action cancelAction = null;
+
+            lock (_sync)
+            {
+                if (_operationsById.TryGetValue(operationId, out OperationState state) == false)
+                    return false;
+
+                if (state.CancelAction == null || state.CancellationRequested || !string.Equals(state.Status, "Running", StringComparison.OrdinalIgnoreCase))
+                    return false;
+
+                state.CancellationRequested = true;
+                state.Status = "Stopping";
+                cancelAction = state.CancelAction;
+            }
+
+            PostToUi(() =>
+            {
+                var state = GetState(operationId);
+                if (state == null)
+                    return;
+
+                UpdateLabel(state);
+            });
+
+            Task.Run(() =>
+            {
+                try
+                {
+                    cancelAction?.Invoke();
+                }
+                catch
+                {
+                }
+            });
+
+            return true;
+        }
+
         private void Finish(Guid operationId, string status, string summary, string details, bool failed)
         {
             OperationState state;
+            bool blockingStateChanged = false;
 
             lock (_sync)
             {
@@ -190,27 +318,37 @@ namespace ScientificReviews.Helpers
                     return;
 
                 _activeKeys.Remove(state.Key);
+                if (state.IsBlocking)
+                    blockingStateChanged = _activeBlockingOperationIds.Remove(state.Id);
             }
 
             PostToUi(() =>
             {
                 state = GetState(operationId);
-                if (state == null || state.Label == null || state.ProgressBar == null)
+                if (state == null || state.Label == null || state.IndicatorHost == null)
                     return;
 
                 state.Status = status;
                 if (string.IsNullOrWhiteSpace(summary) == false)
                     state.Summary = summary;
                 if (string.IsNullOrWhiteSpace(details) == false)
-                    state.Details = details;
+                state.Details = details;
+                state.CancellationRequested = false;
+                state.CancelAction = null;
 
-                state.ProgressBar.Style = ProgressBarStyle.Continuous;
-                state.ProgressBar.Maximum = 1;
-                state.ProgressBar.Value = 1;
+                state.IsIndeterminate = false;
+                state.Completed = 1;
+                state.Total = 1;
+                state.IndicatorHost.Indicator.SetFiniteProgress(1, 1);
 
                 state.Label.Text = failed
-                    ? $"{state.Name}: failed"
-                    : $"{state.Name}: done";
+                    ? $"{GetDisplayName(state)}: failed"
+                    : string.Equals(status, "Cancelled", StringComparison.OrdinalIgnoreCase)
+                        ? $"{GetDisplayName(state)}: cancelled"
+                        : $"{GetDisplayName(state)}: done";
+
+                if (blockingStateChanged)
+                    RaiseBlockingOperationsChanged();
 
                 ScheduleRemoval(operationId, failed ? 12000 : 6000);
             });
@@ -220,36 +358,40 @@ namespace ScientificReviews.Helpers
         {
             if (update == null)
             {
-                state.ProgressBar.Style = ProgressBarStyle.Marquee;
-                state.ProgressBar.MarqueeAnimationSpeed = 20;
+                state.IsIndeterminate = true;
+                state.Completed = null;
+                state.Total = null;
+                state.IndicatorHost.Indicator.SetIndeterminate();
                 return;
             }
 
             bool isIndeterminate = update.IsIndeterminate ?? (update.Total.HasValue == false || update.Completed.HasValue == false || update.Total.Value <= 0);
+            state.IsIndeterminate = isIndeterminate;
             if (isIndeterminate)
             {
-                state.ProgressBar.Style = ProgressBarStyle.Marquee;
-                state.ProgressBar.MarqueeAnimationSpeed = 20;
+                state.Completed = update.Completed;
+                state.Total = update.Total;
+                state.IndicatorHost.Indicator.SetIndeterminate();
                 return;
             }
 
             int total = Math.Max(1, update.Total.Value);
             int completed = Math.Max(0, Math.Min(total, update.Completed ?? 0));
-
-            state.ProgressBar.Style = ProgressBarStyle.Continuous;
-            state.ProgressBar.MarqueeAnimationSpeed = 0;
-            state.ProgressBar.Maximum = total;
-            state.ProgressBar.Value = Math.Min(total, completed);
+            state.Total = total;
+            state.Completed = completed;
+            state.IndicatorHost.Indicator.SetFiniteProgress(completed, total);
         }
 
         private void UpdateLabel(OperationState state)
         {
-            string text = state.Name;
+            string text = GetDisplayName(state);
             if (string.IsNullOrWhiteSpace(state.Summary) == false)
                 text += ": " + state.Summary;
 
             state.Label.Text = text;
             state.Label.ToolTipText = BuildDetailsText(state);
+            if (state.IndicatorHost != null)
+                state.IndicatorHost.ToolTipText = state.Label.ToolTipText;
         }
 
         private void AddOperationUi(OperationState state)
@@ -260,18 +402,14 @@ namespace ScientificReviews.Helpers
             state.Separator = new ToolStripSeparator();
             state.Label = new ToolStripStatusLabel
             {
-                Text = state.Name,
+                Text = GetDisplayName(state),
                 IsLink = true
             };
             state.Label.Click += (sender, e) => ShowDetails(state.Id);
 
-            state.ProgressBar = new ToolStripProgressBar
-            {
-                AutoSize = false,
-                Width = 90,
-                Style = ProgressBarStyle.Marquee,
-                MarqueeAnimationSpeed = 20
-            };
+            state.IndicatorHost = new StatusStripOperationIndicatorHost();
+            state.IndicatorHost.ToolTipText = BuildDetailsText(state);
+            state.IndicatorHost.Indicator.SetIndeterminate();
 
             int anchorIndex = _statusStrip.Items.IndexOf(_anchorItem);
             if (anchorIndex < 0)
@@ -279,29 +417,57 @@ namespace ScientificReviews.Helpers
 
             _statusStrip.Items.Insert(anchorIndex, state.Separator);
             _statusStrip.Items.Insert(anchorIndex + 1, state.Label);
-            _statusStrip.Items.Insert(anchorIndex + 2, state.ProgressBar);
+            _statusStrip.Items.Insert(anchorIndex + 2, state.IndicatorHost);
 
             UpdateLabel(state);
         }
 
         private void ShowDetails(Guid operationId)
         {
-            var state = GetState(operationId);
-            if (state == null)
+            StatusStripOperationSnapshot snapshot = GetSnapshot(operationId);
+            if (snapshot == null)
                 return;
 
-            string message = BuildDetailsText(state);
-            MessageBox.Show(_owner, message, state.Name, MessageBoxButtons.OK, MessageBoxIcon.Information);
+            using (StatusStripOperationDetailsForm form = new StatusStripOperationDetailsForm(this, operationId, snapshot))
+            {
+                form.ShowDialog(_owner);
+            }
         }
 
         private string BuildDetailsText(OperationState state)
         {
             return
-                $"Operation: {state.Name}\n" +
+                $"Operation: {GetDisplayName(state)}\n" +
+                $"Blocking: {(state.IsBlocking ? "Yes" : "No")}\n" +
                 $"Status: {state.Status}\n" +
                 $"Started: {state.StartedAt:G}\n" +
                 $"Summary: {state.Summary ?? string.Empty}\n\n" +
                 $"{state.Details ?? "No details."}";
+        }
+
+        internal StatusStripOperationSnapshot GetSnapshot(Guid operationId)
+        {
+            lock (_sync)
+            {
+                if (_operationsById.TryGetValue(operationId, out OperationState state) == false)
+                    return null;
+
+                return new StatusStripOperationSnapshot
+                {
+                    Id = state.Id,
+                    Name = state.Name,
+                    IsBlocking = state.IsBlocking,
+                    Summary = state.Summary,
+                    Details = state.Details,
+                    Status = state.Status,
+                    StartedAt = state.StartedAt,
+                    Completed = state.Completed,
+                    Total = state.Total,
+                    IsIndeterminate = state.IsIndeterminate,
+                    CanCancel = state.CancelAction != null && state.CancellationRequested == false && string.Equals(state.Status, "Running", StringComparison.OrdinalIgnoreCase),
+                    IsFinished = !string.Equals(state.Status, "Running", StringComparison.OrdinalIgnoreCase) && !string.Equals(state.Status, "Stopping", StringComparison.OrdinalIgnoreCase)
+                };
+            }
         }
 
         private async void ScheduleRemoval(Guid operationId, int delayMilliseconds)
@@ -316,13 +482,13 @@ namespace ScientificReviews.Helpers
 
                 if (state.Label != null)
                     _statusStrip.Items.Remove(state.Label);
-                if (state.ProgressBar != null)
-                    _statusStrip.Items.Remove(state.ProgressBar);
+                if (state.IndicatorHost != null)
+                    _statusStrip.Items.Remove(state.IndicatorHost);
                 if (state.Separator != null)
                     _statusStrip.Items.Remove(state.Separator);
 
                 state.Label?.Dispose();
-                state.ProgressBar?.Dispose();
+                state.IndicatorHost?.Dispose();
                 state.Separator?.Dispose();
             });
         }
@@ -349,6 +515,33 @@ namespace ScientificReviews.Helpers
             }
         }
 
+        private string GetDisplayName(OperationState state)
+        {
+            if (state == null)
+                return string.Empty;
+
+            return state.IsBlocking
+                ? state.Name + " (blocking)"
+                : state.Name;
+        }
+
+        private void RaiseBlockingOperationsChanged()
+        {
+            BlockingOperationsChanged?.Invoke(this, new StatusStripBlockingOperationsChangedEventArgs
+            {
+                HasBlockingOperations = HasBlockingOperations,
+                ActiveBlockingOperationCount = GetActiveBlockingOperationCount()
+            });
+        }
+
+        private int GetActiveBlockingOperationCount()
+        {
+            lock (_sync)
+            {
+                return _activeBlockingOperationIds.Count;
+            }
+        }
+
         private void PostToUi(Action action)
         {
             if (_statusStrip.IsDisposed)
@@ -372,6 +565,347 @@ namespace ScientificReviews.Helpers
             {
                 action();
             }
+        }
+    }
+
+    internal sealed class StatusStripOperationIndicatorHost : ToolStripControlHost
+    {
+        public StatusStripOperationIndicatorHost()
+            : base(new StatusStripOperationIndicatorControl())
+        {
+            AutoSize = false;
+            Width = 24;
+            Height = 24;
+            Margin = new Padding(2, 1, 4, 1);
+        }
+
+        public StatusStripOperationIndicatorControl Indicator => Control as StatusStripOperationIndicatorControl;
+
+        protected override Size DefaultSize => new Size(24, 24);
+    }
+
+    internal sealed class StatusStripOperationIndicatorControl : Control
+    {
+        private readonly Timer _animationTimer;
+        private bool _isIndeterminate = true;
+        private int _value;
+        private int _maximum = 1;
+        private int _spinnerFrame;
+
+        public StatusStripOperationIndicatorControl()
+        {
+            SetStyle(ControlStyles.AllPaintingInWmPaint |
+                     ControlStyles.OptimizedDoubleBuffer |
+                     ControlStyles.ResizeRedraw |
+                     ControlStyles.UserPaint |
+                     ControlStyles.SupportsTransparentBackColor, true);
+
+            BackColor = Color.Transparent;
+            Size = new Size(20, 20);
+
+            _animationTimer = new Timer
+            {
+                Interval = 90,
+                Enabled = true
+            };
+            _animationTimer.Tick += animationTimer_Tick;
+        }
+
+        public void SetIndeterminate()
+        {
+            _isIndeterminate = true;
+            EnsureAnimationState();
+            Invalidate();
+        }
+
+        public void SetFiniteProgress(int value, int maximum)
+        {
+            _isIndeterminate = false;
+            _maximum = Math.Max(1, maximum);
+            _value = Math.Max(0, Math.Min(_maximum, value));
+            EnsureAnimationState();
+            Invalidate();
+        }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                _animationTimer.Tick -= animationTimer_Tick;
+                _animationTimer.Dispose();
+            }
+
+            base.Dispose(disposing);
+        }
+
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            base.OnPaint(e);
+
+            e.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            e.Graphics.Clear(GetBackgroundColor());
+
+            Rectangle bounds = ClientRectangle;
+            bounds.Inflate(-2, -2);
+            if (bounds.Width <= 0 || bounds.Height <= 0)
+                return;
+
+            if (_isIndeterminate)
+                DrawSpinner(e.Graphics, bounds);
+            else
+                DrawProgressRing(e.Graphics, bounds);
+        }
+
+        private void animationTimer_Tick(object sender, EventArgs e)
+        {
+            _spinnerFrame = (_spinnerFrame + 1) % 12;
+            if (_isIndeterminate)
+                Invalidate();
+        }
+
+        private void EnsureAnimationState()
+        {
+            _animationTimer.Enabled = _isIndeterminate;
+        }
+
+        private Color GetBackgroundColor()
+        {
+            if (Parent != null)
+                return Parent.BackColor;
+
+            return SystemColors.Control;
+        }
+
+        private void DrawSpinner(Graphics graphics, Rectangle bounds)
+        {
+            PointF center = new PointF(bounds.Left + bounds.Width / 2f, bounds.Top + bounds.Height / 2f);
+            float radius = Math.Min(bounds.Width, bounds.Height) / 2f - 3f;
+            float dotRadius = Math.Max(1.6f, radius / 4.5f);
+            Color accent = Color.FromArgb(43, 122, 204);
+
+            for (int i = 0; i < 12; i++)
+            {
+                int distance = (i - _spinnerFrame + 12) % 12;
+                int alpha = Math.Max(35, 255 - distance * 18);
+                double angle = (Math.PI * 2d * i / 12d) - Math.PI / 2d;
+                float x = center.X + (float)(Math.Cos(angle) * radius) - dotRadius;
+                float y = center.Y + (float)(Math.Sin(angle) * radius) - dotRadius;
+
+                using (Brush brush = new SolidBrush(Color.FromArgb(alpha, accent)))
+                {
+                    graphics.FillEllipse(brush, x, y, dotRadius * 2f, dotRadius * 2f);
+                }
+            }
+        }
+
+        private void DrawProgressRing(Graphics graphics, Rectangle bounds)
+        {
+            float progress = _maximum <= 0 ? 0f : Math.Min(1f, _value / (float)_maximum);
+            int thickness = Math.Max(2, Math.Min(bounds.Width, bounds.Height) / 6);
+            Color trackColor = Color.FromArgb(210, 218, 228);
+            Color accentColor = Color.FromArgb(43, 122, 204);
+
+            using (Pen trackPen = new Pen(trackColor, thickness))
+            using (Pen progressPen = new Pen(accentColor, thickness))
+            {
+                trackPen.StartCap = LineCap.Round;
+                trackPen.EndCap = LineCap.Round;
+                progressPen.StartCap = LineCap.Round;
+                progressPen.EndCap = LineCap.Round;
+
+                graphics.DrawArc(trackPen, bounds, -90, 360);
+                graphics.DrawArc(progressPen, bounds, -90, Math.Max(4f, 360f * progress));
+            }
+        }
+    }
+
+    internal sealed class StatusStripOperationDetailsForm : Form
+    {
+        private readonly StatusStripOperationManager _manager;
+        private readonly Guid _operationId;
+        private readonly Timer _refreshTimer;
+        private StatusStripOperationSnapshot _lastSnapshot;
+        private Label _lblName;
+        private Label _lblStatus;
+        private Label _lblStarted;
+        private Label _lblSummary;
+        private Label _lblProgress;
+        private ProgressBar _progressBar;
+        private TextBox _txtDetails;
+        private Button _btnStop;
+        private Button _btnClose;
+
+        public StatusStripOperationDetailsForm(StatusStripOperationManager manager, Guid operationId, StatusStripOperationSnapshot initialSnapshot)
+        {
+            _manager = manager ?? throw new ArgumentNullException(nameof(manager));
+            _operationId = operationId;
+            _lastSnapshot = initialSnapshot ?? throw new ArgumentNullException(nameof(initialSnapshot));
+            _refreshTimer = new Timer();
+
+            InitializeComponent();
+            ApplySnapshot(_lastSnapshot);
+
+            _refreshTimer.Interval = 300;
+            _refreshTimer.Tick += RefreshTimer_Tick;
+            _refreshTimer.Start();
+        }
+
+        private void InitializeComponent()
+        {
+            _lblName = new Label();
+            _lblStatus = new Label();
+            _lblStarted = new Label();
+            _lblSummary = new Label();
+            _lblProgress = new Label();
+            _progressBar = new ProgressBar();
+            _txtDetails = new TextBox();
+            _btnStop = new Button();
+            _btnClose = new Button();
+            TableLayoutPanel root = new TableLayoutPanel();
+            FlowLayoutPanel buttons = new FlowLayoutPanel();
+
+            root.SuspendLayout();
+            buttons.SuspendLayout();
+            SuspendLayout();
+
+            root.ColumnCount = 1;
+            root.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100F));
+            root.Dock = DockStyle.Fill;
+            root.Padding = new Padding(12);
+            root.RowCount = 8;
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+            root.RowStyles.Add(new RowStyle(SizeType.Absolute, 22F));
+            root.RowStyles.Add(new RowStyle(SizeType.Percent, 100F));
+            root.RowStyles.Add(new RowStyle(SizeType.AutoSize));
+
+            _lblName.AutoSize = true;
+            _lblName.Font = new Font("Segoe UI Semibold", 11F, FontStyle.Bold);
+            _lblName.Margin = new Padding(0, 0, 0, 8);
+
+            _lblStatus.AutoSize = true;
+            _lblStatus.Margin = new Padding(0, 0, 0, 6);
+
+            _lblStarted.AutoSize = true;
+            _lblStarted.Margin = new Padding(0, 0, 0, 6);
+
+            _lblSummary.AutoSize = true;
+            _lblSummary.MaximumSize = new Size(500, 0);
+            _lblSummary.Margin = new Padding(0, 0, 0, 10);
+
+            _lblProgress.AutoSize = true;
+            _lblProgress.Margin = new Padding(0, 0, 0, 6);
+
+            _progressBar.Dock = DockStyle.Fill;
+            _progressBar.Maximum = 1000;
+            _progressBar.Margin = new Padding(0, 0, 0, 10);
+
+            _txtDetails.Dock = DockStyle.Fill;
+            _txtDetails.Multiline = true;
+            _txtDetails.ReadOnly = true;
+            _txtDetails.ScrollBars = ScrollBars.Vertical;
+
+            buttons.Dock = DockStyle.Fill;
+            buttons.FlowDirection = FlowDirection.RightToLeft;
+            buttons.Margin = new Padding(0, 10, 0, 0);
+            buttons.WrapContents = false;
+
+            _btnClose.AutoSize = true;
+            _btnClose.DialogResult = DialogResult.OK;
+            _btnClose.Text = "Close";
+
+            _btnStop.AutoSize = true;
+            _btnStop.Text = "Stop";
+            _btnStop.Click += btnStop_Click;
+
+            buttons.Controls.Add(_btnClose);
+            buttons.Controls.Add(_btnStop);
+
+            root.Controls.Add(_lblName, 0, 0);
+            root.Controls.Add(_lblStatus, 0, 1);
+            root.Controls.Add(_lblStarted, 0, 2);
+            root.Controls.Add(_lblSummary, 0, 3);
+            root.Controls.Add(_lblProgress, 0, 4);
+            root.Controls.Add(_progressBar, 0, 5);
+            root.Controls.Add(_txtDetails, 0, 6);
+            root.Controls.Add(buttons, 0, 7);
+
+            AcceptButton = _btnClose;
+            AutoScaleDimensions = new SizeF(8F, 20F);
+            AutoScaleMode = AutoScaleMode.Font;
+            ClientSize = new Size(560, 360);
+            Controls.Add(root);
+            FormBorderStyle = FormBorderStyle.FixedDialog;
+            MaximizeBox = false;
+            MinimizeBox = false;
+            Name = "StatusStripOperationDetailsForm";
+            ShowIcon = false;
+            ShowInTaskbar = false;
+            StartPosition = FormStartPosition.CenterParent;
+            Text = "Operation Status";
+            FormClosed += StatusStripOperationDetailsForm_FormClosed;
+
+            root.ResumeLayout(false);
+            root.PerformLayout();
+            buttons.ResumeLayout(false);
+            buttons.PerformLayout();
+            ResumeLayout(false);
+        }
+
+        private void RefreshTimer_Tick(object sender, EventArgs e)
+        {
+            StatusStripOperationSnapshot snapshot = _manager.GetSnapshot(_operationId);
+            if (snapshot != null)
+                _lastSnapshot = snapshot;
+
+            ApplySnapshot(_lastSnapshot);
+        }
+
+        private void ApplySnapshot(StatusStripOperationSnapshot snapshot)
+        {
+            if (snapshot == null)
+                return;
+
+            _lblName.Text = snapshot.IsBlocking
+                ? snapshot.Name + " (blocking)"
+                : snapshot.Name;
+            _lblStatus.Text = $"Status: {snapshot.Status}";
+            _lblStarted.Text = $"Started: {snapshot.StartedAt:G}";
+            _lblSummary.Text = $"Summary: {snapshot.Summary ?? string.Empty}";
+            _txtDetails.Text = snapshot.Details ?? "No details.";
+
+            if (snapshot.IsIndeterminate || snapshot.Total.HasValue == false || snapshot.Total.Value <= 0)
+            {
+                _progressBar.Style = ProgressBarStyle.Marquee;
+                _progressBar.MarqueeAnimationSpeed = 20;
+                _lblProgress.Text = "Progress: working...";
+            }
+            else
+            {
+                int total = Math.Max(1, snapshot.Total.Value);
+                int completed = Math.Max(0, Math.Min(total, snapshot.Completed ?? 0));
+                _progressBar.Style = ProgressBarStyle.Continuous;
+                _progressBar.MarqueeAnimationSpeed = 0;
+                _progressBar.Value = Math.Max(_progressBar.Minimum, Math.Min(_progressBar.Maximum, (int)Math.Round(completed * 1000d / total)));
+                _lblProgress.Text = $"Progress: {completed}/{total}";
+            }
+
+            _btnStop.Enabled = snapshot.CanCancel;
+        }
+
+        private void btnStop_Click(object sender, EventArgs e)
+        {
+            if (_manager.RequestCancel(_operationId))
+                _btnStop.Enabled = false;
+        }
+
+        private void StatusStripOperationDetailsForm_FormClosed(object sender, FormClosedEventArgs e)
+        {
+            _refreshTimer.Stop();
+            _refreshTimer.Dispose();
         }
     }
 }

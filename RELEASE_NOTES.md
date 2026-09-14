@@ -2,22 +2,98 @@
 
 ## Unreleased
 
-This development cycle focused on turning Scientific Reviews into a faster multi-window workflow tool with stronger PDF handling, better background processing, and a much cleaner internal architecture.
+This development cycle focused on turning Scientific Reviews into a faster multi-window workflow tool with stronger PDF handling, configurable preprocessing, safer save/close behavior, smarter search and filtering, unified export workflows, and better background-operation control.
 
 ### Project Workflow
 
 - Added `Project -> Open file` and `Open folder` to open a new archive after optional confirmation and clearing the current one
 - Kept `Add file` and `Add folder` for incremental import into the current archive
+- Added `Project -> Raw Mode` as a shared toggle for raw file/folder import without post-load preprocessing
+- `Open file`, `Open folder`, `Add file`, and `Add folder` now reuse the existing raw import behavior when `Raw Mode` is enabled instead of exposing separate raw-only menu actions
+- Added `Project -> Import Settings` for restoring `settings.json` from an older installation or application version
+- Settings import now validates the selected JSON, normalizes missing defaults, migrates older settings versions, and only replaces the active settings file after verification succeeds
+- Settings import now creates an automatic backup of the current active settings file before replacing it
+- Added a new top-level `Pipelines` menu
+- Added `Pipelines -> Pipeline Builder` for creating, renaming, deleting, and reordering custom pipelines
+- Added dynamic `Pipelines -> Run` entries that are rebuilt from saved custom pipelines on startup and after closing the builder
+- Moved `Autofix` and `Autofix mode` from `Database` into `Pipelines`
 - Added `Project -> New` to launch a separate application window
-- Main window title now shows the active BibTeX file name
-- Added `LastBibTex` tracking for default export behavior and UI context
+- Main window title now shows the active BibTeX file name from the current session
+- Opening a new empty project no longer shows the previous file name in the window title
+- Added `About` window with `Program` and `Project` tabs, including version info, GitHub link, and arXiv acknowledgement
+
+### Save and Close Safety
+
+- Split saving into:
+  - `Save` for overwriting the currently opened BibTeX file
+  - `Save As` for writing a new BibTeX file
+- Added `Ctrl+S` for `Save`
+- Added `Ctrl+Shift+S` for `Save As`
+- `Save` now warns before overwriting unless `Allow unsafe saving` is enabled in settings
+- Added `DatabaseChanged` tracking for unsaved BibTeX changes
+- Closing the application now warns before losing unsaved work, with default action set to `No`
+- Added `Allow unsafe closing` setting to bypass the unsaved-changes warning when desired
+- Save and `Save As` now run through the new blocking-task mechanism, so saving stays async but the main window is temporarily locked against conflicting edits
 
 ### Record Editing and Clipboard
 
 - Added full-record clipboard support with `Ctrl+C`, `Ctrl+X`, and `Ctrl+V`
+- Added `Ctrl+Shift+V` for raw paste without post-paste metadata fetch
 - Added menu actions for `Copy`, `Cut`, and `Paste`
-- Added right-click context menu actions: `Edit`, `Copy`, `Cut`, `Paste`, and `Duplicate`
+- Added `Ctrl+D` shortcut and menu/context action for `Duplicate`
+- Added right-click context menu actions: `Edit`, `Copy`, `Cut`, `Paste`, `Duplicate`, `Rebind PDF`, and `Unbind PDF`
 - Enabled record transfer between independent running application windows through the system clipboard
+- Clipboard shortcuts are now context-aware:
+  - text fields use normal text copy/cut/paste
+  - the grid uses record copy/cut/paste
+- Added `Paste Anything` smart parsing for grid paste:
+  - BibTeX text is inserted as records
+  - DOI-like text creates `@misc` stub records
+  - web links create `@online` stub records
+  - plain title-like text creates `@misc` title stubs
+- Added canonicalization during smart paste for DOI and arXiv links
+- Added `Enable Paste Anything` setting with default `True`
+- Added `Paste Anything mode` setting:
+  - `Simple`
+  - `Auto`
+  - `Deep`
+- In `Auto` and `Deep`, pasted records can immediately trigger metadata fetch for just the newly inserted items
+- Text-field paste behavior remains unchanged; smart paste only applies in the main grid context
+- Added `Ctrl+E` for `Allow edit`
+- Added `Ctrl+F` to focus the search box
+- Added `Ctrl+R` for grid refresh
+- Added `Ctrl+N` for `Project -> New`
+- Added `Ctrl+O` for `Open file`
+- Added `Ctrl+Shift+O` for `Open folder`
+
+### Search and Filtering
+
+- Added `Smart search` mode in the main search box
+- Smart search now supports:
+  - field selectors such as `title:value`, `author:value`, `year:value`
+  - boolean operators `AND`, `OR`, `NOT`
+  - grouping with parentheses
+  - implicit `AND` between adjacent terms
+  - numeric range filters such as `year:2020-2025`
+  - numeric comparison filters such as `year > 2025`, `year>=2025`, `jif<=4`
+- Added checkbox toggle next to the search box to switch between smart search and the original classic full-record search
+- Smart search is now the default mode for new and migrated settings
+- The selected search mode is persisted between application runs
+- Classic search remains available and keeps the original comma-separated `OR` behavior over the whole rendered record
+
+### Tags and Record Actions
+
+- Added `Rename tag` for selected records from the `Database` menu
+- Added `Rename tag` for the current record from the record panel and `Record` menu
+- Rename-tag dialog now supports autocomplete and prefills the new value as `<original>_copy`
+- Added `Record -> Flags` submenu and matching row context-menu submenu with `Green`, `Orange`, `Purple`, `Red`, and `No flag`
+- Records can now be visually flagged through the `flag` tag using human-readable values such as `Green`, `Orange`, `Purple`, and `Red`, and flagged rows are highlighted directly in the main grid
+- Added quick flagging shortcuts:
+  - `F3` = Green
+  - `F4` = Orange
+  - `F5` = Purple
+  - `F6` = Red
+- Moved `Custom columns` management into `Settings` while keeping `Window -> Columns` as a familiar shortcut
 
 ### PDF Pairing and Full-Text Workflow
 
@@ -27,8 +103,14 @@ This development cycle focused on turning Scientific Reviews into a faster multi
   - `pdf_file`
   - `path_to_pdf`
 - Added manual PDF pairing when no file is found
+- Added `Rebind PDF` for the current record
+- Added `Unbind PDF` for the current record, which clears the PDF mapping and sets `has_pdf = no`
 - Added double-click on a record to open its paired PDF
 - Unified PDF matching across open, auto-pair, and export
+- Manual PDF rebind/attach now refreshes the grid while preserving selection and active sort order
+- Moved record-level PDF actions into a dedicated `Record -> PDF Actions` submenu and matching row context submenu
+- Added `Try autopair the PDF` for selected/current records, which runs the auto-pair logic only for the local record scope
+- Added `Autoopening PDF when attach` setting with default `True`
 - Current PDF matching rules:
   - use stored `path_to_pdf` / `pdf_file` when still valid
   - match when the PDF name contains the BibTeX `key`
@@ -36,6 +118,7 @@ This development cycle focused on turning Scientific Reviews into a faster multi
   - match by title similarity using cosine-based scoring and keyword support
 - Added configurable `PDF auto-pair threshold (%)`
 - Added optional recursive PDF search
+- Default recursive PDF search is now enabled
 - Recursive search now ignores folders whose name starts and ends with `__`, for example `__DELETED__`
 
 ### PDF Export
@@ -43,7 +126,7 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Replaced the old PDF export action with a dedicated `Export PDFs` dialog
 - Added export mode for all records or only selected records
 - Default export directory now follows the folder of the opened BibTeX file
-- Added optional DOI metadata injection into exported PDFs
+- Added optional DOI and `eprint` metadata injection into exported PDFs
 - Added `Pack to folder` option that creates an `export` subfolder automatically
 - Added export file naming modes:
   - `Key`
@@ -51,32 +134,147 @@ This development cycle focused on turning Scientific Reviews into a faster multi
   - `Custom` with placeholders such as `<key>_<title>_<doi>`
 - Export now runs asynchronously and in parallel
 - Added progress bar and cancel support to the export dialog
+- PDF export now also uses the new blocking-task mechanism, so the export stays async while the main window is temporarily locked against conflicting edits
+- Updated the `Export PDFs` dialog to match the newer export-form GUI style
+- Switched PDF metadata injection to the iText library
+- Added export preflight validation for source PDFs and destination paths
+- Added detailed per-file PDF export logging
+- Metadata injection failures no longer discard already exported PDFs
+- PDF export now uses a dedicated temporary metadata workspace that is cleaned after export
 
 ### DOI and PDF Opening
 
 - `Open using DOI` now detects DOI format automatically
 - Standard DOI values such as `10.1145/3729343` open through `doi.org`
-- arXiv identifiers such as `2310.08864` open through `arxiv.org/pdf/...`
+- Canonical arXiv DOI values such as `10.48550/arXiv.2310.08864` also open through `doi.org`
 - Unsupported DOI-like values trigger a warning and then open through Google search
+
+### Database Cleanup, Normalization, and Autofix
+
+- Added `Normalize DOI`
+- Added `Normalize page-tag`
+- `Normalize page-tag` now reports results to the status label the same way as `Normalize DOI`
+- Added `Create entry keys` with shortcut `Ctrl+Shift+K`
+- Added `Fetch missing metadata` shortcut `Ctrl+Shift+M`
+- Added `Auto-pair with PDFs` shortcut `Ctrl+Shift+P`
+- Added manual `Autofix` with shortcut `Ctrl+Shift+A`
+- `Autofix` is now implemented as a built-in pipeline workflow under `Pipelines`
+- `Autofix mode` is now managed separately from `Auto-preprocessing mode`
+- `Autofix` and preprocessing now support these built-in pipeline modes:
+  - `Fast`
+  - `Normal`
+  - `Deep`
+- `Normal` runs the full cleanup pipeline but respects the current per-feature settings instead of forcing the deepest metadata mode
+- `Autofix` in `Normal` and `Deep` now runs `Autoupdate JCR` as part of the pipeline, including `Create extra JCR tags`
+- `Normalize DOI` now preserves publisher DOI priority while also filling `eprint` when arXiv information is available
+
+### Auto-Preprocessing
+
+- Added `Auto-preprocessing mode` setting with:
+  - `Off`
+  - `Fast`
+  - `Normal`
+  - `Deep`
+- Default auto-preprocessing mode is now `Fast`
+- `Fast` preprocessing runs:
+  - Normalize DOI
+  - Normalize page-tag
+  - Create entry keys
+  - Auto-pair PDFs
+- `Normal` preprocessing runs the full pipeline while using the current settings for individual operations
+- `Deep` preprocessing runs:
+  - Normalize DOI
+  - Fetch missing metadata
+  - Remove duplicates by title
+  - Remove duplicates by DOI
+  - Normalize page-tag
+  - Create entry keys
+  - Auto-pair PDFs
+  - Autoupdate JCR
+- Automatic preprocessing now runs after opening BibTeX archives according to the selected mode
+
+### Metadata Enrichment
+
+- Metadata fetch now supports type-aware completeness rules:
+  - scholarly records require article metadata such as `title`, `author`, `doi`, `abstract`, and `year`
+  - `@online` records use web-oriented fields such as `title`, `url`, `urldate`, and `note`
+- Added lightweight web metadata extraction from HTML/OpenGraph metadata as a final fallback provider
+- URL lookup is now available after DOI/title matching when a record contains a usable `url`
+- `Deep` smart-paste mode may accept DOI hints from explicit web metadata tags such as `citation_doi`
+- Metadata fetch can now be targeted at a selected subset of records, which is used by smart paste enrichment
+
+### Export and Output Workflows
+
+- Unified database export into a single `Project -> Export` dialog
+- Replaced separate visible/CSV/BibTeX export paths with one configurable export form
+- Added export scope options:
+  - `Visible`
+  - `Selected`
+  - `All`
+- Added export format options:
+  - `BibTeX (.bib)`
+  - `CSV (.csv)`
+- Added export mode options:
+  - `Normal`
+  - `As columns`
+  - `As standard`
+- Added configurable CSV separator options:
+  - `,`
+  - `;`
+  - `TAB`
+  - custom
+- Added `Standard columns` setting for `As standard` export mode
+- Added `Default CSV separator` setting
+- Added `LastExportSettings` persistence so export choices are reused between openings
+- Added `Ctrl+Shift+E` shortcut for database export
+- Database export now runs modally from the export form with progress and cancel support
+- Successful database export now closes the export form automatically
+- Database export now runs through the new blocking-task mechanism to protect the in-memory archive during export
 
 ### Background Operations and Performance
 
 - Added a status-strip operation manager for long-running tasks
 - Added support for multiple parallel background operations in the main window
+- Added general blocking/non-blocking task support to the operation manager
+- Blocking tasks are now tracked centrally, automatically labeled with `(blocking)`, and can temporarily lock the main window while still using async execution
+- `Autoupdate JCR` now exposes `Update Journals Database` and `Create extra JCR tags` as visible child tasks in the status strip instead of hiding them inside the parent task
+- Custom pipelines, Autofix, and preprocessing now run through a shared pipeline executor with visible per-step progress
 - Added shared `Threads` setting with default value `4`
 - Multi-threaded operations now use the configured `Threads` value
 - `Auto-pair with PDFs` now runs asynchronously and in parallel
 - PDF export now runs asynchronously and in parallel
+- Large Notifications reports now switch to async plain-text rendering with a loading placeholder to avoid UI stalls on very long change reports
+- Added general `Performance Optimization` setting for report rendering with these modes:
+  - `Optimize For Performance`
+  - `Optimize For Quality / Performance ratio`
+  - `Optimize For Quality (!)`
+  - `No optimization (not recommended)`
 - Open/add operations now use continuous progress when completion percentage cannot be estimated reliably
-- After open/add, the app can automatically trigger:
-  - PDF auto-pair
-  - JCR update when API key is configured
+- Added live status dialog when clicking a running background operation in the status strip
+- Added `Stop` support for cancellable subtasks and their child processes from the status dialog
+- Metadata fetch, JCR update, PDF auto-pair, archive loading, and preprocessing/autofix can now be cancelled cooperatively
+- After open/add, the app can automatically trigger the configured preprocessing pipeline
 
 ### JCR and Database Cleanup
 
+- Fixed incorrect `Update Journals Database` progress/success summaries so resolved journal counts no longer exceed the number of missing journals
+- `Update JCR` now reports record-level outcomes:
+  - records whose `journal` was resolved and now have JCR coverage
+  - records with `journal` that still could not get JCR tags, including the reason
+  - records without `journal`
+  - records that failed for another reason
+- `Create extra JCR tags` now reports record-level success/failure details instead of finishing silently
+- Both `Update JCR` and `Create extra JCR tags` now include a combined `Records still missing JCR tags` count that also includes records without `journal`
+- Added `Low Quantile (Q3,Q4) Deleting Mode` setting with:
+  - `Only Records With Valid Jif Tags`
+  - `All records`
+- Fixed `Remove Q3 Q4` so it no longer deletes records without valid JCR tags unless the new setting explicitly allows it
 - JCR tag generation now updates existing tags instead of duplicating them
 - Added `Remove duplicate tags` database action
 - Duplicate-tag cleanup preserves the newest value for the same tag key
+- Added `Clear flags` database action for removing all record flags from the current archive at once
+- Added `Normalize page-tag` into the `Autofix` pipeline
+- Added database refresh usage across lightweight edit actions instead of unnecessary full reloads
 
 ### Refactoring
 
@@ -88,13 +286,16 @@ This development cycle focused on turning Scientific Reviews into a faster multi
   - `MainForm.PdfActions.cs`
 - Extracted shared logic into helper services:
   - `BibtexLoadService`
+  - `DatabaseExportService`
   - `JcrUpdateService`
+  - `MetadataFetchService`
   - `PdfMatchingService`
   - `PdfExportService`
   - `BibtexTagService`
   - `StatusStripOperationManager`
 - Removed empty event handlers and unused designer event hookups from `MainForm`
 - Simplified duplicated logic around PDF handling, export, archive loading, and JCR updates
+- Added shared preprocessing pipeline logic reused by both automatic preprocessing and manual `Autofix`
 
 ### Fixes and UX Improvements
 
@@ -102,3 +303,8 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Fixed `pdf_file` to store only the file name instead of a relative folder path
 - Fixed menu typo `Add folfer` to `Add folder`
 - Improved consistency between PDF pairing, PDF export, and manual PDF selection behavior
+- Fixed record panel selection after light grid refresh so the current record stays focused
+- Fixed text paste into search and editors so `Ctrl+V` no longer incorrectly pastes BibTeX records there
+- Improved settings organization with grouped categories, unified naming, and descriptions
+- Renamed `Update page tag format` to `Normalize page-tag`
+- Fixed legacy `Recursive PDF search` defaults in persisted settings through settings migration

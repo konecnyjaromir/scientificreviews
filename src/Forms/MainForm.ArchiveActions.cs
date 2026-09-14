@@ -1,9 +1,12 @@
 using ScientificReviews.Bibtex;
 using ScientificReviews.Helpers;
+using ScientificReviews.Logs;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
+using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 
@@ -11,15 +14,52 @@ namespace ScientificReviews.Forms
 {
     public partial class MainForm
     {
+        private bool _isInitializingRawModeUi;
+
+        private OpenAddMode DefaultOpenAddMode
+        {
+            get => Program.AppSettings?.Data?.OpenAddMode ?? OpenAddMode.Normal;
+            set
+            {
+                if (Program.AppSettings?.Data != null)
+                    Program.AppSettings.Data.OpenAddMode = value;
+            }
+        }
+
+        private bool IsRawModeEnabled => rawModeToolStripMenuItem != null && rawModeToolStripMenuItem.Checked;
+
+        private void InitializeOpenAddModeUi()
+        {
+            UpdateOpenAddModeUi();
+        }
+
+        private void UpdateOpenAddModeUi()
+        {
+            if (rawModeToolStripMenuItem == null)
+                return;
+
+            bool rawModeEnabled = DefaultOpenAddMode == OpenAddMode.Raw;
+            if (rawModeToolStripMenuItem.Checked == rawModeEnabled)
+                return;
+
+            _isInitializingRawModeUi = true;
+            try
+            {
+                rawModeToolStripMenuItem.Checked = rawModeEnabled;
+            }
+            finally
+            {
+                _isInitializingRawModeUi = false;
+            }
+        }
+
         private void UpdateWindowTitle()
         {
             string title = Program.APP_NAME;
-            string lastBibTex = Program.AppSettings?.Data?.LastBibTex;
-            if (string.IsNullOrWhiteSpace(lastBibTex) == false)
+            string currentSessionTitle = GetCurrentBibTexSessionTitle();
+            if (string.IsNullOrWhiteSpace(currentSessionTitle) == false)
             {
-                string bibFileName = Path.GetFileName(lastBibTex);
-                if (string.IsNullOrWhiteSpace(bibFileName) == false)
-                    title += " - " + bibFileName;
+                title += " - " + currentSessionTitle;
             }
 
             Text = title;
@@ -27,16 +67,116 @@ namespace ScientificReviews.Forms
 
         private void SetCurrentBibTex(string filePath)
         {
-            Program.AppSettings.Data.LastBibTex = string.IsNullOrWhiteSpace(filePath) ? null : filePath;
+            SetCurrentBibTexSources(string.IsNullOrWhiteSpace(filePath) ? Array.Empty<string>() : new[] { filePath }, filePath);
+        }
+
+        private void SetCurrentBibTexSources(IEnumerable<string> sourcePaths, string currentFilePath = null)
+        {
+            string[] normalizedSourcePaths = NormalizeBibTexSourcePaths(sourcePaths);
+
+            _currentBibTexSourcePaths.Clear();
+            _currentBibTexSourcePaths.AddRange(normalizedSourcePaths);
+
+            if (string.IsNullOrWhiteSpace(currentFilePath))
+                _currentBibTexPath = normalizedSourcePaths.Length == 1 ? normalizedSourcePaths[0] : null;
+            else
+                _currentBibTexPath = Path.GetFullPath(currentFilePath);
+
+            if (string.IsNullOrWhiteSpace(_currentBibTexPath) == false)
+                Program.AppSettings.Data.LastBibTex = _currentBibTexPath;
+
             UpdateWindowTitle();
+        }
+
+        private void AddCurrentBibTexSources(IEnumerable<string> sourcePaths)
+        {
+            string[] normalizedSourcePaths = NormalizeBibTexSourcePaths(sourcePaths);
+            if (normalizedSourcePaths.Length == 0)
+                return;
+
+            string[] combinedSourcePaths = _currentBibTexSourcePaths
+                .Concat(normalizedSourcePaths)
+                .Where(path => string.IsNullOrWhiteSpace(path) == false)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            SetCurrentBibTexSources(combinedSourcePaths);
+        }
+
+        private string[] NormalizeBibTexSourcePaths(IEnumerable<string> sourcePaths)
+        {
+            return (sourcePaths ?? Array.Empty<string>())
+                .Where(path => string.IsNullOrWhiteSpace(path) == false)
+                .Select(path => Path.GetFullPath(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private string[] GetBibTexSourcePaths(string sourcePath, bool isFolderLoad)
+        {
+            if (string.IsNullOrWhiteSpace(sourcePath))
+                return Array.Empty<string>();
+
+            if (!isFolderLoad)
+                return NormalizeBibTexSourcePaths(new[] { sourcePath });
+
+            return Directory
+                .GetFiles(sourcePath, "*.bib", SearchOption.AllDirectories)
+                .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+        }
+
+        private string GetCurrentBibTexSessionTitle()
+        {
+            return string.Join(",",
+                _currentBibTexSourcePaths
+                    .Select(Path.GetFileName)
+                    .Where(fileName => string.IsNullOrWhiteSpace(fileName) == false));
+        }
+
+        private string GetCurrentBibTexSessionSaveName()
+        {
+            string[] nameParts = _currentBibTexSourcePaths
+                .Select(path => Path.GetFileNameWithoutExtension(path))
+                .Where(name => string.IsNullOrWhiteSpace(name) == false)
+                .Select(SanitizeFileNamePart)
+                .Where(name => string.IsNullOrWhiteSpace(name) == false)
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            if (nameParts.Length == 0)
+                return null;
+
+            return string.Join("_", nameParts);
+        }
+
+        private string SanitizeFileNamePart(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+                return null;
+
+            char[] invalidChars = Path.GetInvalidFileNameChars();
+            char[] sanitized = value
+                .Trim()
+                .Select(ch => invalidChars.Contains(ch) ? '_' : ch)
+                .ToArray();
+
+            string result = new string(sanitized).Trim();
+            return string.IsNullOrWhiteSpace(result) ? null : result;
         }
 
         private string GetDefaultPdfExportDirectory()
         {
-            string lastBibTex = Program.AppSettings.Data.LastBibTex;
-            if (string.IsNullOrWhiteSpace(lastBibTex) == false)
+            if (string.IsNullOrWhiteSpace(_currentBibTexPath) == false)
             {
-                string bibDirectory = Path.GetDirectoryName(lastBibTex);
+                string bibDirectory = Path.GetDirectoryName(_currentBibTexPath);
+                if (string.IsNullOrWhiteSpace(bibDirectory) == false)
+                    return bibDirectory;
+            }
+
+            if (_currentBibTexSourcePaths.Count > 0)
+            {
+                string bibDirectory = Path.GetDirectoryName(_currentBibTexSourcePaths[0]);
                 if (string.IsNullOrWhiteSpace(bibDirectory) == false)
                     return bibDirectory;
             }
@@ -55,11 +195,14 @@ namespace ScientificReviews.Forms
             if (entries.Count == 0)
                 return;
 
-            if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.PdfFolder) == false)
-                _ = StartAutoPairOperationAsync(true);
+            if (Program.AppSettings.Data.AutoPreprocessingMode == AutoPreprocessingMode.Off)
+                return;
 
-            if (string.IsNullOrWhiteSpace(Program.AppSettings.Data.JcrApiKey) == false)
-                _ = StartUpdateJcrOperationAsync(true);
+            _ = StartPreprocessingPipelineAsync(
+                Program.AppSettings.Data.AutoPreprocessingMode,
+                startedAutomatically: true,
+                operationKey: "auto-preprocessing",
+                operationName: "Auto-preprocessing");
         }
 
         private bool ConfirmReplaceCurrentArchive()
@@ -89,9 +232,11 @@ namespace ScientificReviews.Forms
 
             if (markChanged)
                 Changed();
+            else
+                SetDatabaseChanged(false);
         }
 
-        private async Task<bool> LoadBibTexFolderAsync(bool replaceExisting)
+        private async Task<bool> LoadBibTexFolderAsync(bool replaceExisting, bool runPostLoadPreprocessing = true)
         {
             using (FolderBrowserDialog folderDialog = new FolderBrowserDialog()
             {
@@ -108,42 +253,70 @@ namespace ScientificReviews.Forms
                 StatusStripOperationHandle operation = StartTrackedOperation(
                     "load-bibtex",
                     replaceExisting ? "Open folder" : "Add folder",
-                    folderDialog.SelectedPath);
+                    folderDialog.SelectedPath,
+                    cancelAction: null);
                 if (operation == null)
                     return false;
 
                 Program.AppSettings.Data.LastDirectory = folderDialog.SelectedPath;
-
-                try
+                ProcessLogScope log = BeginProcessLog(replaceExisting ? "Load BibTeX folder" : "Add BibTeX folder", folderDialog.SelectedPath);
+                using (CancellationTokenSource cancellation = new CancellationTokenSource())
                 {
-                    if (replaceExisting)
-                        ClearCurrentArchiveState(false);
+                    operation.RegisterCancellation(cancellation.Cancel);
 
-                    var progress = new Progress<BibtexLoadProgress>(update =>
+                    try
                     {
-                        operation.Report(update?.Summary, update?.Details, isIndeterminate: update?.IsIndeterminate);
-                    });
-                    BibtexLoadResult loadResult = await _bibtexLoadService.LoadFolderAsync(folderDialog.SelectedPath, progress);
-                    var loadedEntries = loadResult.Entries;
+                        if (replaceExisting)
+                            ClearCurrentArchiveState(false);
 
-                    SetCurrentBibTex(null);
-                    entries.AddRange(loadedEntries);
-                    LoadData(entries.ToArray());
-                    Changed();
+                        var progress = new Progress<BibtexLoadProgress>(update =>
+                        {
+                            operation.Report(update?.Summary, update?.Details, isIndeterminate: update?.IsIndeterminate);
+                            LogProcessProgress(log, update?.Summary, update?.Details);
+                        });
+                        BibtexLoadResult loadResult = await _bibtexLoadService.LoadFolderAsync(folderDialog.SelectedPath, progress, cancellation.Token);
+                        var loadedEntries = loadResult.Entries;
+                        string[] sourcePaths = GetBibTexSourcePaths(loadResult.SourcePath, loadResult.IsFolderLoad);
 
-                    operation.Complete($"Loaded {loadedEntries.Count} record(s).", folderDialog.SelectedPath);
-                    StartAutomaticBackgroundOperationsAfterLoad();
-                    return true;
-                }
-                catch (Exception ex)
-                {
-                    operation.Fail(ex, "Failed");
-                    throw;
+                        if (replaceExisting)
+                            SetCurrentBibTexSources(sourcePaths);
+                        else
+                            AddCurrentBibTexSources(sourcePaths);
+                        entries.AddRange(loadedEntries);
+                        LoadData(entries.ToArray());
+                        Changed(!replaceExisting);
+
+                        if (replaceExisting)
+                            SetDatabaseChanged(false);
+
+                        operation.Complete($"Loaded {loadedEntries.Count} record(s).", folderDialog.SelectedPath);
+                        log.Complete($"Loaded {loadedEntries.Count} record(s).");
+                        if (runPostLoadPreprocessing)
+                            StartAutomaticBackgroundOperationsAfterLoad();
+                        return true;
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        operation.Cancel("Cancelled", "Folder loading was stopped by user.");
+                        lblStatus.Text = "Folder load cancelled.";
+                        log.Complete("Folder load cancelled.");
+                        return false;
+                    }
+                    catch (Exception ex)
+                    {
+                        operation.Fail(ex, "Failed");
+                        log.Fail(ex, "Folder load failed.");
+                        throw;
+                    }
+                    finally
+                    {
+                        log.Dispose();
+                    }
                 }
             }
         }
 
-        private async Task<bool> LoadBibTexFileAsync(bool replaceExisting)
+        private async Task<bool> LoadBibTexFileAsync(bool replaceExisting, bool runPostLoadPreprocessing = true)
         {
             OpenFileDialog ofd = new OpenFileDialog()
             {
@@ -165,42 +338,76 @@ namespace ScientificReviews.Forms
             StatusStripOperationHandle operation = StartTrackedOperation(
                 "load-bibtex",
                 replaceExisting ? "Open file" : "Add file",
-                fileName);
+                fileName,
+                cancelAction: null);
             if (operation == null)
                 return false;
 
             Program.AppSettings.Data.LastDirectory = Path.GetDirectoryName(fileName);
-
-            try
+            ProcessLogScope log = BeginProcessLog(replaceExisting ? "Load BibTeX file" : "Add BibTeX file", fileName);
+            using (CancellationTokenSource cancellation = new CancellationTokenSource())
             {
-                if (replaceExisting)
-                    ClearCurrentArchiveState(false);
+                operation.RegisterCancellation(cancellation.Cancel);
 
-                var progress = new Progress<BibtexLoadProgress>(update =>
+                try
                 {
-                    operation.Report(update?.Summary, update?.Details, isIndeterminate: update?.IsIndeterminate);
-                });
-                BibtexLoadResult loadResult = await _bibtexLoadService.LoadFileAsync(fileName, progress);
-                var loadedEntries = loadResult.Entries;
+                    if (replaceExisting)
+                        ClearCurrentArchiveState(false);
 
-                SetCurrentBibTex(fileName);
-                entries.AddRange(loadedEntries);
-                LoadData(entries.ToArray());
-                Changed();
+                    var progress = new Progress<BibtexLoadProgress>(update =>
+                    {
+                        operation.Report(update?.Summary, update?.Details, isIndeterminate: update?.IsIndeterminate);
+                        LogProcessProgress(log, update?.Summary, update?.Details);
+                    });
+                    BibtexLoadResult loadResult = await _bibtexLoadService.LoadFileAsync(fileName, progress, cancellation.Token);
+                    var loadedEntries = loadResult.Entries;
+                    string[] sourcePaths = GetBibTexSourcePaths(loadResult.SourcePath, loadResult.IsFolderLoad);
 
-                operation.Complete($"Loaded {loadedEntries.Count} record(s).", fileName);
-                StartAutomaticBackgroundOperationsAfterLoad();
-                return true;
-            }
-            catch (Exception ex)
-            {
-                operation.Fail(ex, "Failed");
-                throw;
+                    if (replaceExisting)
+                        SetCurrentBibTexSources(sourcePaths, fileName);
+                    else
+                        AddCurrentBibTexSources(sourcePaths);
+                    entries.AddRange(loadedEntries);
+                    LoadData(entries.ToArray());
+                    Changed(!replaceExisting);
+
+                    if (replaceExisting)
+                        SetDatabaseChanged(false);
+
+                    operation.Complete($"Loaded {loadedEntries.Count} record(s).", fileName);
+                    log.Complete($"Loaded {loadedEntries.Count} record(s).");
+                    if (runPostLoadPreprocessing)
+                        StartAutomaticBackgroundOperationsAfterLoad();
+                    return true;
+                }
+                catch (OperationCanceledException)
+                {
+                    operation.Cancel("Cancelled", "File loading was stopped by user.");
+                    lblStatus.Text = "File load cancelled.";
+                    log.Complete("File load cancelled.");
+                    return false;
+                }
+                catch (Exception ex)
+                {
+                    operation.Fail(ex, "Failed");
+                    log.Fail(ex, "File load failed.");
+                    throw;
+                }
+                finally
+                {
+                    log.Dispose();
+                }
             }
         }
 
         private async void loadBibTexFolderToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (IsRawModeEnabled)
+            {
+                loadBibTexFolderRawToolStripMenuItem_Click(sender, e);
+                return;
+            }
+
             try
             {
                 bool loaded = await LoadBibTexFolderAsync(false);
@@ -213,8 +420,28 @@ namespace ScientificReviews.Forms
             }
         }
 
+        private async void loadBibTexFolderRawToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                bool loaded = await LoadBibTexFolderAsync(false, false);
+                if (loaded)
+                    lblStatus.Text = "Added folder as raw.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
         private async void loadBibTexFileToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (IsRawModeEnabled)
+            {
+                loadBibTexFileRawToolStripMenuItem_Click(sender, e);
+                return;
+            }
+
             try
             {
                 bool loaded = await LoadBibTexFileAsync(false);
@@ -227,8 +454,28 @@ namespace ScientificReviews.Forms
             }
         }
 
+        private async void loadBibTexFileRawToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                bool loaded = await LoadBibTexFileAsync(false, false);
+                if (loaded)
+                    lblStatus.Text = "Added file as raw.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
         private async void loadReplaceBibTexFileToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (IsRawModeEnabled)
+            {
+                loadReplaceBibTexFileRawToolStripMenuItem_Click(sender, e);
+                return;
+            }
+
             try
             {
                 bool loaded = await LoadBibTexFileAsync(true);
@@ -243,11 +490,45 @@ namespace ScientificReviews.Forms
 
         private async void loadReplaceBibTexFolderToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (IsRawModeEnabled)
+            {
+                loadReplaceBibTexFolderRawToolStripMenuItem_Click(sender, e);
+                return;
+            }
+
             try
             {
                 bool loaded = await LoadBibTexFolderAsync(true);
                 if (loaded)
                     lblStatus.Text = "Loaded folder as a new archive.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
+        private async void loadReplaceBibTexFileRawToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                bool loaded = await LoadBibTexFileAsync(true, false);
+                if (loaded)
+                    lblStatus.Text = "Loaded file as a raw archive.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
+        private async void loadReplaceBibTexFolderRawToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            try
+            {
+                bool loaded = await LoadBibTexFolderAsync(true, false);
+                if (loaded)
+                    lblStatus.Text = "Loaded folder as a raw archive.";
             }
             catch (Exception ex)
             {
@@ -275,6 +556,22 @@ namespace ScientificReviews.Forms
         private void clearToolStripMenuItem_Click(object sender, EventArgs e)
         {
             ClearCurrentArchiveState(true);
+        }
+
+        private void rawModeToolStripMenuItem_CheckedChanged(object sender, EventArgs e)
+        {
+            if (_isInitializingRawModeUi)
+                return;
+
+            DefaultOpenAddMode = rawModeToolStripMenuItem.Checked
+                ? OpenAddMode.Raw
+                : OpenAddMode.Normal;
+
+            string statusMessage = rawModeToolStripMenuItem.Checked
+                ? "Raw Mode enabled."
+                : "Normal open/add mode enabled.";
+
+            lblStatus.Text = statusMessage;
         }
     }
 }

@@ -1,10 +1,13 @@
 using ScientificReviews.Bibtex;
 using ScientificReviews.Forms;
+using ScientificReviews.Logs;
+using iText.Kernel.Pdf;
 using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
@@ -14,11 +17,22 @@ namespace ScientificReviews.Helpers
 {
     public sealed class PdfExportService
     {
+        private const int MaxDestinationPathLength = 240;
+        private const int MaxFileNameLength = 120;
+
+        private sealed class MetadataInjectionResult
+        {
+            public bool Injected { get; set; }
+            public string ErrorMessage { get; set; }
+        }
+
         private sealed class PdfExportJob
         {
+            public string EntryKey { get; set; }
             public string SourcePdfPath { get; set; }
             public string DestinationPath { get; set; }
             public string Doi { get; set; }
+            public string Eprint { get; set; }
             public bool InjectDoiMetadata { get; set; }
         }
 
@@ -45,14 +59,29 @@ namespace ScientificReviews.Helpers
                 int completed = 0;
                 int exported = 0;
                 int skipped = 0;
+                int errors = 0;
                 int injected = 0;
+                string lastErrorMessage = null;
                 string exportDirectory = options.PackToFolder
                     ? Path.Combine(options.OutputDirectory, "export")
                     : options.OutputDirectory;
+                string metadataTempDirectory = Path.Combine(exportDirectory, "_metadata_tmp_" + Guid.NewGuid().ToString("N"));
+                string metadataInjectionAvailabilityError = null;
+                bool canInjectPdfMetadata = options.InjectDoiMetadata && IsITextMetadataInjectionAvailable(out metadataInjectionAvailabilityError);
 
                 try
                 {
                     Directory.CreateDirectory(exportDirectory);
+                    if (canInjectPdfMetadata)
+                        Directory.CreateDirectory(metadataTempDirectory);
+
+                    if (options.InjectDoiMetadata && !canInjectPdfMetadata)
+                    {
+                        string warningMessage = "PDF metadata injection is unavailable. Install/restore iText Bouncy Castle adapter. " + metadataInjectionAvailabilityError;
+                        LogExportDetail("<global>", "ERROR", warningMessage);
+                        lastErrorMessage = warningMessage;
+                        errors++;
+                    }
 
                     string[] pdfFiles = pdfMatchingService.GetPdfFiles(pdfMatchingOptions);
                     var jobs = new List<PdfExportJob>();
@@ -75,6 +104,19 @@ namespace ScientificReviews.Helpers
                         string sourcePdf = pdfMatchingService.FindPdfFile(entry, pdfMatchingOptions, pdfFiles);
                         if (string.IsNullOrWhiteSpace(sourcePdf))
                         {
+                            LogExportDetail(entry, "SKIP", "No valid source PDF was found for this record.");
+                            int finishedSkipped = Interlocked.Increment(ref skipped);
+                            int finishedCount = Interlocked.Increment(ref completed);
+                            ReportProgress(progress, total, finishedCount, exported, finishedSkipped, injected, $"Preparing export... {finishedCount}/{total}");
+                            continue;
+                        }
+
+                        if (!File.Exists(sourcePdf))
+                        {
+                            string sourceError = $"Source PDF path is invalid or unavailable: {sourcePdf}";
+                            LogExportDetail(entry, "ERROR", sourceError);
+                            lastErrorMessage = sourceError;
+                            Interlocked.Increment(ref errors);
                             int finishedSkipped = Interlocked.Increment(ref skipped);
                             int finishedCount = Interlocked.Increment(ref completed);
                             ReportProgress(progress, total, finishedCount, exported, finishedSkipped, injected, $"Preparing export... {finishedCount}/{total}");
@@ -82,12 +124,28 @@ namespace ScientificReviews.Helpers
                         }
 
                         string baseFileName = BuildExportPdfBaseName(entry, options.FileNameMode, options.CustomPattern);
-                        string destination = BuildReservedExportDestinationPath(exportDirectory, baseFileName, sourcePdf, reservedDestinations);
+                        string destination;
+                        string destinationError;
+                        if (!TryBuildReservedExportDestinationPath(exportDirectory, baseFileName, sourcePdf, reservedDestinations, out destination, out destinationError))
+                        {
+                            string fullError = $"Cannot prepare destination path. {destinationError}";
+                            LogExportDetail(entry, "ERROR", fullError);
+                            lastErrorMessage = fullError;
+                            Interlocked.Increment(ref errors);
+                            int finishedSkipped = Interlocked.Increment(ref skipped);
+                            int finishedCount = Interlocked.Increment(ref completed);
+                            ReportProgress(progress, total, finishedCount, exported, finishedSkipped, injected, $"Preparing export... {finishedCount}/{total}");
+                            continue;
+                        }
+
+                        LogExportDetail(entry, "JOB", $"Prepared export job | source={sourcePdf} | destination={destination}");
                         jobs.Add(new PdfExportJob
                         {
+                            EntryKey = entry?.Key,
                             SourcePdfPath = sourcePdf,
                             DestinationPath = destination,
                             Doi = BibtexTagService.GetTagValueIgnoreCase(entry, "doi"),
+                            Eprint = BibtexTagService.GetTagValueIgnoreCase(entry, "eprint"),
                             InjectDoiMetadata = options.InjectDoiMetadata
                         });
                     }
@@ -96,23 +154,52 @@ namespace ScientificReviews.Helpers
                     {
                         cancellationToken.ThrowIfCancellationRequested();
 
-                        bool isSameFile = string.Equals(
-                            Path.GetFullPath(job.SourcePdfPath),
-                            Path.GetFullPath(job.DestinationPath),
-                            StringComparison.OrdinalIgnoreCase);
-
-                        if (isSameFile == false)
-                            File.Copy(job.SourcePdfPath, job.DestinationPath, false);
-
-                        if (job.InjectDoiMetadata && string.IsNullOrWhiteSpace(job.Doi) == false)
+                        try
                         {
-                            InjectDoiIntoPdfMetadata(job.DestinationPath, job.Doi);
-                            Interlocked.Increment(ref injected);
-                        }
+                            bool isSameFile = string.Equals(
+                                Path.GetFullPath(job.SourcePdfPath),
+                                Path.GetFullPath(job.DestinationPath),
+                                StringComparison.OrdinalIgnoreCase);
 
-                        int finishedExported = Interlocked.Increment(ref exported);
-                        int finishedCount = Interlocked.Increment(ref completed);
-                        ReportProgress(progress, total, finishedCount, finishedExported, skipped, injected, $"Exporting PDFs... {finishedCount}/{total}");
+                            if (isSameFile == false)
+                            {
+                                string destinationDirectory = Path.GetDirectoryName(job.DestinationPath);
+                                if (string.IsNullOrWhiteSpace(destinationDirectory))
+                                    throw new DirectoryNotFoundException("Destination directory could not be determined.");
+
+                                Directory.CreateDirectory(destinationDirectory);
+                                File.Copy(job.SourcePdfPath, job.DestinationPath, false);
+                            }
+
+                            if (job.InjectDoiMetadata && canInjectPdfMetadata)
+                            {
+                                MetadataInjectionResult metadataResult = InjectIdentifiersIntoPdfMetadata(job.DestinationPath, job.Doi, job.Eprint, metadataTempDirectory);
+                                if (metadataResult.Injected)
+                                    Interlocked.Increment(ref injected);
+                                else if (string.IsNullOrWhiteSpace(metadataResult.ErrorMessage) == false)
+                                {
+                                    string warningMessage = $"Metadata injection failed but exported PDF was kept. {metadataResult.ErrorMessage}";
+                                    LogExportDetail(job.EntryKey, "ERROR", warningMessage);
+                                    Interlocked.Exchange(ref lastErrorMessage, warningMessage);
+                                    Interlocked.Increment(ref errors);
+                                }
+                            }
+
+                            LogExportDetail(job.EntryKey, "OK", $"Exported to {job.DestinationPath}");
+                            int finishedExported = Interlocked.Increment(ref exported);
+                            int finishedCount = Interlocked.Increment(ref completed);
+                            ReportProgress(progress, total, finishedCount, finishedExported, skipped, injected, $"Exporting PDFs... {finishedCount}/{total}");
+                        }
+                        catch (Exception ex)
+                        {
+                            string errorMessage = $"{ex.GetType().Name}: {ex.Message} | source={job.SourcePdfPath} | destination={job.DestinationPath}";
+                            LogExportDetail(job.EntryKey, "ERROR", errorMessage);
+                            Interlocked.Exchange(ref lastErrorMessage, errorMessage);
+                            Interlocked.Increment(ref errors);
+                            int finishedSkipped = Interlocked.Increment(ref skipped);
+                            int finishedCount = Interlocked.Increment(ref completed);
+                            ReportProgress(progress, total, finishedCount, exported, finishedSkipped, injected, $"Exporting PDFs... {finishedCount}/{total}");
+                        }
                     });
 
                     return new ExportPdfsRunResult
@@ -121,8 +208,10 @@ namespace ScientificReviews.Helpers
                         Completed = completed,
                         Exported = exported,
                         Skipped = skipped,
+                        Errors = errors,
                         Injected = injected,
-                        Cancelled = false
+                        Cancelled = false,
+                        LastErrorMessage = lastErrorMessage
                     };
                 }
                 catch (OperationCanceledException)
@@ -133,9 +222,15 @@ namespace ScientificReviews.Helpers
                         Completed = completed,
                         Exported = exported,
                         Skipped = skipped,
+                        Errors = errors,
                         Injected = injected,
-                        Cancelled = true
+                        Cancelled = true,
+                        LastErrorMessage = lastErrorMessage
                     };
+                }
+                finally
+                {
+                    TryDeleteDirectory(metadataTempDirectory);
                 }
             }, cancellationToken);
         }
@@ -223,15 +318,41 @@ namespace ScientificReviews.Helpers
             return sanitized;
         }
 
-        private string BuildReservedExportDestinationPath(string outputDirectory, string baseFileName, string sourcePdfPath, HashSet<string> reservedDestinations)
+        private bool TryBuildReservedExportDestinationPath(string outputDirectory, string baseFileName, string sourcePdfPath, HashSet<string> reservedDestinations, out string destinationPath, out string errorMessage)
         {
+            destinationPath = null;
+            errorMessage = null;
             string sourceFullPath = Path.GetFullPath(sourcePdfPath);
 
             for (int index = 1; ; index++)
             {
-                string candidateFileName = index == 1 ? baseFileName + ".pdf" : $"{baseFileName}_{index}.pdf";
+                string suffix = index == 1 ? string.Empty : "_" + index.ToString(CultureInfo.InvariantCulture);
+                string effectiveBaseName = TrimBaseFileNameForPath(baseFileName, outputDirectory, suffix);
+                if (string.IsNullOrWhiteSpace(effectiveBaseName))
+                    effectiveBaseName = "record";
+
+                string candidateFileName = effectiveBaseName + suffix + ".pdf";
                 string candidate = Path.Combine(outputDirectory, candidateFileName);
-                string candidateFullPath = Path.GetFullPath(candidate);
+                string candidateFullPath;
+
+                try
+                {
+                    candidateFullPath = Path.GetFullPath(candidate);
+                }
+                catch (Exception ex)
+                {
+                    errorMessage = ex.Message;
+                    return false;
+                }
+
+                if (candidateFullPath.Length > MaxDestinationPathLength)
+                {
+                    if (index == 1 && effectiveBaseName.Length > 10)
+                        continue;
+
+                    errorMessage = $"Destination path is too long: {candidateFullPath}";
+                    return false;
+                }
 
                 bool isSameFile = string.Equals(candidateFullPath, sourceFullPath, StringComparison.OrdinalIgnoreCase);
                 bool exists = File.Exists(candidateFullPath);
@@ -240,73 +361,187 @@ namespace ScientificReviews.Helpers
                 if ((isSameFile || exists == false) && alreadyReserved == false)
                 {
                     reservedDestinations.Add(candidateFullPath);
-                    return candidateFullPath;
+                    destinationPath = candidateFullPath;
+                    return true;
                 }
             }
         }
 
-        private void InjectDoiIntoPdfMetadata(string fileName, string doi)
+        private string TrimBaseFileNameForPath(string baseFileName, string outputDirectory, string suffix)
         {
-            if (string.IsNullOrWhiteSpace(fileName) || string.IsNullOrWhiteSpace(doi))
-                return;
+            string safeBaseName = string.IsNullOrWhiteSpace(baseFileName) ? "record" : baseFileName.Trim();
+            safeBaseName = safeBaseName.Trim(' ', '.', '_', '-');
+            if (string.IsNullOrWhiteSpace(safeBaseName))
+                safeBaseName = "record";
 
-            byte[] originalBytes = File.ReadAllBytes(fileName);
-            Encoding encoding = Encoding.GetEncoding("ISO-8859-1");
-            string pdfText = encoding.GetString(originalBytes);
+            if (safeBaseName.Length > MaxFileNameLength)
+                safeBaseName = safeBaseName.Substring(0, MaxFileNameLength).TrimEnd(' ', '.', '_', '-');
 
-            Match trailerMatch = Regex.Matches(pdfText, @"trailer\s*<<(?<dict>.*?)>>\s*startxref\s*(?<xref>\d+)", RegexOptions.Singleline | RegexOptions.IgnoreCase)
-                .Cast<Match>()
-                .LastOrDefault();
-            if (trailerMatch == null)
-                return;
+            int available = MaxDestinationPathLength - outputDirectory.Length - suffix.Length - ".pdf".Length - 1;
+            if (available <= 0)
+                return "record";
 
-            string trailerDict = trailerMatch.Groups["dict"].Value;
-            int prevXref = int.Parse(trailerMatch.Groups["xref"].Value, CultureInfo.InvariantCulture);
+            if (safeBaseName.Length > available)
+                safeBaseName = safeBaseName.Substring(0, available).TrimEnd(' ', '.', '_', '-');
 
-            Match rootMatch = Regex.Match(trailerDict, @"/Root\s+(?<root>\d+\s+\d+\s+R)", RegexOptions.IgnoreCase);
-            Match sizeMatch = Regex.Match(trailerDict, @"/Size\s+(?<size>\d+)", RegexOptions.IgnoreCase);
-            Match infoMatch = Regex.Match(trailerDict, @"/Info\s+(?<info>\d+)\s+\d+\s+R", RegexOptions.IgnoreCase);
-            Match idMatch = Regex.Match(trailerDict, @"/ID\s*\[[^\]]+\]", RegexOptions.IgnoreCase);
-
-            if (rootMatch.Success == false || sizeMatch.Success == false)
-                return;
-
-            int newObjectNumber = int.Parse(sizeMatch.Groups["size"].Value, CultureInfo.InvariantCulture);
-            string existingInfoBody = string.Empty;
-            if (infoMatch.Success)
-            {
-                int infoObjectNumber = int.Parse(infoMatch.Groups["info"].Value, CultureInfo.InvariantCulture);
-                Match infoObjectMatch = Regex.Match(pdfText, $@"(?s)\b{infoObjectNumber}\s+0\s+obj\s*<<(.*?)>>\s*endobj");
-                if (infoObjectMatch.Success)
-                    existingInfoBody = infoObjectMatch.Groups[1].Value;
-            }
-
-            existingInfoBody = Regex.Replace(existingInfoBody, @"(?is)/DOI\s*(\((?:\\.|[^\\)])*\)|<[^>]*>)", string.Empty).Trim();
-
-            string escapedDoi = EscapePdfLiteralString(doi.Trim());
-            string infoObject = $"{newObjectNumber} 0 obj\n<<\n{existingInfoBody}\n/DOI ({escapedDoi})\n>>\nendobj\n";
-            int objectOffset = originalBytes.Length;
-            string xref = $"xref\n{newObjectNumber} 1\n{objectOffset:D10} 00000 n \n";
-            int xrefOffset = objectOffset + encoding.GetByteCount(infoObject);
-
-            string trailer = $"trailer\n<< /Size {newObjectNumber + 1} /Root {rootMatch.Groups["root"].Value} /Info {newObjectNumber} 0 R";
-            if (idMatch.Success)
-                trailer += " " + idMatch.Value;
-
-            trailer += $" /Prev {prevXref} >>\nstartxref\n{xrefOffset}\n%%EOF";
-
-            byte[] appendedBytes = encoding.GetBytes(infoObject + xref + trailer);
-            File.WriteAllBytes(fileName, originalBytes.Concat(appendedBytes).ToArray());
+            return string.IsNullOrWhiteSpace(safeBaseName) ? "record" : safeBaseName;
         }
 
-        private string EscapePdfLiteralString(string value)
+        private void LogExportDetail(BibtexEntry entry, string stage, string message)
         {
-            return (value ?? string.Empty)
-                .Replace("\\", "\\\\")
-                .Replace("(", "\\(")
-                .Replace(")", "\\)")
-                .Replace("\r", "\\r")
-                .Replace("\n", "\\n");
+            string key = entry?.Key;
+            LogExportDetail(key, stage, message);
+        }
+
+        private void LogExportDetail(string entryKey, string stage, string message)
+        {
+            string safeStage = string.IsNullOrWhiteSpace(stage) ? "INFO" : stage.Trim();
+            string safeKey = string.IsNullOrWhiteSpace(entryKey) ? "<no-key>" : entryKey.Trim();
+            string safeMessage = string.IsNullOrWhiteSpace(message) ? "-" : message.Trim();
+            AppLog.Log($"[Export PDFs detail][{safeStage}][{safeKey}] {safeMessage}", stage == "ERROR" ? AppLog.MessageType.Error : AppLog.MessageType.Info);
+        }
+
+        private MetadataInjectionResult InjectIdentifiersIntoPdfMetadata(string fileName, string doi, string eprint, string metadataTempDirectory)
+        {
+            if (string.IsNullOrWhiteSpace(fileName))
+                return new MetadataInjectionResult();
+
+            string normalizedDoi = string.IsNullOrWhiteSpace(doi) ? null : doi.Trim();
+            string normalizedEprint = string.IsNullOrWhiteSpace(eprint) ? null : eprint.Trim();
+            if (string.IsNullOrWhiteSpace(normalizedDoi) && string.IsNullOrWhiteSpace(normalizedEprint))
+                return new MetadataInjectionResult();
+
+            string tempDirectory = string.IsNullOrWhiteSpace(metadataTempDirectory)
+                ? (Path.GetDirectoryName(fileName) ?? string.Empty)
+                : metadataTempDirectory;
+            Directory.CreateDirectory(tempDirectory);
+
+            string tempFileName = Path.Combine(
+                tempDirectory,
+                Path.GetFileNameWithoutExtension(fileName) + ".metadata_tmp_" + Guid.NewGuid().ToString("N") + Path.GetExtension(fileName));
+
+            try
+            {
+                using (PdfReader reader = new PdfReader(fileName))
+                using (PdfWriter writer = new PdfWriter(tempFileName))
+                using (PdfDocument pdfDocument = new PdfDocument(reader, writer))
+                {
+                    PdfDocumentInfo info = pdfDocument.GetDocumentInfo();
+
+                    if (string.IsNullOrWhiteSpace(normalizedDoi) == false)
+                        info.SetMoreInfo("DOI", normalizedDoi);
+
+                    if (string.IsNullOrWhiteSpace(normalizedEprint) == false)
+                        info.SetMoreInfo("eprint", normalizedEprint);
+                }
+
+                File.Copy(tempFileName, fileName, true);
+                return new MetadataInjectionResult
+                {
+                    Injected = true
+                };
+            }
+            catch (Exception ex)
+            {
+                Exception baseException = ex.GetBaseException() ?? ex;
+                return new MetadataInjectionResult
+                {
+                    Injected = false,
+                    ErrorMessage = $"{baseException.GetType().Name}: {baseException.Message} | file={fileName}"
+                };
+            }
+            finally
+            {
+                TryDeleteFile(tempFileName);
+            }
+        }
+
+        private void TryDeleteFile(string fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName) || File.Exists(fileName) == false)
+                return;
+
+            for (int attempt = 0; attempt < 5; attempt++)
+            {
+                try
+                {
+                    File.Delete(fileName);
+                    return;
+                }
+                catch
+                {
+                    Thread.Sleep(100);
+                }
+            }
+        }
+
+        private void TryDeleteDirectory(string directoryPath)
+        {
+            if (string.IsNullOrWhiteSpace(directoryPath) || Directory.Exists(directoryPath) == false)
+                return;
+
+            for (int attempt = 0; attempt < 5; attempt++)
+            {
+                try
+                {
+                    foreach (string file in Directory.GetFiles(directoryPath, "*", SearchOption.AllDirectories))
+                    {
+                        try
+                        {
+                            File.SetAttributes(file, FileAttributes.Normal);
+                        }
+                        catch
+                        {
+                        }
+                    }
+
+                    foreach (string subDirectory in Directory.GetDirectories(directoryPath, "*", SearchOption.AllDirectories)
+                        .OrderByDescending(path => path.Length))
+                    {
+                        try
+                        {
+                            Directory.Delete(subDirectory, true);
+                        }
+                        catch
+                        {
+                        }
+                    }
+
+                    Directory.Delete(directoryPath, true);
+                    return;
+                }
+                catch
+                {
+                    Thread.Sleep(150);
+                }
+            }
+        }
+
+        private bool IsITextMetadataInjectionAvailable(out string errorMessage)
+        {
+            errorMessage = null;
+
+            try
+            {
+                Assembly.Load("BouncyCastle.Cryptography");
+                Assembly.Load("itext.bouncy-castle-adapter");
+                return true;
+            }
+            catch
+            {
+            }
+
+            try
+            {
+                Assembly.Load("itext.bouncy-castle-fips-adapter");
+                return true;
+            }
+            catch
+            {
+            }
+
+            errorMessage = "Missing assembly 'BouncyCastle.Cryptography' and/or 'itext.bouncy-castle-adapter' (or FIPS alternative).";
+            return false;
         }
     }
 }

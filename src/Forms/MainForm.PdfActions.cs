@@ -1,10 +1,11 @@
 using ScientificReviews.Bibtex;
 using ScientificReviews.Helpers;
+using ScientificReviews.Logs;
+using ScientificReviews.Reports;
 using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
@@ -36,43 +37,30 @@ namespace ScientificReviews.Forms
                 .FirstOrDefault(t => string.Equals(t.Key, "doi", StringComparison.OrdinalIgnoreCase));
 
             if (doiTag == null || string.IsNullOrWhiteSpace(doiTag.Value))
+            {
+                lblStatus.Text = "Record does not contain DOI. Opened in Google search.";
+                SearchEntryTitleOnGoogle(entry);
                 return;
+            }
 
             string doiValue = doiTag.Value.Trim();
-            string normalizedDoi = NormalizeDoi(doiValue);
+            string normalizedDoi = DoiNormalizationHelper.NormalizeDoiValue(doiValue);
+            DoiValueKind doiKind = DoiNormalizationHelper.GetDoiValueKind(normalizedDoi);
 
-            if (IsClassicDoi(normalizedDoi))
+            if (doiKind == DoiValueKind.Classic || doiKind == DoiValueKind.Arxiv)
             {
                 OpenUrl($"https://doi.org/{Uri.EscapeDataString(normalizedDoi)}");
                 return;
             }
 
-            if (IsArxivIdentifier(normalizedDoi))
-            {
-                OpenUrl($"https://arxiv.org/pdf/{Uri.EscapeDataString(normalizedDoi)}");
-                return;
-            }
-
             MessageBox.Show(
-                "Unsupported DOI format. The DOI will be opened using Google search.",
+                "Unsupported DOI format. The record will be opened using Google search.",
                 Program.APP_NAME,
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Warning);
 
             lblStatus.Text = "Unsupported DOI format. Opened in Google search.";
             OpenUrl(BuildGoogleSearchUrl(doiValue));
-        }
-
-        private bool IsClassicDoi(string doi)
-        {
-            return string.IsNullOrWhiteSpace(doi) == false &&
-                Regex.IsMatch(doi, @"^10\.\d{4,9}/\S+$", RegexOptions.IgnoreCase);
-        }
-
-        private bool IsArxivIdentifier(string doi)
-        {
-            return string.IsNullOrWhiteSpace(doi) == false &&
-                Regex.IsMatch(doi, @"^\d{4}\.\d{4,5}(v\d+)?$", RegexOptions.IgnoreCase);
         }
 
         private string BuildGoogleSearchUrl(string query)
@@ -111,20 +99,6 @@ namespace ScientificReviews.Forms
         private string[] GetPdfFiles()
         {
             return _pdfMatchingService.GetPdfFiles(CreatePdfMatchingOptions());
-        }
-
-        private string NormalizeDoi(string doi)
-        {
-            if (string.IsNullOrWhiteSpace(doi))
-                return null;
-
-            string normalized = doi.Trim();
-            normalized = Regex.Replace(normalized, @"^https?://(dx\.)?doi\.org/", string.Empty, RegexOptions.IgnoreCase);
-            normalized = Regex.Replace(normalized, @"^doi:\s*", string.Empty, RegexOptions.IgnoreCase);
-            normalized = Regex.Replace(normalized, @"^arxiv:\s*", string.Empty, RegexOptions.IgnoreCase);
-            normalized = normalized.Trim().TrimEnd('/', '.', ',', ';');
-
-            return normalized.ToLowerInvariant();
         }
 
         private void AssignPdfToEntry(BibtexEntry entry, string pdfFilePath)
@@ -182,6 +156,92 @@ namespace ScientificReviews.Forms
             }
         }
 
+        private void rebindPdfToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            RebindPdfForCurrentEntry();
+        }
+
+        private void unbindPdfToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            UnbindPdfForCurrentEntry();
+        }
+
+        private async void tryAutopairThePDFToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            await TryAutoPairPdfForSelectedRecordsAsync();
+        }
+
+        private bool HasPdfTag(BibtexEntry entry)
+        {
+            string hasPdfValue = BibtexTagService.GetTagValueIgnoreCase(entry, "has_pdf");
+            if (string.IsNullOrWhiteSpace(hasPdfValue))
+                return false;
+
+            string normalized = hasPdfValue.Trim();
+            return string.Equals(normalized, "yes", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "true", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, "1", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void UpdatePdfActionUi()
+        {
+            BibtexEntry currentEntry = GetCurrentEntry();
+            bool hasCurrentEntry = currentEntry != null;
+            bool canUnbindPdf = HasPdfTag(currentEntry);
+
+            pdfActionsToolStripMenuItem.Enabled = hasCurrentEntry;
+            tryAutopairThePDFToolStripMenuItem.Enabled = hasCurrentEntry;
+            rebindPdfToolStripMenuItem.Enabled = hasCurrentEntry;
+            unbindPdfToolStripMenuItem.Enabled = canUnbindPdf;
+        }
+
+        private void RebindPdfForCurrentEntry()
+        {
+            try
+            {
+                BibtexEntry entry = GetCurrentEntry();
+                if (entry == null)
+                {
+                    lblStatus.Text = "No current record selected.";
+                    return;
+                }
+
+                PromptManualPdfPair(entry, true);
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
+        private void UnbindPdfForCurrentEntry()
+        {
+            try
+            {
+                BibtexEntry entry = GetCurrentEntry();
+                if (entry == null)
+                {
+                    lblStatus.Text = "No current record selected.";
+                    return;
+                }
+
+                if (!HasPdfTag(entry))
+                {
+                    lblStatus.Text = "Current record has no PDF to unbind.";
+                    return;
+                }
+
+                ClearPdfAssignment(entry);
+                RefreshGrid(new[] { entry });
+                Changed();
+                lblStatus.Text = "PDF unbound.";
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = ex.Message;
+            }
+        }
+
         private BibtexEntry[] GetSelected()
         {
             if (dataGridView1.SelectedRows.Count == 0)
@@ -220,7 +280,7 @@ namespace ScientificReviews.Forms
 
         private async void exportSelectedToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            await ExportDatabaseAsync(GetSelected());
+            await ShowExportDialogAsync(DatabaseExportScope.Selected, DatabaseExportFormat.Bib);
         }
 
         private async void autoPairWithPdfsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -228,44 +288,124 @@ namespace ScientificReviews.Forms
             await StartAutoPairOperationAsync(false);
         }
 
-        private async Task StartAutoPairOperationAsync(bool startedAutomatically)
+        private async Task TryAutoPairPdfForSelectedRecordsAsync(CancellationToken externalCancellationToken = default(CancellationToken))
         {
-            StatusStripOperationHandle operation = StartTrackedOperation(
+            BibtexEntry[] targetEntries = GetSelectedEntriesOrCurrent();
+            if (targetEntries == null || targetEntries.Length == 0)
+            {
+                lblStatus.Text = "No current record selected.";
+                return;
+            }
+
+            await StartAutoPairOperationAsync(
+                targetEntries,
+                "auto-pair-selected-pdfs",
+                "Try autopair the PDF",
+                $"Selected record(s): {targetEntries.Length}",
+                false,
+                externalCancellationToken);
+        }
+
+        private async Task StartAutoPairOperationAsync(bool startedAutomatically, CancellationToken externalCancellationToken = default(CancellationToken))
+        {
+            await StartAutoPairOperationAsync(
+                entries.ToArray(),
                 "auto-pair-pdfs",
                 "Auto-pair PDFs",
                 Program.AppSettings.Data.PdfFolder,
+                startedAutomatically,
+                externalCancellationToken);
+        }
+
+        private async Task StartAutoPairOperationAsync(
+            IEnumerable<BibtexEntry> sourceEntries,
+            string operationKey,
+            string operationName,
+            string operationDetails,
+            bool startedAutomatically,
+            CancellationToken externalCancellationToken = default(CancellationToken))
+        {
+            BibtexEntry[] targetEntries = sourceEntries as BibtexEntry[] ?? sourceEntries?.Where(entry => entry != null).ToArray() ?? Array.Empty<BibtexEntry>();
+            if (targetEntries.Length == 0)
+            {
+                if (!startedAutomatically)
+                    lblStatus.Text = "No records available for PDF auto-pair.";
+                return;
+            }
+
+            StatusStripOperationHandle operation = StartTrackedOperation(
+                operationKey,
+                operationName,
+                operationDetails,
                 startedAutomatically);
             if (operation == null)
                 return;
 
-            try
+            ProcessLogScope log = BeginProcessLog(operationName, operationDetails);
+            EntryChangeSnapshot changeSnapshot = null;
+            using (CancellationTokenSource cancellation = CancellationTokenSource.CreateLinkedTokenSource(externalCancellationToken))
             {
-                lblStatus.Text = $"Auto-pairing PDFs using {GetConfiguredThreadCount()} thread(s)...";
-                PdfAutoPairResult result = await RunAutoPairAsync(operation);
+                operation.RegisterCancellation(cancellation.Cancel);
 
-                LoadData(entries.ToArray(), txtSearch.Text);
-                Changed();
-
-                if (result.NoPdfsFound)
+                try
                 {
-                    operation.Complete("No PDFs found.", Program.AppSettings.Data.PdfFolder);
-                    lblStatus.Text = "No PDFs found in Pdf Folder.";
-                    return;
-                }
+                    lblStatus.Text = $"{operationName} using {GetConfiguredThreadCount()} thread(s)...";
+                    changeSnapshot = CaptureEntryChanges(targetEntries);
+                    PdfAutoPairResult result = await RunAutoPairAsync(targetEntries, operation, cancellation.Token);
+                    EntryChangeReport changeReport = BuildEntryChangeReport(changeSnapshot, targetEntries);
 
-                string summary = $"Direct {result.DirectMatches}, smart {result.SmartMatches}, unmatched {result.Unmatched}";
-                operation.Complete(summary, Program.AppSettings.Data.PdfFolder);
-                lblStatus.Text = $"Auto-pair finished using {GetConfiguredThreadCount()} thread(s). Direct: {result.DirectMatches}, smart: {result.SmartMatches}, unmatched: {result.Unmatched}.";
-            }
-            catch (Exception ex)
-            {
-                operation.Fail(ex, "Failed");
-                lblStatus.Text = ex.Message;
+                    if (result.NoPdfsFound)
+                    {
+                        string details = result.RecommendRecursiveSearch
+                            ? "No PDFs were found. Consider enabling Recursive PDF search in Settings."
+                            : "No PDFs were found in the configured PDF source folder.";
+
+                        operation.Complete("No PDFs found.", details);
+                        lblStatus.Text = details;
+                        log.Complete(details);
+                        PublishReport(operationName, "No PDFs found.", details, OperationReportSeverity.Warning, changeReport);
+                        return;
+                    }
+
+                    RefreshGrid(targetEntries);
+                    if (changeReport != null && changeReport.HasChanges)
+                        Changed();
+
+                    string summary = $"Direct {result.DirectMatches}, smart {result.SmartMatches}, unmatched {result.Unmatched}";
+                    operation.Complete(summary, operationDetails);
+                    lblStatus.Text = $"{operationName} finished using {GetConfiguredThreadCount()} thread(s). Direct: {result.DirectMatches}, smart: {result.SmartMatches}, unmatched: {result.Unmatched}.";
+                    log.Complete(summary);
+                    PublishReport(
+                        operationName,
+                        summary,
+                        $"PDF folder: {Program.AppSettings.Data.PdfFolder}{Environment.NewLine}Records: {targetEntries.Length}",
+                        result.Unmatched > 0 ? OperationReportSeverity.Warning : OperationReportSeverity.Info,
+                        changeReport);
+                }
+                catch (OperationCanceledException)
+                {
+                    operation.Cancel("Cancelled", "Auto-pair was stopped by user.");
+                    lblStatus.Text = $"{operationName} cancelled.";
+                    log.Complete($"{operationName} cancelled.");
+                    PublishReport(operationName, $"{operationName} cancelled.", null, OperationReportSeverity.Warning);
+                }
+                catch (Exception ex)
+                {
+                    operation.Fail(ex, "Failed");
+                    lblStatus.Text = ex.Message;
+                    log.Fail(ex, $"{operationName} failed.");
+                    PublishReport(operationName, $"{operationName} failed.", ex.Message, OperationReportSeverity.Error);
+                }
+                finally
+                {
+                    log.Dispose();
+                }
             }
         }
 
-        private Task<PdfAutoPairResult> RunAutoPairAsync(StatusStripOperationHandle operation)
+        private async Task<PdfAutoPairResult> RunAutoPairAsync(BibtexEntry[] targetEntries, StatusStripOperationHandle operation, CancellationToken cancellationToken)
         {
+            ProcessLogScope log = BeginProcessLog("Auto-pair PDFs inner", Program.AppSettings.Data.PdfFolder);
             Progress<PdfAutoPairProgress> progress = new Progress<PdfAutoPairProgress>(update =>
             {
                 operation.Report(
@@ -274,9 +414,24 @@ namespace ScientificReviews.Forms
                     update?.Completed,
                     update?.Total,
                     update != null && update.IsIndeterminate);
+                LogProcessProgress(log, update?.Summary, update?.Details, update?.Completed, update?.Total);
             });
 
-            return _pdfMatchingService.AutoPairAsync(entries, CreatePdfMatchingOptions(), progress);
+            try
+            {
+                PdfAutoPairResult result = await _pdfMatchingService.AutoPairAsync(targetEntries, CreatePdfMatchingOptions(), progress, cancellationToken);
+                log.Complete("Auto-pair inner process completed.");
+                return result;
+            }
+            catch (Exception ex)
+            {
+                log.Fail(ex, "Auto-pair inner process failed.");
+                throw;
+            }
+            finally
+            {
+                log.Dispose();
+            }
         }
 
         private void exportPdfsToolStripMenuItem_Click(object sender, EventArgs e)
@@ -309,20 +464,89 @@ namespace ScientificReviews.Forms
             if (toExport.Length == 0)
                 throw new InvalidOperationException("No records selected for export.");
 
-            lblStatus.Text = $"Exporting PDFs using {GetConfiguredThreadCount()} thread(s)...";
-            ExportPdfsRunResult result = await _pdfExportService.RunExportAsync(
-                toExport,
-                options,
-                _pdfMatchingService,
-                CreatePdfMatchingOptions(),
-                progress,
-                cancellationToken);
+            StatusStripOperationHandle operation = StartTrackedOperation(
+                "export-pdfs",
+                "Export PDFs",
+                options.OutputDirectory,
+                isBlocking: true);
+            if (operation == null)
+                throw new InvalidOperationException("Export PDFs is already running.");
 
-            lblStatus.Text = result.Cancelled
-                ? $"PDF export cancelled after {result.Completed}/{result.Total}."
-                : $"Exported {result.Exported} PDF(s), skipped {result.Skipped}, DOI injected into {result.Injected}.";
+            ProcessLogScope log = BeginProcessLog("Export PDFs", $"{toExport.Length} record(s) -> {options.OutputDirectory}");
+            IProgress<ExportPdfsProgress> compositeProgress = new Progress<ExportPdfsProgress>(update =>
+            {
+                progress?.Report(update);
+                operation.Report(
+                    update?.StatusText,
+                    options.OutputDirectory,
+                    update?.Completed,
+                    update?.Total,
+                    update == null || update.Total <= 0);
+                LogProcessProgress(log, update?.StatusText, null, update?.Completed, update?.Total);
+            });
 
-            return result;
+            try
+            {
+                operation.Report("Preparing export...", options.OutputDirectory, 0, toExport.Length, false);
+                lblStatus.Text = $"Exporting PDFs using {GetConfiguredThreadCount()} thread(s)... (blocking)";
+                ExportPdfsRunResult result = await _pdfExportService.RunExportAsync(
+                    toExport,
+                    options,
+                    _pdfMatchingService,
+                    CreatePdfMatchingOptions(),
+                    compositeProgress,
+                    cancellationToken);
+
+                if (result.Cancelled)
+                    operation.Cancel("Cancelled", $"Stopped after {result.Completed}/{result.Total} record(s).");
+                else if (result.Errors > 0)
+                    operation.Complete($"Finished with {result.Errors} error(s).", options.OutputDirectory);
+                else
+                    operation.Complete($"Exported {result.Exported} PDF(s).", options.OutputDirectory);
+
+                lblStatus.Text = result.Cancelled
+                    ? $"PDF export cancelled after {result.Completed}/{result.Total}."
+                    : result.Errors > 0
+                        ? $"PDF export finished with {result.Errors} error(s). Exported {result.Exported}, skipped {result.Skipped}, DOI injected into {result.Injected}."
+                        : $"Exported {result.Exported} PDF(s), skipped {result.Skipped}, DOI injected into {result.Injected}.";
+
+                if (result.Cancelled)
+                    log.Fail($"PDF export cancelled after {result.Completed}/{result.Total}.");
+                else if (result.Errors > 0)
+                    log.Fail($"Exported {result.Exported}, skipped {result.Skipped}, errors {result.Errors}, DOI injected into {result.Injected}. Last error: {result.LastErrorMessage}");
+                else
+                    log.Complete($"Exported {result.Exported}, skipped {result.Skipped}, DOI injected into {result.Injected}.");
+
+                PublishReport(
+                    "Export PDFs",
+                    result.Cancelled
+                        ? $"PDF export cancelled after {result.Completed}/{result.Total}."
+                        : result.Errors > 0
+                            ? $"PDF export finished with {result.Errors} error(s)."
+                            : $"Exported {result.Exported} PDF(s).",
+                    $"Output: {options.OutputDirectory}{Environment.NewLine}Exported: {result.Exported}{Environment.NewLine}Skipped: {result.Skipped}{Environment.NewLine}DOI injected: {result.Injected}" +
+                    (result.Errors > 0 && string.IsNullOrWhiteSpace(result.LastErrorMessage) == false
+                        ? Environment.NewLine + "Last error: " + result.LastErrorMessage
+                        : string.Empty),
+                    result.Cancelled
+                        ? OperationReportSeverity.Warning
+                        : result.Errors > 0
+                            ? OperationReportSeverity.Warning
+                            : OperationReportSeverity.Info);
+
+                return result;
+            }
+            catch (Exception ex)
+            {
+                operation.Fail(ex, "Failed");
+                log.Fail(ex, "PDF export failed.");
+                PublishReport("Export PDFs", "PDF export failed.", ex.Message, OperationReportSeverity.Error);
+                throw;
+            }
+            finally
+            {
+                log.Dispose();
+            }
         }
 
         private void btnDoi_Click(object sender, EventArgs e)

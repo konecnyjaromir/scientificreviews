@@ -64,6 +64,10 @@ Thumbs.db
 bin
 obj
 .vs
+tempbin/
+tempobj/
+**/tempbin/
+**/tempobj/
 
 # React
 node_modules
@@ -100,3 +104,4 @@ yarn-error.log*
 *.gz
 *.user
 packages
+.dotnet-home/
