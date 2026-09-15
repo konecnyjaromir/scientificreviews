@@ -44,6 +44,8 @@
             this.loadBibTexFolderToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripMenuItem2 = new System.Windows.Forms.ToolStripSeparator();
             this.settingsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.openSettingsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.firstTimeUseToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.importSettingsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.toolStripMenuItem4 = new System.Windows.Forms.ToolStripSeparator();
             this.saveToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -196,7 +198,6 @@
             this.loadBibTexFolderToolStripMenuItem,
             this.toolStripMenuItem2,
             this.settingsToolStripMenuItem,
-            this.importSettingsToolStripMenuItem,
             this.toolStripMenuItem4,
             this.saveToolStripMenuItem,
             this.exportDatabaseToolStripMenuItem,
@@ -282,10 +283,23 @@
             // 
             // settingsToolStripMenuItem
             // 
+            this.settingsToolStripMenuItem.DropDownItems.AddRange(new System.Windows.Forms.ToolStripItem[] {
+            this.openSettingsToolStripMenuItem,
+            this.firstTimeUseToolStripMenuItem,
+            this.importSettingsToolStripMenuItem});
             this.settingsToolStripMenuItem.Name = "settingsToolStripMenuItem";
             this.settingsToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
             this.settingsToolStripMenuItem.Text = "Settings";
-            this.settingsToolStripMenuItem.Click += new System.EventHandler(this.settingsToolStripMenuItem_Click);
+            // openSettingsToolStripMenuItem
+            this.openSettingsToolStripMenuItem.Name = "openSettingsToolStripMenuItem";
+            this.openSettingsToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
+            this.openSettingsToolStripMenuItem.Text = "All Settings...";
+            this.openSettingsToolStripMenuItem.Click += new System.EventHandler(this.settingsToolStripMenuItem_Click);
+            // firstTimeUseToolStripMenuItem
+            this.firstTimeUseToolStripMenuItem.Name = "firstTimeUseToolStripMenuItem";
+            this.firstTimeUseToolStripMenuItem.Size = new System.Drawing.Size(265, 26);
+            this.firstTimeUseToolStripMenuItem.Text = "First Time Use...";
+            this.firstTimeUseToolStripMenuItem.Click += new System.EventHandler(this.firstTimeUseToolStripMenuItem_Click);
             // 
             // importSettingsToolStripMenuItem
             // 
@@ -1328,6 +1342,8 @@
         private System.Windows.Forms.ToolStripSeparator toolStripMenuItem3;
         private System.Windows.Forms.ToolStripMenuItem exportSelectedPDFToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem settingsToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem openSettingsToolStripMenuItem;
+        private System.Windows.Forms.ToolStripMenuItem firstTimeUseToolStripMenuItem;
         private System.Windows.Forms.ToolStripMenuItem importSettingsToolStripMenuItem;
         private System.Windows.Forms.ToolStripSeparator toolStripMenuItem4;
         private System.Windows.Forms.ToolStripButton btnDoi;

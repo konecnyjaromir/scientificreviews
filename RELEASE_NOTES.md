@@ -12,6 +12,8 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 
 ### Project Workflow
 
+- Added a `First Time Use` setup guide for new installations, with steps for archive opening, PDFs, metadata, safety, and a final review
+- The guide can be reopened from `Project -> Settings -> First Time Use...`; changes are saved only after finishing
 - Added `Project -> Open file` and `Open folder` to open a new archive after optional confirmation and clearing the current one
 - Kept `Add file` and `Add folder` for incremental import into the current archive
 - Added `Project -> Raw Mode` as a shared toggle for raw file/folder import without post-load preprocessing

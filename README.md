@@ -152,6 +152,8 @@ This gives the archive a bibliographically correct DOI while still preserving ar
 
 ## Pipelines, Auto-Preprocessing, and Autofix
 
+On a new installation, `First Time Use` opens at startup to guide archive preprocessing, PDF folders, optional metadata access, and backup/save warnings. The guide saves settings only when finished and can be opened again from `Project -> Settings -> First Time Use...`.
+
 The application supports reusable multi-step pipelines for cleanup and enrichment workflows.
 
 - `Pipelines -> Pipeline Builder` can create named custom pipelines from supported steps such as:

@@ -1159,6 +1159,20 @@ namespace ScientificReviews.Forms
                 ReloadSettingsIntoUi("Settings updated.");
         }
 
+        private void firstTimeUseToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            ShowFirstTimeUseGuide();
+        }
+
+        private void ShowFirstTimeUseGuide()
+        {
+            using (FirstTimeUseForm guide = new FirstTimeUseForm(Program.AppSettings.Data))
+            {
+                if (guide.ShowDialog(this) == DialogResult.OK)
+                    ReloadSettingsIntoUi("First Time Use setup completed.");
+            }
+        }
+
         private void importSettingsToolStripMenuItem_Click(object sender, EventArgs e)
         {
             using (OpenFileDialog openFileDialog = new OpenFileDialog())
@@ -1243,6 +1257,9 @@ namespace ScientificReviews.Forms
             try
             {
                 UpdateWindowTitle();
+
+                if (Program.AppSettings.Data.FirstTimeUseCompleted != true)
+                    ShowFirstTimeUseGuide();
 
                 if (entries != null && entries.Count > 0)
                     return;

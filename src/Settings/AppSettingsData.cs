@@ -253,5 +253,8 @@ namespace ScientificReviews
 
         [Browsable(false)]
         public int SettingsVersion { get; set; } = CURRENT_SETTINGS_VERSION;
+
+        [Browsable(false)]
+        public bool? FirstTimeUseCompleted { get; set; }
     }
 }

@@ -86,9 +86,16 @@ namespace ScientificReviews
         {
             try
             {
+                bool settingsFileExisted = File.Exists(SettingsFilePath);
                 AppSettings = new AppSettingsJson<AppSettingsData>(SettingsFilePath);
                 AppSettings.LoadSettings();
                 bool settingsChanged = PrepareSettingsData(AppSettings.Data);
+
+                if (!AppSettings.Data.FirstTimeUseCompleted.HasValue)
+                {
+                    AppSettings.Data.FirstTimeUseCompleted = settingsFileExisted;
+                    settingsChanged = true;
+                }
 
                 if (settingsChanged)
                     AppSettings.SaveSettings("Settings migration/default normalization");
