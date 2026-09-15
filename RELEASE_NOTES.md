@@ -4,6 +4,12 @@
 
 This development cycle focused on turning Scientific Reviews into a faster multi-window workflow tool with stronger PDF handling, configurable preprocessing, safer save/close behavior, smarter search and filtering, unified export workflows, and better background-operation control.
 
+### Follow-up Hotfix
+
+- `Create entry keys` now asks for confirmation before running manually and warns that previously generated keys may change
+- The unsaved-changes dialog on close now saves and closes with `Yes`, or closes without saving with `No`; a cancelled or failed save keeps the application open
+- Removed `Create entry keys` from the built-in `Fast` auto-preprocessing routine; `Normal` and `Deep` still include it
+
 ### Project Workflow
 
 - Added `Project -> Open file` and `Open folder` to open a new archive after optional confirmation and clearing the current one
@@ -179,7 +185,6 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - `Fast` preprocessing runs:
   - Normalize DOI
   - Normalize page-tag
-  - Create entry keys
   - Auto-pair PDFs
 - `Normal` preprocessing runs the full pipeline while using the current settings for individual operations
 - `Deep` preprocessing runs:

@@ -501,7 +501,7 @@ namespace ScientificReviews.Forms
             }
         }
 
-        private void MainForm_FormClosing(object sender, FormClosingEventArgs e)
+        private async void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
             if (IsBlockingUiActive)
             {
@@ -514,13 +514,21 @@ namespace ScientificReviews.Forms
             {
                 DialogResult result = MessageBox.Show(
                     this,
-                    "The current database contains unsaved changes.\r\n\r\nDo you really want to close the application without saving?",
+                    "The current database contains unsaved changes.\r\n\r\nDo you want to save changes before closing?",
                     Program.APP_NAME,
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Warning,
-                    MessageBoxDefaultButton.Button2);
+                    MessageBoxDefaultButton.Button1);
 
-                if (result != DialogResult.Yes)
+                if (result == DialogResult.Yes)
+                {
+                    e.Cancel = true;
+                    if (await SaveCurrentArchiveAsync(skipConfirmation: true) && !DatabaseChanged)
+                        Close();
+                    return;
+                }
+
+                if (result != DialogResult.No)
                 {
                     e.Cancel = true;
                     return;

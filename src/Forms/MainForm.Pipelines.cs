@@ -181,7 +181,6 @@ namespace ScientificReviews.Forms
                         {
                             new PipelineStepDefinition { Kind = PipelineStepKind.NormalizeDoi },
                             new PipelineStepDefinition { Kind = PipelineStepKind.NormalizePageTag },
-                            new PipelineStepDefinition { Kind = PipelineStepKind.CreateEntryKeys },
                             new PipelineStepDefinition { Kind = PipelineStepKind.AutoPairPdfs }
                         }
                     };

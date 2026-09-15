@@ -97,7 +97,7 @@ namespace ScientificReviews
         [DisplayName("Auto-preprocessing mode")]
         [Description("Selects which automatic preprocessing steps run after opening a BibTeX database: Off = none, Fast = local quick fixes and PDF pairing, Normal = the full preprocessing pipeline using the current settings of individual procedures, Deep = the full preprocessing pipeline with the most exhaustive metadata options.")]
         [TypeConverter(typeof(AutoPreprocessingModeConverter))]
-        public AutoPreprocessingMode AutoPreprocessingMode { get; set; } = AutoPreprocessingMode.Fast;
+        public AutoPreprocessingMode AutoPreprocessingMode { get; set; } = AutoPreprocessingMode.Off;
 
         [Browsable(true)]
         [Category(APPLICATION_CAT)]

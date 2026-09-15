@@ -96,6 +96,19 @@ namespace ScientificReviews.Forms
 
         private void createEntryKeysToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            if (entries.Count > 0)
+            {
+                DialogResult response = MessageBox.Show(
+                    this,
+                    "Creating entry keys may change keys that have already been generated.\r\n\r\nDo you want to continue?",
+                    "Create entry keys",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Warning);
+
+                if (response != DialogResult.Yes)
+                    return;
+            }
+
             RunCreateEntryKeysOperation(entries.ToArray());
         }
 
@@ -242,16 +255,15 @@ namespace ScientificReviews.Forms
             await ShowExportDialogAsync(DatabaseExportScope.Visible, DatabaseExportFormat.Bib);
         }
 
-        private async Task SaveCurrentArchiveAsync()
+        private async Task<bool> SaveCurrentArchiveAsync(bool skipConfirmation = false)
         {
             string currentFile = _currentBibTexPath;
             if (string.IsNullOrWhiteSpace(currentFile))
             {
-                await SaveArchiveAsAsync();
-                return;
+                return await SaveArchiveAsAsync();
             }
 
-            if (Program.AppSettings.Data.SaveWithoutApprove == false)
+            if (!skipConfirmation && Program.AppSettings.Data.SaveWithoutApprove == false)
             {
                 DialogResult result = MessageBox.Show(
                     this,
@@ -264,24 +276,24 @@ namespace ScientificReviews.Forms
                 if (result != DialogResult.Yes)
                 {
                     lblStatus.Text = "Save cancelled.";
-                    return;
+                    return false;
                 }
             }
 
-            await SaveBibtexToFileAsync(entries.ToArray(), currentFile, "Save BibTeX", "Saved.", true);
+            return await SaveBibtexToFileAsync(entries.ToArray(), currentFile, "Save BibTeX", "Saved.", true);
         }
 
-        private async Task SaveArchiveAsAsync()
+        private async Task<bool> SaveArchiveAsAsync()
         {
             using (SaveFileDialog saveFileDialog = CreateBibtexSaveFileDialog())
             {
                 if (saveFileDialog.ShowDialog(this) != DialogResult.OK)
                 {
                     lblStatus.Text = "Save As cancelled.";
-                    return;
+                    return false;
                 }
 
-                await SaveBibtexToFileAsync(entries.ToArray(), saveFileDialog.FileName, "Save BibTeX As", "Saved.", true);
+                return await SaveBibtexToFileAsync(entries.ToArray(), saveFileDialog.FileName, "Save BibTeX As", "Saved.", true);
             }
         }
 
@@ -322,7 +334,7 @@ namespace ScientificReviews.Forms
             return saveFileDialog;
         }
 
-        private async Task SaveBibtexToFileAsync(BibtexEntry[] entriesToSave, string fileName, string processName, string successMessage, bool updateCurrentFile)
+        private async Task<bool> SaveBibtexToFileAsync(BibtexEntry[] entriesToSave, string fileName, string processName, string successMessage, bool updateCurrentFile)
         {
             StatusStripOperationHandle operation = StartTrackedOperation(
                 "save-bibtex",
@@ -330,7 +342,7 @@ namespace ScientificReviews.Forms
                 fileName,
                 isBlocking: true);
             if (operation == null)
-                return;
+                return false;
 
             ProcessLogScope log = BeginProcessLog(processName, fileName);
             try
@@ -360,6 +372,7 @@ namespace ScientificReviews.Forms
                     successMessage,
                     $"File: {fileName}{Environment.NewLine}Records: {entriesToSave?.Length ?? 0}",
                     OperationReportSeverity.Info);
+                return true;
             }
             catch (Exception ex)
             {
@@ -367,6 +380,7 @@ namespace ScientificReviews.Forms
                 lblStatus.Text = ex.Message;
                 log.Fail(ex, $"{processName} failed.");
                 PublishReport(processName, $"{processName} failed.", ex.Message, OperationReportSeverity.Error);
+                return false;
             }
             finally
             {

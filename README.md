@@ -181,7 +181,6 @@ Built-in preprocessing and Autofix are now backed by the same pipeline mechanism
 - Fast preprocessing:
   - Normalize DOI
   - Normalize page tags
-  - Create entry keys
   - Auto-pair PDFs
 - Normal preprocessing / Autofix:
   - Normalize DOI
