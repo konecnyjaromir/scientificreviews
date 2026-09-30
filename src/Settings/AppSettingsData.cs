@@ -191,9 +191,15 @@ namespace ScientificReviews
         [Browsable(true)]
         [Category(EXPORT_CAT)]
         [DisplayName("Custom columns")]
-        [Description("Columns shown in the main grid and used by Export mode = As columns.")]
+        [Description("Column order and columns used by Export mode = As columns. Use Window -> Columns to hide or show grid columns.")]
         [Editor(typeof(StringArrayEditor), typeof(UITypeEditor))]
         public string[] Columns { get; set; } = new string[0];
+
+        [Browsable(false)]
+        public string[] HiddenColumns { get; set; } = new string[0];
+
+        [Browsable(false)]
+        public bool ColumnVisibilityInitialized { get; set; }
 
         [Browsable(true)]
         [Category(EXPORT_CAT)]

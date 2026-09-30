@@ -2056,14 +2056,25 @@ namespace ScientificReviews.Forms
 
         private void columnsToolStripMenuItem_Click(object sender, EventArgs e)
         {
-            EditColumnsForm frm = new EditColumnsForm();
-            frm.SetColumns(Program.AppSettings.Data.Columns);
-
-            if (frm.ShowDialog(this) == DialogResult.OK)
+            using (EditColumnsForm frm = new EditColumnsForm())
             {
-                Program.AppSettings.Data.Columns = frm.GetColumns();
-                Program.AppSettings.SaveSettings();
-                RefreshGrid(statusMessage: "Custom columns updated.");
+                string[] allColumns = dataGridView1.Columns.Cast<DataGridViewColumn>()
+                    .Where(column => column.Name != "Entry")
+                    .OrderBy(column => column.DisplayIndex)
+                    .Select(column => column.Name)
+                    .ToArray();
+                frm.SetVisibilityColumns(allColumns, GetHiddenGridColumns().ToArray());
+
+                if (frm.ShowDialog(this) == DialogResult.OK)
+                {
+                    Program.AppSettings.Data.Columns = frm.GetColumns()
+                        .Where(column => column != "Key" && column != "Entry Type")
+                        .ToArray();
+                    Program.AppSettings.Data.HiddenColumns = frm.GetHiddenColumns();
+                    Program.AppSettings.Data.ColumnVisibilityInitialized = true;
+                    Program.AppSettings.SaveSettings();
+                    RefreshGrid(statusMessage: "Column visibility updated.");
+                }
             }
         }
 

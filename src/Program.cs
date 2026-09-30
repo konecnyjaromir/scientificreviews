@@ -290,6 +290,13 @@ namespace ScientificReviews
                 changed = true;
             }
 
+            string[] normalizedHiddenColumns = NormalizeStringArray(settings.HiddenColumns);
+            if (AreStringArraysEqual(settings.HiddenColumns, normalizedHiddenColumns) == false)
+            {
+                settings.HiddenColumns = normalizedHiddenColumns;
+                changed = true;
+            }
+
             string[] normalizedStandardColumns = NormalizeStringArray(settings.StandardColumns);
             if (normalizedStandardColumns.Length == 0)
             {

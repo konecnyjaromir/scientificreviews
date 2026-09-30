@@ -13,7 +13,10 @@ namespace ScientificReviews.Forms
     public partial class EditColumnsForm : Form
     {
         private readonly BindingList<string> _columns = new BindingList<string>();
+        private readonly HashSet<string> _hiddenColumns = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private bool _visibilityMode;
         private int _dragIndex = -1;
+        private Point _dragStart;
 
         public EditColumnsForm()
         {
@@ -26,6 +29,66 @@ namespace ScientificReviews.Forms
             lstColumns.AllowDrop = true;
             lstColumns.DragOver += lstColumns_DragOver;
             lstColumns.DragDrop += lstColumns_DragDrop;
+            lstColumns.MouseMove += lstColumns_MouseMove;
+            lstColumns.MouseUp += (sender, args) => _dragIndex = -1;
+            lstColumns.SelectedIndexChanged += (sender, args) => UpdateVisibilityButton();
+        }
+
+        public void SetVisibilityColumns(string[] columns, string[] hiddenColumns)
+        {
+            _visibilityMode = true;
+            _hiddenColumns.Clear();
+            foreach (string column in hiddenColumns ?? Array.Empty<string>())
+                _hiddenColumns.Add(column);
+
+            SetColumns(columns);
+            Text = "Columns";
+            lblTitle.Text = "Loaded columns";
+            lblNew.Visible = false;
+            txtNew.Visible = false;
+            btnAdd.Visible = false;
+            btnEdit.Visible = false;
+            btnRemove.Text = "Hide";
+            lblHint.Text = "Hidden columns are gray. Select a column to hide or show it.";
+            lstColumns.DrawMode = DrawMode.OwnerDrawFixed;
+            lstColumns.DrawItem += lstColumns_DrawItem;
+            UpdateVisibilityButton();
+        }
+
+        public string[] GetHiddenColumns()
+        {
+            return _columns.Where(column => _hiddenColumns.Contains(column)).ToArray();
+        }
+
+        private void UpdateVisibilityButton()
+        {
+            if (!_visibilityMode) return;
+            int index = lstColumns.SelectedIndex;
+            btnRemove.Enabled = index >= 0;
+            btnRemove.Text = index >= 0 && _hiddenColumns.Contains(_columns[index]) ? "Show" : "Hide";
+        }
+
+        private void ToggleSelectedVisibility()
+        {
+            int index = lstColumns.SelectedIndex;
+            if (index < 0) return;
+            string column = _columns[index];
+            if (!_hiddenColumns.Add(column))
+                _hiddenColumns.Remove(column);
+            lstColumns.Invalidate();
+            UpdateVisibilityButton();
+        }
+
+        private void lstColumns_DrawItem(object sender, DrawItemEventArgs e)
+        {
+            if (e.Index < 0) return;
+            e.DrawBackground();
+            string column = _columns[e.Index];
+            Color color = _hiddenColumns.Contains(column) ? SystemColors.GrayText
+                : (e.State & DrawItemState.Selected) != 0 ? SystemColors.HighlightText : lstColumns.ForeColor;
+            TextRenderer.DrawText(e.Graphics, column, e.Font, e.Bounds, color,
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis);
+            e.DrawFocusRectangle();
         }
 
         /// <summary>
@@ -63,6 +126,7 @@ namespace ScientificReviews.Forms
         public string[] GetColumns()
         {
             return _columns
+                .Where(x => !_visibilityMode || !_hiddenColumns.Contains(x))
                 .Select(x => (x ?? string.Empty).Trim())
                 .Where(x => x.Length > 0)
                 .ToArray();
@@ -128,7 +192,8 @@ namespace ScientificReviews.Forms
 
         private void lstColumns_DoubleClick(object sender, EventArgs e)
         {
-            EditSelected();
+            if (_visibilityMode) ToggleSelectedVisibility();
+            else EditSelected();
         }
 
         private void EditSelected()
@@ -155,7 +220,8 @@ namespace ScientificReviews.Forms
 
         private void btnRemove_Click(object sender, EventArgs e)
         {
-            RemoveSelected();
+            if (_visibilityMode) ToggleSelectedVisibility();
+            else RemoveSelected();
         }
 
         private void RemoveSelected()
@@ -199,12 +265,13 @@ namespace ScientificReviews.Forms
         {
             if (e.KeyCode == Keys.Delete)
             {
-                RemoveSelected();
+                if (_visibilityMode) ToggleSelectedVisibility();
+                else RemoveSelected();
                 e.Handled = true;
             }
             else if (e.KeyCode == Keys.F2)
             {
-                EditSelected();
+                if (!_visibilityMode) EditSelected();
                 e.Handled = true;
             }
             else if (e.Control && e.KeyCode == Keys.Up)
@@ -228,11 +295,25 @@ namespace ScientificReviews.Forms
         // --- Drag & Drop reorder ---
         private void lstColumns_MouseDown(object sender, MouseEventArgs e)
         {
-            _dragIndex = lstColumns.IndexFromPoint(e.Location);
+            _dragIndex = e.Button == MouseButtons.Left ? lstColumns.IndexFromPoint(e.Location) : -1;
+            _dragStart = e.Location;
             if (_dragIndex >= 0 && _dragIndex < _columns.Count)
-            {
-                lstColumns.DoDragDrop(_columns[_dragIndex], DragDropEffects.Move);
-            }
+                lstColumns.SelectedIndex = _dragIndex;
+        }
+
+        private void lstColumns_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (_dragIndex < 0 || e.Button != MouseButtons.Left)
+                return;
+
+            Size dragSize = SystemInformation.DragSize;
+            if (Math.Abs(e.X - _dragStart.X) < dragSize.Width / 2
+                && Math.Abs(e.Y - _dragStart.Y) < dragSize.Height / 2)
+                return;
+
+            int index = _dragIndex;
+            lstColumns.DoDragDrop(_columns[index], DragDropEffects.Move);
+            _dragIndex = -1;
         }
 
         private void lstColumns_DragOver(object sender, DragEventArgs e)

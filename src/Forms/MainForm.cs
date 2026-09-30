@@ -368,11 +368,38 @@ namespace ScientificReviews.Forms
             bindingSource1.DataSource = dt;
             dataGridView1.DataSource = bindingSource1;
             dataGridView1.Columns["Entry"].Visible = false;
+            HashSet<string> hiddenColumns = GetHiddenGridColumns();
+            foreach (DataGridViewColumn column in dataGridView1.Columns)
+            {
+                if (column.Name != "Entry" && hiddenColumns.Contains(column.Name))
+                    column.Visible = false;
+            }
             ConfigureGridSorting();
             lblInfo.Text = $"{entries.Length} entries";
 
             if (string.IsNullOrWhiteSpace(searchValidationMessage) == false)
                 lblStatus.Text = searchValidationMessage;
+        }
+
+        private HashSet<string> GetHiddenGridColumns()
+        {
+            AppSettingsData settings = Program.AppSettings.Data;
+            HashSet<string> hidden = new HashSet<string>(
+                settings.HiddenColumns ?? Array.Empty<string>(), StringComparer.OrdinalIgnoreCase);
+
+            // Preserve the visible selection from settings created before Hide/Show existed.
+            if (!settings.ColumnVisibilityInitialized && settings.Columns != null && settings.Columns.Length > 0)
+            {
+                HashSet<string> visible = new HashSet<string>(settings.Columns, StringComparer.OrdinalIgnoreCase);
+                foreach (DataGridViewColumn column in dataGridView1.Columns)
+                {
+                    if (column.Name != "Key" && column.Name != "Entry Type" && column.Name != "Entry"
+                        && !visible.Contains(column.Name))
+                        hidden.Add(column.Name);
+                }
+            }
+
+            return hidden;
         }
 
         private DataTable BuildTable(BibtexEntry[] entries, string[] userColumns)
@@ -381,10 +408,12 @@ namespace ScientificReviews.Forms
             table.Columns.Add("Key", typeof(string));
             table.Columns.Add("Entry Type", typeof(string));
 
-            if (userColumns == null || userColumns.Length == 0)
-                userColumns = GetOrderedTagKeys(entries).ToArray();
-
-            userColumns = SanitizeColumnList(userColumns);
+            userColumns = SanitizeColumnList(
+                (userColumns ?? Array.Empty<string>()).Concat(GetOrderedTagKeys(this.entries)))
+                .Where(column => !string.Equals(column, "Key", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(column, "Entry Type", StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(column, "Entry", StringComparison.OrdinalIgnoreCase))
+                .ToArray();
 
             foreach (string col in userColumns)
                 table.Columns.Add(col, typeof(string));
