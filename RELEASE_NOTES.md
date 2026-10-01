@@ -1,6 +1,6 @@
 # Release Notes
 
-## v1.1.0.5
+## v1.1.1.8
 
 This development cycle focused on turning Scientific Reviews into a faster multi-window workflow tool with stronger PDF handling, configurable preprocessing, safer save/close behavior, smarter search and filtering, unified export workflows, and better background-operation control.
 
@@ -9,6 +9,7 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - `Create entry keys` now asks for confirmation before running manually and warns that previously generated keys may change
 - The unsaved-changes dialog on close now saves and closes with `Yes`, or closes without saving with `No`; a cancelled or failed save keeps the application open
 - Removed `Create entry keys` from the built-in `Fast` auto-preprocessing routine; `Normal` and `Deep` still include it
+- Custom Columns have memory now, and Hide/Show function
 
 ### Project Workflow
 
