@@ -768,6 +768,10 @@ namespace ScientificReviews.Forms
         {
             if (bindingSource1.Current is DataRowView == false)
             {
+                propertyGrid1.SelectedObject = null;
+                propertyGrid1.Tag = null;
+                richTextBox1.Clear();
+                lblSelected.Text = "(0)";
                 UpdatePdfActionUi();
                 return;
             }
@@ -799,8 +803,6 @@ namespace ScientificReviews.Forms
         private void ShowEntry(BibtexEntry entry, string search = "")
         {
             string text = bibtexExporter.EntryToString(entry);
-            text = text.ToLower();
-            search = search.ToLower();
             richTextBox1.Text = text;
             if (string.IsNullOrWhiteSpace(search))
                 return;
@@ -825,6 +827,29 @@ namespace ScientificReviews.Forms
 
             richTextBox1.Select(selStart, selLength);
             richTextBox1.SelectionBackColor = richTextBox1.BackColor;
+        }
+
+        private void richTextBox1_LinkClicked(object sender, LinkClickedEventArgs e)
+        {
+            string target = e.LinkText;
+            if (target.StartsWith("www.", StringComparison.OrdinalIgnoreCase))
+                target = "https://" + target;
+            if (!Uri.TryCreate(target, UriKind.Absolute, out Uri uri) ||
+                (uri.Scheme != Uri.UriSchemeHttp && uri.Scheme != Uri.UriSchemeHttps))
+                return;
+
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = uri.AbsoluteUri,
+                    UseShellExecute = true
+                });
+            }
+            catch (Exception ex)
+            {
+                lblStatus.Text = "Could not open link: " + ex.Message;
+            }
         }
 
         private void OpenPdf(string pdfPath)

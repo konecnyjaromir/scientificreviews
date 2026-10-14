@@ -92,6 +92,7 @@ namespace ScientificReviews.Forms
                     Text = "(No custom pipelines)",
                     Enabled = false
                 });
+                MenuIconHelper.Apply(_pipelineRunToolStripMenuItem);
                 return;
             }
 
@@ -106,6 +107,8 @@ namespace ScientificReviews.Forms
                 item.Click += customPipelineRunToolStripMenuItem_Click;
                 _pipelineRunToolStripMenuItem.DropDownItems.Add(item);
             }
+
+            MenuIconHelper.Apply(_pipelineRunToolStripMenuItem);
         }
 
         private async void customPipelineRunToolStripMenuItem_Click(object sender, EventArgs e)

@@ -7,6 +7,8 @@ using System;
 using System.ComponentModel;
 using System.Collections.Generic;
 using System.Data;
+using System.Drawing;
+using System.Drawing.Drawing2D;
 using System.Globalization;
 using System.IO;
 using System.Linq;
@@ -35,9 +37,15 @@ namespace ScientificReviews.Forms
         [DllImport("shlwapi.dll", CharSet = CharSet.Unicode)]
         private static extern int StrCmpLogicalW(string left, string right);
 
-        public MainForm()
+        public MainForm(string[] startupFilePaths = null)
         {
+            _startupFilePaths = startupFilePaths ?? Array.Empty<string>();
+            _archiveHistory.Reset(entries);
             InitializeComponent();
+            InitializeDatabaseHistoryMenu();
+            richTextBox1.ReadOnly = true;
+            richTextBox1.DetectUrls = true;
+            richTextBox1.LinkClicked += richTextBox1_LinkClicked;
             InitializeOpenAddModeUi();
             InitializeAutofixModeUi();
             InitializeSearchUi();
@@ -54,6 +62,9 @@ namespace ScientificReviews.Forms
             dataGridView1.DataBindingComplete += dataGridView1_DataBindingComplete;
             dataGridView1.MouseDown += dataGridView1_MouseDown;
             splitter1.SplitterMoved += splitter1_SplitterMoved;
+            MenuIconHelper.Apply(menuStrip1);
+            MenuIconHelper.Apply(_recordContextMenu);
+            MenuIconHelper.Apply(_gridBackgroundContextMenu);
         }
 
         private bool IsBlockingUiActive => _operationManager?.HasBlockingOperations ?? false;
@@ -73,7 +84,99 @@ namespace ScientificReviews.Forms
             if (HandleClipboardShortcut(keyData))
                 return true;
 
+            if (TryHandleHistoryShortcut(keyData, Control.FromHandle(GetFocus()) as TextBoxBase))
+                return true;
+
             return base.ProcessCmdKey(ref msg, keyData);
+        }
+
+        internal bool TryHandleHistoryShortcut(Keys keyData, TextBoxBase editor)
+        {
+            if (keyData != (Keys.Control | Keys.Z) && keyData != (Keys.Control | Keys.Y) &&
+                keyData != (Keys.Control | Keys.Shift | Keys.Z))
+                return false;
+            if (IsBlockingUiActive || _closingForBackup)
+                return true;
+
+            if (editor != null && !editor.ReadOnly)
+            {
+                if (keyData == (Keys.Control | Keys.Z) && editor.CanUndo)
+                {
+                    editor.Undo();
+                    return true;
+                }
+                if (!propertyGrid1.ContainsFocus)
+                    return false;
+            }
+
+            RestoreArchiveHistory(keyData != (Keys.Control | Keys.Z));
+            return true;
+        }
+
+        private ToolStripMenuItem _undoArchiveMenuItem;
+        private ToolStripMenuItem _redoArchiveMenuItem;
+
+        private void InitializeDatabaseHistoryMenu()
+        {
+            _undoArchiveMenuItem = new ToolStripMenuItem("Undo")
+            {
+                Name = "undoArchiveToolStripMenuItem",
+                Image = CreateHistoryIcon(false),
+                ImageScaling = ToolStripItemImageScaling.None,
+                DisplayStyle = ToolStripItemDisplayStyle.ImageAndText,
+                ShortcutKeys = Keys.Control | Keys.Z,
+                ShowShortcutKeys = true
+            };
+            _redoArchiveMenuItem = new ToolStripMenuItem("Redo")
+            {
+                Name = "redoArchiveToolStripMenuItem",
+                Image = CreateHistoryIcon(true),
+                ImageScaling = ToolStripItemImageScaling.None,
+                DisplayStyle = ToolStripItemDisplayStyle.ImageAndText,
+                ShortcutKeys = Keys.Control | Keys.Y,
+                ShowShortcutKeys = true
+            };
+
+            _undoArchiveMenuItem.Click += (sender, args) => RestoreArchiveHistory(false);
+            _redoArchiveMenuItem.Click += (sender, args) => RestoreArchiveHistory(true);
+            databaseToolStripMenuItem.DropDownOpening += DatabaseHistoryMenu_DropDownOpening;
+            databaseToolStripMenuItem.DropDownItems.Insert(0, _undoArchiveMenuItem);
+            databaseToolStripMenuItem.DropDownItems.Insert(1, _redoArchiveMenuItem);
+            databaseToolStripMenuItem.DropDownItems.Insert(2, new ToolStripSeparator());
+            UpdateDatabaseHistoryMenu();
+        }
+
+        private static Bitmap CreateHistoryIcon(bool redo)
+        {
+            Bitmap icon = new Bitmap(16, 16);
+            using (Graphics graphics = Graphics.FromImage(icon))
+            using (Pen pen = new Pen(SystemColors.MenuText, 1.7f))
+            {
+                graphics.SmoothingMode = SmoothingMode.AntiAlias;
+                if (redo)
+                {
+                    graphics.TranslateTransform(16, 0);
+                    graphics.ScaleTransform(-1, 1);
+                }
+                graphics.DrawArc(pen, 3, 3, 10, 10, 45, 285);
+                graphics.DrawLine(pen, 2, 4, 3, 1);
+                graphics.DrawLine(pen, 2, 4, 6, 4);
+            }
+            return icon;
+        }
+
+        private void DatabaseHistoryMenu_DropDownOpening(object sender, EventArgs e)
+        {
+            UpdateDatabaseHistoryMenu();
+        }
+
+        private void UpdateDatabaseHistoryMenu()
+        {
+            if (_undoArchiveMenuItem == null || _redoArchiveMenuItem == null)
+                return;
+
+            _undoArchiveMenuItem.Enabled = _archiveHistory.CanUndo && !IsBlockingUiActive;
+            _redoArchiveMenuItem.Enabled = _archiveHistory.CanRedo && !IsBlockingUiActive;
         }
 
         private void SetMainInteractionEnabled(bool enabled)
@@ -166,6 +269,13 @@ namespace ScientificReviews.Forms
         BibtexExporter bibtexExporter = new BibtexExporter();
 
         private CancellationTokenSource _changedCts;
+        private readonly ArchiveHistory _archiveHistory = new ArchiveHistory();
+        private readonly string[] _startupFilePaths;
+        private string _approvedSavePath;
+        private int _backupVersion;
+        private int _lastBackupVersion;
+        private bool _closingForBackup;
+        private bool _closeAfterBackup;
         private readonly SemaphoreSlim _autosaveLock = new SemaphoreSlim(1, 1);
         private readonly StatusStripOperationManager _operationManager;
         private readonly BibtexLoadService _bibtexLoadService = new BibtexLoadService();
@@ -355,17 +465,22 @@ namespace ScientificReviews.Forms
 
         private void LoadData(BibtexEntry[] entries, string search = "")
         {
+            CancelPendingSearch();
             string searchValidationMessage;
             entries = ApplySearchFilter(entries, search, out searchValidationMessage);
             entries = ApplyCurrentSort(entries);
+            DataTable table = BuildTable(entries, this.entries.ToArray(), Program.AppSettings.Data.Columns, CancellationToken.None);
+            BindGridResult(entries, table, searchValidationMessage);
+        }
 
+        private void BindGridResult(BibtexEntry[] entries, DataTable table, string searchValidationMessage)
+        {
             visibleEntries.Clear();
             visibleEntries.AddRange(entries);
 
             bindingSource1.DataSource = null;
             dataGridView1.DataSource = null;
-            DataTable dt = BuildTable(entries, Program.AppSettings.Data.Columns);
-            bindingSource1.DataSource = dt;
+            bindingSource1.DataSource = table;
             dataGridView1.DataSource = bindingSource1;
             dataGridView1.Columns["Entry"].Visible = false;
             HashSet<string> hiddenColumns = GetHiddenGridColumns();
@@ -402,14 +517,14 @@ namespace ScientificReviews.Forms
             return hidden;
         }
 
-        private DataTable BuildTable(BibtexEntry[] entries, string[] userColumns)
+        private DataTable BuildTable(BibtexEntry[] entries, BibtexEntry[] allEntries, string[] userColumns, CancellationToken cancellationToken)
         {
             DataTable table = new DataTable();
             table.Columns.Add("Key", typeof(string));
             table.Columns.Add("Entry Type", typeof(string));
 
             userColumns = SanitizeColumnList(
-                (userColumns ?? Array.Empty<string>()).Concat(GetOrderedTagKeys(this.entries)))
+                (userColumns ?? Array.Empty<string>()).Concat(GetOrderedTagKeys(allEntries)))
                 .Where(column => !string.Equals(column, "Key", StringComparison.OrdinalIgnoreCase)
                     && !string.Equals(column, "Entry Type", StringComparison.OrdinalIgnoreCase)
                     && !string.Equals(column, "Entry", StringComparison.OrdinalIgnoreCase))
@@ -422,6 +537,7 @@ namespace ScientificReviews.Forms
 
             foreach (BibtexEntry entry in entries)
             {
+                cancellationToken.ThrowIfCancellationRequested();
                 DataRow row = table.NewRow();
                 foreach (string col in userColumns)
                     row[col] = entry.GetTagValue(col);
@@ -479,8 +595,13 @@ namespace ScientificReviews.Forms
 
         private async void Changed(bool markDatabaseChanged = true)
         {
+            CancelPendingSearch();
             if (markDatabaseChanged)
-                SetDatabaseChanged(true);
+                _archiveHistory.Record(entries);
+            else
+                _archiveHistory.Reset(entries);
+            SetDatabaseChanged(!_archiveHistory.IsSaved);
+            _backupVersion++;
 
             AppSettingsData s = Program.AppSettings.Data;
             if (!s.AllowBackup)
@@ -506,22 +627,51 @@ namespace ScientificReviews.Forms
             }
             catch (TaskCanceledException)
             {
+                if (ReferenceEquals(_changedCts, cts))
+                    _changedCts = null;
+                cts.Dispose();
                 return;
             }
+
+            try
+            {
+                await SaveAutosaveSnapshotAsync();
+            }
+            finally
+            {
+                if (ReferenceEquals(_changedCts, cts))
+                    _changedCts = null;
+                cts.Dispose();
+            }
+        }
+
+        private async Task<bool> SaveAutosaveSnapshotAsync()
+        {
+            AppSettingsData s = Program.AppSettings.Data;
+            if (!s.AllowBackup || s.NumberOfBackups <= 0)
+                return true;
 
             await _autosaveLock.WaitAsync();
             ProcessLogScope log = BeginProcessLog("Autosave backup", s.BackupFolder);
             try
             {
+                if (_lastBackupVersion == _backupVersion)
+                    return true;
+
+                int version = _backupVersion;
+                int keepBackups = s.NumberOfBackups;
                 string content = new BibtexExporter().EntriesToString(entries.ToArray());
                 await Task.Run(() => BibtexAutosaveManager.SaveSnapshot(s.BackupFolder, keepBackups, content));
+                _lastBackupVersion = version;
                 lblStatus.Text = "Autosave backup created";
                 log.Complete($"Snapshot saved. Entries: {entries.Count}, keepBackups: {keepBackups}.");
+                return true;
             }
             catch (Exception ex)
             {
                 lblStatus.Text = "Autosave failed: " + ex.Message;
-                log.Fail(ex, $"Snapshot failed. Entries: {entries.Count}, keepBackups: {keepBackups}.");
+                log.Fail(ex, $"Snapshot failed. Entries: {entries.Count}, keepBackups: {s.NumberOfBackups}.");
+                return false;
             }
             finally
             {
@@ -532,6 +682,13 @@ namespace ScientificReviews.Forms
 
         private async void MainForm_FormClosing(object sender, FormClosingEventArgs e)
         {
+            if (_closeAfterBackup)
+                return;
+            if (_closingForBackup)
+            {
+                e.Cancel = true;
+                return;
+            }
             if (IsBlockingUiActive)
             {
                 lblStatus.Text = "A blocking operation is still running.";
@@ -564,7 +721,46 @@ namespace ScientificReviews.Forms
                 }
             }
 
+            if (Program.AppSettings.Data.AllowBackup && _lastBackupVersion != _backupVersion)
+            {
+                e.Cancel = true;
+                _closingForBackup = true;
+                _changedCts?.Cancel();
+                SetMainInteractionEnabled(false);
+                bool backedUp = await SaveAutosaveSnapshotAsync();
+                _closingForBackup = false;
+                SetMainInteractionEnabled(true);
+                if (!backedUp)
+                    return;
+
+                Program.AppSettings.SaveSettings();
+                _closeAfterBackup = true;
+                Close();
+                return;
+            }
+
+            _changedCts?.Cancel();
             Program.AppSettings.SaveSettings();
+        }
+
+        private void RestoreArchiveHistory(bool redo)
+        {
+            if (_operationManager.HasRunningOperations)
+            {
+                lblStatus.Text = "Wait for the running operation before undoing archive changes.";
+                return;
+            }
+
+            int[] selection = GetSelectedOrdered().Select(entry => entries.IndexOf(entry)).ToArray();
+            List<BibtexEntry> restored = redo ? _archiveHistory.Redo() : _archiveHistory.Undo();
+            if (restored == null)
+                return;
+
+            entries = restored;
+            RefreshGrid(selection.Where(index => index >= 0 && index < entries.Count).Select(index => entries[index]));
+            Changed();
+            UpdateDatabaseHistoryMenu();
+            lblStatus.Text = redo ? "Archive change redone." : "Archive change undone.";
         }
 
         private void RefreshGrid(IEnumerable<BibtexEntry> preferredSelection = null, string statusMessage = null)
@@ -592,16 +788,26 @@ namespace ScientificReviews.Forms
 
         private BibtexEntry[] ApplyCurrentSort(IEnumerable<BibtexEntry> sourceEntries)
         {
+            return ApplyCurrentSort(sourceEntries, _currentSortColumnName, _currentSortDirection, CancellationToken.None);
+        }
+
+        private BibtexEntry[] ApplyCurrentSort(
+            IEnumerable<BibtexEntry> sourceEntries,
+            string sortColumnName,
+            ListSortDirection? sortDirection,
+            CancellationToken cancellationToken)
+        {
             BibtexEntry[] sourceArray = sourceEntries?.ToArray() ?? Array.Empty<BibtexEntry>();
-            if (string.IsNullOrWhiteSpace(_currentSortColumnName) || !_currentSortDirection.HasValue || sourceArray.Length <= 1)
+            if (string.IsNullOrWhiteSpace(sortColumnName) || !sortDirection.HasValue || sourceArray.Length <= 1)
                 return sourceArray;
 
-            bool sortAsNumeric = IsNumericColumn(sourceArray, _currentSortColumnName);
+            bool sortAsNumeric = IsNumericColumn(sourceArray, sortColumnName);
             List<BibtexEntry> sorted = sourceArray.ToList();
             sorted.Sort((left, right) =>
             {
-                int comparison = CompareEntryValues(left, right, _currentSortColumnName, sortAsNumeric);
-                return _currentSortDirection == ListSortDirection.Descending
+                cancellationToken.ThrowIfCancellationRequested();
+                int comparison = CompareEntryValues(left, right, sortColumnName, sortAsNumeric);
+                return sortDirection == ListSortDirection.Descending
                     ? -comparison
                     : comparison;
             });
@@ -1281,7 +1487,7 @@ namespace ScientificReviews.Forms
             return Application.StartupPath;
         }
 
-        private void MainForm_Shown(object sender, EventArgs e)
+        private async void MainForm_Shown(object sender, EventArgs e)
         {
             try
             {
@@ -1289,6 +1495,19 @@ namespace ScientificReviews.Forms
 
                 if (Program.AppSettings.Data.FirstTimeUseCompleted != true)
                     ShowFirstTimeUseGuide();
+
+                if (_startupFilePaths.Length > 0)
+                {
+                    bool replaceExisting = true;
+                    foreach (string filePath in _startupFilePaths)
+                    {
+                        if (await LoadBibTexPathAsync(filePath, replaceExisting, runPostLoadPreprocessing: false))
+                            replaceExisting = false;
+                    }
+                    if (!IsRawModeEnabled)
+                        StartAutomaticBackgroundOperationsAfterLoad();
+                    return;
+                }
 
                 if (entries != null && entries.Count > 0)
                     return;
@@ -1326,14 +1545,16 @@ namespace ScientificReviews.Forms
                 }
 
                 entries = loadedEntries.ToList();
-                visibleEntries = entries;
-                LoadData(visibleEntries.ToArray());
+                _archiveHistory.Reset(entries, isSaved: false);
+                LoadData(entries.ToArray());
                 SetDatabaseChanged(true);
                 lblStatus.Text = "Loaded latest autosave backup.";
             }
             catch (Exception ex)
             {
-                lblStatus.Text = "Failed to load autosave: " + ex.Message;
+                lblStatus.Text = (_startupFilePaths.Length > 0 ? "Failed to open file: " : "Failed to load autosave: ") + ex.Message;
+                if (_startupFilePaths.Length > 0)
+                    MessageBox.Show(this, lblStatus.Text, Program.APP_NAME, MessageBoxButtons.OK, MessageBoxIcon.Error);
             }
         }
     }

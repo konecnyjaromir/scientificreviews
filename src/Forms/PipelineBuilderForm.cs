@@ -1,3 +1,4 @@
+using ScientificReviews.Helpers;
 using ScientificReviews.Pipelines;
 using System;
 using System.Collections.Generic;
@@ -257,6 +258,7 @@ namespace ScientificReviews.Forms
                 menu.Items.Add(item);
             }
 
+            MenuIconHelper.Apply(menu);
             return menu;
         }
 

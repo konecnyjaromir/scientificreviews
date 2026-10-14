@@ -27,13 +27,13 @@ namespace ScientificReviews.Helpers
             Directory.CreateDirectory(backupFolder);
 
             // 1) write timestamped backup
-            string stampName = $"{BaseName}_{DateTime.Now:yyyyMMdd_HHmmss_fff}.bib";
+            string stampName = $"{BaseName}_{DateTime.Now:yyyyMMdd_HHmmss_fff}_{Guid.NewGuid():N}.bib";
             string stampPath = Path.Combine(backupFolder, stampName);
-            File.WriteAllText(stampPath, content ?? string.Empty);
+            WriteSnapshot(stampPath, content);
 
             // 2) update "latest" (overwrite)
             string latestPath = Path.Combine(backupFolder, LatestName);
-            File.WriteAllText(latestPath, content ?? string.Empty);
+            WriteSnapshot(latestPath, content);
 
             // 3) prune old timestamped backups (keep newest N)
             PruneOldSnapshots(backupFolder, keepBackups);
@@ -62,6 +62,7 @@ namespace ScientificReviews.Helpers
         private static void PruneOldSnapshots(string backupFolder, int keepBackups)
         {
             var files = Directory.GetFiles(backupFolder, $"{BaseName}_*.bib")
+                .Where(file => !string.Equals(Path.GetFileName(file), LatestName, StringComparison.OrdinalIgnoreCase))
                 .Select(f => new FileInfo(f))
                 .OrderByDescending(fi => fi.LastWriteTimeUtc)
                 .ToList();
@@ -71,6 +72,24 @@ namespace ScientificReviews.Helpers
             {
                 try { files[i].Delete(); }
                 catch { /* ignore */ }
+            }
+        }
+
+        private static void WriteSnapshot(string path, string content)
+        {
+            string temporaryPath = path + "." + Guid.NewGuid().ToString("N") + ".tmp";
+            try
+            {
+                File.WriteAllText(temporaryPath, content ?? string.Empty);
+                if (File.Exists(path))
+                    File.Replace(temporaryPath, path, null);
+                else
+                    File.Move(temporaryPath, path);
+            }
+            finally
+            {
+                if (File.Exists(temporaryPath))
+                    File.Delete(temporaryPath);
             }
         }
     }

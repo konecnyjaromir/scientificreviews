@@ -73,6 +73,7 @@ namespace ScientificReviews.Forms
         private void SetCurrentBibTexSources(IEnumerable<string> sourcePaths, string currentFilePath = null)
         {
             string[] normalizedSourcePaths = NormalizeBibTexSourcePaths(sourcePaths);
+            string previousPath = _currentBibTexPath;
 
             _currentBibTexSourcePaths.Clear();
             _currentBibTexSourcePaths.AddRange(normalizedSourcePaths);
@@ -81,6 +82,9 @@ namespace ScientificReviews.Forms
                 _currentBibTexPath = normalizedSourcePaths.Length == 1 ? normalizedSourcePaths[0] : null;
             else
                 _currentBibTexPath = Path.GetFullPath(currentFilePath);
+
+            if (!string.Equals(previousPath, _currentBibTexPath, StringComparison.OrdinalIgnoreCase))
+                _approvedSavePath = null;
 
             if (string.IsNullOrWhiteSpace(_currentBibTexPath) == false)
                 Program.AppSettings.Data.LastBibTex = _currentBibTexPath;
@@ -207,7 +211,7 @@ namespace ScientificReviews.Forms
 
         private bool ConfirmReplaceCurrentArchive()
         {
-            if (entries.Count == 0)
+            if (entries.Count == 0 || !DatabaseChanged)
                 return true;
 
             DialogResult result = MessageBox.Show(
@@ -221,6 +225,8 @@ namespace ScientificReviews.Forms
 
         private void ClearCurrentArchiveState(bool markChanged)
         {
+            _changedCts?.Cancel();
+            _approvedSavePath = null;
             entries = new List<BibtexEntry>();
             visibleEntries = new List<BibtexEntry>();
             propertyGrid1.SelectedObject = null;
@@ -233,7 +239,10 @@ namespace ScientificReviews.Forms
             if (markChanged)
                 Changed();
             else
+            {
+                _archiveHistory.Reset(entries);
                 SetDatabaseChanged(false);
+            }
         }
 
         private async Task<bool> LoadBibTexFolderAsync(bool replaceExisting, bool runPostLoadPreprocessing = true)
@@ -266,9 +275,6 @@ namespace ScientificReviews.Forms
 
                     try
                     {
-                        if (replaceExisting)
-                            ClearCurrentArchiveState(false);
-
                         var progress = new Progress<BibtexLoadProgress>(update =>
                         {
                             operation.Report(update?.Summary, update?.Details, isIndeterminate: update?.IsIndeterminate);
@@ -277,6 +283,9 @@ namespace ScientificReviews.Forms
                         BibtexLoadResult loadResult = await _bibtexLoadService.LoadFolderAsync(folderDialog.SelectedPath, progress, cancellation.Token);
                         var loadedEntries = loadResult.Entries;
                         string[] sourcePaths = GetBibTexSourcePaths(loadResult.SourcePath, loadResult.IsFolderLoad);
+
+                        if (replaceExisting)
+                            ClearCurrentArchiveState(false);
 
                         if (replaceExisting)
                             SetCurrentBibTexSources(sourcePaths);
@@ -318,7 +327,7 @@ namespace ScientificReviews.Forms
 
         private async Task<bool> LoadBibTexFileAsync(bool replaceExisting, bool runPostLoadPreprocessing = true)
         {
-            OpenFileDialog ofd = new OpenFileDialog()
+            using (OpenFileDialog ofd = new OpenFileDialog()
             {
                 CheckPathExists = true,
                 CheckFileExists = true,
@@ -326,15 +335,26 @@ namespace ScientificReviews.Forms
                 InitialDirectory = string.IsNullOrWhiteSpace(Program.AppSettings.Data.LastBibTex)
                     ? Program.AppSettings.Data.LastDirectory
                     : Path.GetDirectoryName(Program.AppSettings.Data.LastBibTex)
-            };
+            })
+            {
+                if (ofd.ShowDialog(this) != DialogResult.OK)
+                    return false;
 
-            if (ofd.ShowDialog(this) != DialogResult.OK)
-                return false;
+                return await LoadBibTexPathAsync(ofd.FileName, replaceExisting, runPostLoadPreprocessing);
+            }
+        }
+
+        private async Task<bool> LoadBibTexPathAsync(string filePath, bool replaceExisting, bool runPostLoadPreprocessing = true)
+        {
+            string fileName = Path.GetFullPath(filePath);
+            if (!File.Exists(fileName))
+                throw new FileNotFoundException("BibTeX file was not found.", fileName);
+            if (!string.Equals(Path.GetExtension(fileName), ".bib", StringComparison.OrdinalIgnoreCase))
+                throw new ArgumentException("Only .bib files can be opened as an archive.", nameof(filePath));
 
             if (replaceExisting && ConfirmReplaceCurrentArchive() == false)
                 return false;
 
-            string fileName = ofd.FileName;
             StatusStripOperationHandle operation = StartTrackedOperation(
                 "load-bibtex",
                 replaceExisting ? "Open file" : "Add file",
@@ -351,9 +371,6 @@ namespace ScientificReviews.Forms
 
                 try
                 {
-                    if (replaceExisting)
-                        ClearCurrentArchiveState(false);
-
                     var progress = new Progress<BibtexLoadProgress>(update =>
                     {
                         operation.Report(update?.Summary, update?.Details, isIndeterminate: update?.IsIndeterminate);
@@ -362,6 +379,9 @@ namespace ScientificReviews.Forms
                     BibtexLoadResult loadResult = await _bibtexLoadService.LoadFileAsync(fileName, progress, cancellation.Token);
                     var loadedEntries = loadResult.Entries;
                     string[] sourcePaths = GetBibTexSourcePaths(loadResult.SourcePath, loadResult.IsFolderLoad);
+
+                    if (replaceExisting)
+                        ClearCurrentArchiveState(false);
 
                     if (replaceExisting)
                         SetCurrentBibTexSources(sourcePaths, fileName);

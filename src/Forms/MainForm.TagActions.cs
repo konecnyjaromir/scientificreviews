@@ -42,6 +42,7 @@ namespace ScientificReviews.Forms
                     entry.Tags = list.ToArray();
                     lblStatus.Text = string.Empty;
                     RefreshGrid(new[] { entry });
+                    Changed();
                 }
             }
         }
@@ -81,6 +82,7 @@ namespace ScientificReviews.Forms
 
             lblStatus.Text = string.Empty;
             RefreshGrid(GetSelectedOrdered());
+            Changed();
         }
 
         private void addTagToolStripMenuItem_Click(object sender, EventArgs e)
@@ -375,6 +377,7 @@ namespace ScientificReviews.Forms
 
             lblStatus.Text = string.Empty;
             RefreshGrid(GetSelectedOrdered());
+            Changed();
         }
 
         private void RenameTagForSelectedRecords()

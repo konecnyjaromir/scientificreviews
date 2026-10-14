@@ -82,8 +82,8 @@ namespace ScientificReviews
 
         [Browsable(true)]
         [Category(APPLICATION_CAT)]
-        [DisplayName("Allow unsafe saving")]
-        [Description("If enabled, Save overwrites the currently opened BibTeX file without confirmation.")]
+        [DisplayName("Save without confirmation")]
+        [Description("Skip the first overwrite confirmation. After a successful Save or Save As, further saves to that file are approved for the current session automatically.")]
         public bool SaveWithoutApprove { get; set; } = false;
 
         [Browsable(true)]
@@ -223,9 +223,9 @@ namespace ScientificReviews
         [Browsable(true)]
         [Category(BACKUP_CAT)]
         [DisplayName("Backup folder")]
-        [Description("Folder where automatic backup BibTeX snapshots are stored.")]
+        [Description("Folder where automatic backup BibTeX snapshots are stored. Defaults to the backup folder next to the application.")]
         [Editor(typeof(PathEditor), typeof(UITypeEditor))]
-        public string BackupFolder { get; set; }
+        public string BackupFolder { get; set; } = System.IO.Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "backup");
 
         [Browsable(true)]
         [Category(BACKUP_CAT)]

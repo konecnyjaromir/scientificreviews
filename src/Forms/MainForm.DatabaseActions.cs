@@ -263,11 +263,12 @@ namespace ScientificReviews.Forms
                 return await SaveArchiveAsAsync();
             }
 
-            if (!skipConfirmation && Program.AppSettings.Data.SaveWithoutApprove == false)
+            if (!skipConfirmation && Program.AppSettings.Data.SaveWithoutApprove == false &&
+                !string.Equals(_approvedSavePath, currentFile, StringComparison.OrdinalIgnoreCase))
             {
                 DialogResult result = MessageBox.Show(
                     this,
-                    $"Save will overwrite the currently opened file:\r\n{currentFile}\r\n\r\nThis operation cannot be undone. Do you want to continue?",
+                    $"Save will overwrite the currently opened file:\r\n{currentFile}\r\n\r\nAllow saving to this file for the rest of this session?",
                     "Confirm Save",
                     MessageBoxButtons.YesNo,
                     MessageBoxIcon.Warning,
@@ -360,6 +361,9 @@ namespace ScientificReviews.Forms
                 {
                     Program.AppSettings.Data.LastDirectory = Path.GetDirectoryName(fileName);
                     SetCurrentBibTex(fileName);
+                    _approvedSavePath = _currentBibTexPath;
+                    _archiveHistory.Record(entries);
+                    _archiveHistory.MarkSaved();
                     SetDatabaseChanged(false);
                     Program.AppSettings.SaveSettings();
                 }
@@ -2050,8 +2054,7 @@ namespace ScientificReviews.Forms
 
         private void txtSearch_TextChanged(object sender, EventArgs e)
         {
-            LoadData(entries.ToArray(), txtSearch.Text);
-            UpdateSearchValidationStatus();
+            ScheduleSearch();
         }
 
         private void columnsToolStripMenuItem_Click(object sender, EventArgs e)

@@ -157,6 +157,15 @@ namespace ScientificReviews.Helpers
             _owner = owner;
         }
 
+        public bool HasRunningOperations
+        {
+            get
+            {
+                lock (_sync)
+                    return _activeKeys.Count > 0;
+            }
+        }
+
         public bool HasBlockingOperations
         {
             get

@@ -8,6 +8,7 @@ Scientific Reviews is a Windows desktop tool for researchers who work with BibTe
 ### Project and archive workflow
 
 - Open a BibTeX file or a whole folder as a new archive from `Project -> Open file` / `Open folder`
+- Open `.bib` files directly through Windows `Open with` by selecting `ScientificReviews.exe`, or pass quoted file paths on the command line; an explicitly opened file takes priority over autosave recovery
 - Add more BibTeX files or folders into the current archive from `Project -> Add file` / `Add folder`
 - `Project -> Raw Mode` turns open/add file/folder actions into raw import without post-load preprocessing
 - `Project -> Import Settings` lets you import a settings JSON from an older installation or version after an update
@@ -18,6 +19,9 @@ Scientific Reviews is a Windows desktop tool for researchers who work with BibTe
 - Show the currently opened BibTeX file in the main window title
 - Restore the latest autosave backup on startup when available
 - Autosave the current state during long-running operations
+- Backups default to the `backup` folder next to the application; pending changes are backed up before closing, and the latest recovery file is retained separately from the configured number of snapshots
+- After a successful `Save` or `Save As`, subsequent saves to the same file do not ask for overwrite approval again in that session; opening a different archive resets this approval
+- Opening another archive asks for replacement confirmation only when the current archive has unsaved changes
 
 ### Fast screening and editing
 
@@ -26,6 +30,9 @@ Scientific Reviews is a Windows desktop tool for researchers who work with BibTe
 - Classic full-table search across rendered BibTeX content remains available as a fallback mode
 - Search mode toggle remembers the last selected `Smart search` / classic mode between application runs
 - Record editing through the property grid and tag editor
+- `Ctrl+Z` undoes archive changes, including tag edits, deletion, paste and bulk operations; `Ctrl+Y` / `Ctrl+Shift+Z` redo them (up to 50 steps, with a memory limit for large archives)
+- Text editors retain normal text undo; `Ctrl+Backspace` deletes the previous word and supports undo
+- HTTP/HTTPS links in the read-only BibTeX preview open in the default browser, preserving URL capitalization
 - Bulk tag add/edit for selected records
 - Remove selected tags from all selected records
 - Rename selected tags in bulk or rename a single tag from the record panel
@@ -354,7 +361,7 @@ The settings dialog contains the main workflow switches and defaults, including:
 - `Default CSV separator`
 - `Custom columns`
 - `Standard columns`
-- `Allow unsafe saving`
+- `Save without confirmation`
 - `Allow unsafe closing`
 - `Performance Optimization`
 - backup settings

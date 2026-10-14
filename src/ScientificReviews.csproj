@@ -151,6 +151,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Helpers\ArchiveHistory.cs" />
+    <Compile Include="Helpers\TextEditingShortcuts.cs" />
+    <Compile Include="Helpers\MenuIconHelper.cs" />
     <Compile Include="Forms\ExportPdfsModels.cs" />
     <Compile Include="Helpers\BibtexAutosaveManager.cs" />
     <Compile Include="Helpers\BibtexLoadService.cs" />

@@ -39,9 +39,13 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Added `Ctrl+S` for `Save`
 - Added `Ctrl+Shift+S` for `Save As`
 - `Save` now warns before overwriting unless `Allow unsafe saving` is enabled in settings
+- After confirming an overwrite, saving to that file no longer asks again during the session; `Save As` approves the new file for later saves in that session
 - Added `DatabaseChanged` tracking for unsaved BibTeX changes
 - Closing the application now warns before losing unsaved work, with default action set to `No`
 - Added `Allow unsafe closing` setting to bypass the unsaved-changes warning when desired
+- Automatic BibTeX backups are enabled by default and stored in the `backup` folder next to the application
+- Changed archives are backed up asynchronously, including a final snapshot before closing; the latest recovery snapshot is kept separately from the configured snapshot count
+- Backup files are written atomically to avoid leaving partial snapshots
 - Save and `Save As` now run through the new blocking-task mechanism, so saving stays async but the main window is temporarily locked against conflicting edits
 
 ### Record Editing and Clipboard
@@ -74,6 +78,10 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Added `Ctrl+N` for `Project -> New`
 - Added `Ctrl+O` for `Open file`
 - Added `Ctrl+Shift+O` for `Open folder`
+- Added archive-level `Undo` and `Redo` with up to 50 history steps at the top of the `Database` menu
+- Added `Ctrl+Z` to undo archive changes and `Ctrl+Y` / `Ctrl+Shift+Z` to redo; text editors retain their normal text undo behavior
+- Fixed `Ctrl+Backspace` so it deletes the previous word in text editors instead of inserting a character
+- BibTeX URLs in the read-only record preview are clickable and open in the default browser
 
 ### Search and Filtering
 
@@ -89,6 +97,7 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 - Smart search is now the default mode for new and migrated settings
 - The selected search mode is persisted between application runs
 - Classic search remains available and keeps the original comma-separated `OR` behavior over the whole rendered record
+- Search now waits briefly after typing, then filters and sorts asynchronously so the interface stays responsive; only the latest query is applied
 
 ### Tags and Record Actions
 
@@ -307,6 +316,9 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 
 ### Fixes and UX Improvements
 
+- Added distinct icons to menu items, with more varied icons for the main menus
+- Registered `.bib` files can now be opened directly in the application from the operating system; multiple files passed at startup load into one archive
+- Opening a replacement archive now keeps the current archive intact if loading the selected file or folder fails
 - Fixed context menu positioning in the main grid so it opens at the actual click location
 - Fixed `pdf_file` to store only the file name instead of a relative folder path
 - Fixed menu typo `Add folfer` to `Add folder`

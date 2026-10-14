@@ -36,6 +36,8 @@
     <Reference Include="System" />
     <Reference Include="System.Core" />
     <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Windows.Forms" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="BibtexUtilsTests.cs" />
@@ -44,6 +46,7 @@
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="SmartSearchFilterTests.cs" />
+    <Compile Include="WorkflowRegressionTests.cs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\ScientificReviews.csproj">

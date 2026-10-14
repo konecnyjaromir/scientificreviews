@@ -5,9 +5,19 @@ namespace ScientificReviews.Tests
 {
     internal static class Program
     {
+        [STAThread]
         private static int Main()
         {
             List<string> failures = new List<string>();
+
+            RunTest(nameof(WorkflowRegressionTests.ArchiveHistory_RestoresEditsDeletionAndSavedState), WorkflowRegressionTests.ArchiveHistory_RestoresEditsDeletionAndSavedState, failures);
+            RunTest(nameof(WorkflowRegressionTests.Backups_KeepLatestAndRequestedNumberOfSnapshots), WorkflowRegressionTests.Backups_KeepLatestAndRequestedNumberOfSnapshots, failures);
+            RunTest(nameof(WorkflowRegressionTests.CtrlBackspace_DeletesWordSelectionAndSupportsUndo), WorkflowRegressionTests.CtrlBackspace_DeletesWordSelectionAndSupportsUndo, failures);
+            RunTest(nameof(WorkflowRegressionTests.BackupDefaults_NormalizeOlderSettings), WorkflowRegressionTests.BackupDefaults_NormalizeOlderSettings, failures);
+            RunTest(nameof(WorkflowRegressionTests.MainForm_TagEditsUndoRedoAndUrlPreview), WorkflowRegressionTests.MainForm_TagEditsUndoRedoAndUrlPreview, failures);
+            RunTest(nameof(WorkflowRegressionTests.MainForm_StartupFileOverridesRecoveryAndSaveApprovalResets), WorkflowRegressionTests.MainForm_StartupFileOverridesRecoveryAndSaveApprovalResets, failures);
+            RunTest(nameof(WorkflowRegressionTests.MainForm_RecoveryRetainsRecordsAndQuickCloseFlushesBackup), WorkflowRegressionTests.MainForm_RecoveryRetainsRecordsAndQuickCloseFlushesBackup, failures);
+            RunTest(nameof(WorkflowRegressionTests.MainForm_SearchKeepsLatestSmartAndClassicQuery), WorkflowRegressionTests.MainForm_SearchKeepsLatestSmartAndClassicQuery, failures);
 
             RunTest(nameof(DoiNormalizationHelperTests.PrepareDoiForLookup_StripsKnownPrefixesAndTrailingPunctuation), DoiNormalizationHelperTests.PrepareDoiForLookup_StripsKnownPrefixesAndTrailingPunctuation, failures);
             RunTest(nameof(DoiNormalizationHelperTests.NormalizeArxivIdentifier_NormalizesSupportedInputs), DoiNormalizationHelperTests.NormalizeArxivIdentifier_NormalizesSupportedInputs, failures);

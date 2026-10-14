@@ -226,7 +226,7 @@ namespace ScientificReviews.Forms
             AddCheck(card, "Create backup snapshots after changes", draft.AllowBackup, value => draft.AllowBackup = value);
             AddPath(card, "Backup folder", draft.BackupFolder, value => draft.BackupFolder = value);
             AddHeading(card, "Save and close warnings");
-            AddCheck(card, "Ask before overwriting the current archive", !draft.SaveWithoutApprove, value => draft.SaveWithoutApprove = !value);
+            AddCheck(card, "Confirm the first overwrite of an opened file", !draft.SaveWithoutApprove, value => draft.SaveWithoutApprove = !value);
             AddCheck(card, "Ask what to do with unsaved changes on close", !draft.UnsafeClosing, value => draft.UnsafeClosing = !value);
         }
 

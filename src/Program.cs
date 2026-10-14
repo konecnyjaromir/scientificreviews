@@ -1,5 +1,6 @@
 ﻿using ScientificReviews.Bibtex;
 using ScientificReviews.Logs;
+using ScientificReviews.Helpers;
 using ScientificReviews.Pipelines;
 using ScientificReviews.Settings;
 using Newtonsoft.Json;
@@ -31,7 +32,7 @@ namespace ScientificReviews
         /// The main entry point for the application.
         /// </summary>
         [STAThread]
-        static void Main()
+        static void Main(string[] args)
         {
             try
             {
@@ -66,7 +67,8 @@ namespace ScientificReviews
 #endif
             finally { }
 
-            Application.Run(new Forms.MainForm());
+            Application.AddMessageFilter(new TextEditingShortcuts());
+            Application.Run(new Forms.MainForm(args));
         }
 
         private static void LogsInitialize()
@@ -282,6 +284,12 @@ namespace ScientificReviews
         {
             bool changed = false;
             AppSettingsData defaults = new AppSettingsData();
+
+            if (string.IsNullOrWhiteSpace(settings.BackupFolder))
+            {
+                settings.BackupFolder = defaults.BackupFolder;
+                changed = true;
+            }
 
             string[] normalizedColumns = NormalizeStringArray(settings.Columns);
             if (AreStringArraysEqual(settings.Columns, normalizedColumns) == false)
