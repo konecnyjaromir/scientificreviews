@@ -198,6 +198,9 @@ namespace ScientificReviews.Forms
             ComboBox import = AddCombo(card, "Default Open/Add mode", new[] { "Normal", "Raw" }, draft.OpenAddMode.ToString());
             import.SelectedIndexChanged += (sender, args) => draft.OpenAddMode = (OpenAddMode)Enum.Parse(typeof(OpenAddMode), import.Text);
             AddNote(card, "Raw opens the original data without post-load preprocessing.");
+            AddHeading(card, "Search");
+            AddCheck(card, "Match letter case in search", draft.SearchCaseSensitive, value => draft.SearchCaseSensitive = value);
+            AddNote(card, "When enabled, searches distinguish uppercase and lowercase text. This applies to Smart search and classic search.");
         }
 
         private void BuildPdfs(FlowLayoutPanel card)
@@ -235,6 +238,7 @@ namespace ScientificReviews.Forms
             stepDescription.Text = "Check your choices before saving them.";
             AddHeading(card, "Your setup");
             AddNote(card, "Archive preprocessing: " + draft.AutoPreprocessingMode + "\r\nImport mode: " + draft.OpenAddMode
+                + "\r\nCase-sensitive search: " + YesNo(draft.SearchCaseSensitive)
                 + "\r\nPDF folder: " + DisplayPath(draft.PdfFolder)
                 + "\r\nSearch PDF subfolders: " + YesNo(draft.RecursivePdfSearch)
                 + "\r\nMetadata email: " + (string.IsNullOrWhiteSpace(draft.MetadataContactEmail) ? "Not set" : draft.MetadataContactEmail)

@@ -644,6 +644,10 @@ namespace ScientificReviews.Helpers
 
             return (entry.Tags ?? Array.Empty<BibtexTag>())
                 .Where(tag => tag != null && string.Equals(tag.Key, field, StringComparison.OrdinalIgnoreCase))
+                // The grid and property panel show the first value for a tag key.
+                // Searching later duplicate values can make a visible "From" title
+                // appear to match title:from even with case-sensitive search.
+                .Take(1)
                 .Select(tag => tag.Value ?? string.Empty);
         }
 

@@ -130,6 +130,17 @@ namespace ScientificReviews.Tests
             AssertTrue(SmartSearchFilter.TryParse("key:MixedKey").Filter.IsMatch(entry));
             AssertFalse(SmartSearchFilter.TryParse("\"alpha beta\"").Filter.IsMatch(entry));
             AssertTrue(SmartSearchFilter.TryParse("\"alpha beta\"", false).Filter.IsMatch(entry));
+
+            var fromEntry = CreateEntry("example", "Article", new BibtexTag("title", "From the archive"));
+            AssertFalse(SmartSearchFilter.TryParse("title:from", true).Filter.IsMatch(fromEntry));
+            AssertTrue(SmartSearchFilter.TryParse("title:From", true).Filter.IsMatch(fromEntry));
+            AssertTrue(SmartSearchFilter.TryParse("title:from", false).Filter.IsMatch(fromEntry));
+
+            var duplicateTitle = CreateEntry("duplicate", "Article",
+                new BibtexTag("title", "From the archive"),
+                new BibtexTag("title", "from the archive"));
+            AssertFalse(SmartSearchFilter.TryParse("title:from", true).Filter.IsMatch(duplicateTitle));
+            AssertTrue(SmartSearchFilter.TryParse("title:From", true).Filter.IsMatch(duplicateTitle));
         }
 
         private static void AssertTrue(bool value)

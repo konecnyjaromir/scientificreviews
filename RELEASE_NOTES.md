@@ -7,7 +7,7 @@ This development cycle focused on turning Scientific Reviews into a faster multi
 ### Follow-up Hotfix
 
 - Added whole-column merge, copy, set-value, find/replace, and removal from `Window -> Columns merge/copy/replace` and tag-column header menus, with all/visible/selected scopes, previews, and undo/redo
-- Smart and classic search now match letter case by default; the saved `Case-sensitive search` setting can turn this off
+- Added a persistent `AZ` case-sensitive search toggle beside the search bar; it defaults to off and can also be set in the First Time Use guide
 - `Create entry keys` now asks for confirmation before running manually and warns that previously generated keys may change
 - The unsaved-changes dialog on close now saves and closes with `Yes`, or closes without saving with `No`; a cancelled or failed save keeps the application open
 - Removed `Create entry keys` from the built-in `Fast` auto-preprocessing routine; `Normal` and `Deep` still include it

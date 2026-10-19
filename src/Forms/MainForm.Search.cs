@@ -17,6 +17,9 @@ namespace ScientificReviews.Forms
 
         private CheckBox _searchModeCheckBox;
         private ToolStripControlHost _searchModeCheckBoxHost;
+        private CheckBox _searchCaseSensitiveCheckBox;
+        private ToolStripControlHost _searchCaseSensitiveCheckBoxHost;
+        private bool _updatingSearchUi;
         private CancellationTokenSource _searchCancellation;
 
         private sealed class PreparedSearchResult
@@ -89,7 +92,7 @@ namespace ScientificReviews.Forms
             }
         }
 
-        private bool SearchCaseSensitive => Program.AppSettings?.Data?.SearchCaseSensitive ?? true;
+        private bool SearchCaseSensitive => Program.AppSettings?.Data?.SearchCaseSensitive ?? false;
 
         private bool UseSmartSearch
         {
@@ -103,6 +106,26 @@ namespace ScientificReviews.Forms
 
         private void InitializeSearchUi()
         {
+            _searchCaseSensitiveCheckBox = new CheckBox
+            {
+                Appearance = Appearance.Button,
+                AutoSize = false,
+                CheckAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                Checked = SearchCaseSensitive,
+                Font = new System.Drawing.Font("Segoe UI Emoji", 11F, System.Drawing.FontStyle.Regular),
+                Size = new System.Drawing.Size(30, 24),
+                Text = "\U0001F520",
+                TextAlign = System.Drawing.ContentAlignment.MiddleCenter,
+                AccessibleName = "Case-sensitive search",
+                AccessibleDescription = "Toggle whether search distinguishes uppercase and lowercase text."
+            };
+            _searchCaseSensitiveCheckBox.CheckedChanged += searchCaseSensitiveCheckBox_CheckedChanged;
+            _searchCaseSensitiveCheckBoxHost = new ToolStripControlHost(_searchCaseSensitiveCheckBox)
+            {
+                AutoSize = false,
+                Size = new System.Drawing.Size(34, 26)
+            };
+
             _searchModeCheckBox = new CheckBox
             {
                 AutoSize = true,
@@ -119,9 +142,15 @@ namespace ScientificReviews.Forms
 
             int searchIndex = toolStrip1.Items.IndexOf(txtSearch);
             if (searchIndex >= 0)
-                toolStrip1.Items.Insert(searchIndex + 1, _searchModeCheckBoxHost);
+            {
+                toolStrip1.Items.Insert(searchIndex + 1, _searchCaseSensitiveCheckBoxHost);
+                toolStrip1.Items.Insert(searchIndex + 2, _searchModeCheckBoxHost);
+            }
             else
+            {
+                toolStrip1.Items.Add(_searchCaseSensitiveCheckBoxHost);
                 toolStrip1.Items.Add(_searchModeCheckBoxHost);
+            }
 
             UpdateSearchModeUi();
         }
@@ -192,25 +221,48 @@ namespace ScientificReviews.Forms
 
         private void UpdateSearchModeUi()
         {
-            if (_searchModeCheckBox == null)
+            if (_searchModeCheckBox == null || _searchCaseSensitiveCheckBox == null)
                 return;
 
+            _updatingSearchUi = true;
+            _searchCaseSensitiveCheckBox.Checked = SearchCaseSensitive;
             if (_searchModeCheckBox.Checked != UseSmartSearch)
                 _searchModeCheckBox.Checked = UseSmartSearch;
+            _updatingSearchUi = false;
+
+            _searchCaseSensitiveCheckBoxHost.ToolTipText = SearchCaseSensitive
+                ? "Case-sensitive search is on. Click 🔠 to ignore letter case."
+                : "Case-sensitive search is off. Click 🔠 to match letter case.";
 
             if (UseSmartSearch)
             {
                 _searchModeCheckBoxHost.ToolTipText = "Smart search is active. Uncheck to switch to classic full-text search.";
-                txtSearch.ToolTipText = "Examples: title:\"machine learning\" AND author:novak, year:2020-2025, year>2025 OR doi:10.1000/xyz";
+                txtSearch.ToolTipText = "Unqualified terms search the whole record, including abstract and PDF paths. Use title:snake to search only titles. Examples: title:\"machine learning\" AND author:novak, year:2020-2025, year>2025 OR doi:10.1000/xyz";
             }
             else
             {
                 _searchModeCheckBoxHost.ToolTipText = "Classic full-text search is active. Check to switch to smart query search.";
-                txtSearch.ToolTipText = "Classic mode searches the whole record. Separate values by comma for OR.";
+                txtSearch.ToolTipText = "Classic mode searches the whole record, including abstract and PDF paths. A record can contain both snake and Snake. Separate values by comma for OR; use Smart search and title:snake to search only titles.";
             }
             txtSearch.ToolTipText += SearchCaseSensitive
-                ? " Case-sensitive (change in Settings)."
-                : " Case-insensitive (change in Settings).";
+                ? " Case-sensitive (toggle with the 🔠 button)."
+                : " Case-insensitive (toggle with the 🔠 button).";
+        }
+
+        private void searchCaseSensitiveCheckBox_CheckedChanged(object sender, EventArgs e)
+        {
+            if (_updatingSearchUi || Program.AppSettings?.Data == null)
+                return;
+
+            Program.AppSettings.Data.SearchCaseSensitive = _searchCaseSensitiveCheckBox.Checked;
+            Program.AppSettings.SaveSettings("Search case sensitivity");
+            UpdateSearchModeUi();
+
+            string statusMessage = SearchCaseSensitive
+                ? "Case-sensitive search enabled."
+                : "Case-sensitive search disabled.";
+            RefreshGrid(statusMessage: statusMessage);
+            UpdateSearchValidationStatus(statusMessage);
         }
 
         private void UpdateSearchValidationStatus(string preferredStatus = null)

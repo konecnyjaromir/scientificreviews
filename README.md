@@ -59,7 +59,9 @@ The main search box supports two modes:
 
 The `Smart search` checkbox next to the search box switches between these modes. Hovering over the search box shows a tooltip with example syntax for the active mode.
 
-Both modes match letter case by default. Turn off `Project -> Settings -> Case-sensitive search` to ignore letter case; this preference is saved between runs. Smart-search field names and boolean operators remain case-insensitive, and numeric comparisons are unaffected.
+An unqualified term in either mode searches the entire record, including abstracts and PDF paths. A record can contain both `Snake` in its title and `snake` in its abstract, so both queries correctly return it even with case sensitivity enabled. To distinguish the title's capitalization, enable Smart search and use `title:snake` or `title:Snake`.
+
+The `AZ` button next to the search box toggles case-sensitive matching in either mode. It is off by default, saves its state between runs, and can also be set in `Project -> Settings -> First Time Use...`. Smart-search field names and boolean operators remain case-insensitive, and numeric comparisons are unaffected.
 
 ### Whole-column editing
 
@@ -174,7 +176,7 @@ This gives the archive a bibliographically correct DOI while still preserving ar
 
 ## Pipelines, Auto-Preprocessing, and Autofix
 
-On a new installation, `First Time Use` opens at startup to guide archive preprocessing, PDF folders, optional metadata access, and backup/save warnings. The guide saves settings only when finished and can be opened again from `Project -> Settings -> First Time Use...`.
+On a new installation, `First Time Use` opens at startup to guide archive preprocessing, search case sensitivity, PDF folders, optional metadata access, and backup/save warnings. The guide saves settings only when finished and can be opened again from `Project -> Settings -> First Time Use...`.
 
 The application supports reusable multi-step pipelines for cleanup and enrichment workflows.
 

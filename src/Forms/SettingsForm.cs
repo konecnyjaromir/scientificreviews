@@ -18,7 +18,7 @@ namespace ScientificReviews.Forms
             InitializeComponent();
         }
 
-        AppSettingsJson<AppSettingsData> set = new AppSettingsJson<AppSettingsData>(Program.SETTINGS_FILE_JSON);
+        AppSettingsJson<AppSettingsData> set = new AppSettingsJson<AppSettingsData>(Program.SettingsFilePath);
 
         private void SettingsForm_Shown(object sender, EventArgs e)
         {

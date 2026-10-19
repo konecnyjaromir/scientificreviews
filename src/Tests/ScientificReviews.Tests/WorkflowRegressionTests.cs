@@ -248,7 +248,7 @@ namespace ScientificReviews.Tests
                 var grid = (DataGridView)Field(form, "dataGridView1").GetValue(form);
                 var search = (ToolStripTextBox)Field(form, "txtSearch").GetValue(form);
                 var settings = ScientificReviews.Program.AppSettings;
-                Equal(true, settings.Data.SearchCaseSensitive);
+                Equal(false, settings.Data.SearchCaseSensitive);
                 foreach (bool smart in new[] { true, false })
                 {
                     settings.Data.UseSmartSearch = smart;
@@ -270,6 +270,40 @@ namespace ScientificReviews.Tests
                 settings.Data.SearchCaseSensitive = true;
                 settings.LoadSettings();
                 Equal(false, settings.Data.SearchCaseSensitive);
+            }
+        }
+
+        public static void SettingsForm_SavesSearchCaseToActiveSettingsFile()
+        {
+            using (TestDirectory directory = new TestDirectory())
+            {
+                var globalPathProperty = typeof(ScientificReviews.Program).GetProperty("GlobalPath", BindingFlags.Static | BindingFlags.Public);
+                string previousPath = (string)globalPathProperty.GetValue(null);
+                string activePath = Path.Combine(directory.Path, "settings.json");
+                var settings = new AppSettingsJson<AppSettingsData>(activePath);
+                settings.Data.SearchCaseSensitive = false;
+                settings.SaveSettings();
+                try
+                {
+                    globalPathProperty.GetSetMethod(true).Invoke(null, new object[] { directory.Path });
+                    using (var form = new SettingsForm())
+                    {
+                        typeof(SettingsForm).GetMethod("SettingsForm_Shown", BindingFlags.Instance | BindingFlags.NonPublic)
+                            .Invoke(form, new object[] { form, EventArgs.Empty });
+                        var grid = (PropertyGrid)typeof(SettingsForm).GetField("propertyGrid1", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(form);
+                        Equal(false, ((AppSettingsData)grid.SelectedObject).SearchCaseSensitive);
+                        ((AppSettingsData)grid.SelectedObject).SearchCaseSensitive = true;
+                        typeof(SettingsForm).GetMethod("btnOk_Click", BindingFlags.Instance | BindingFlags.NonPublic)
+                            .Invoke(form, new object[] { form, EventArgs.Empty });
+                    }
+                    var reloaded = new AppSettingsJson<AppSettingsData>(activePath);
+                    reloaded.LoadSettings();
+                    Equal(true, reloaded.Data.SearchCaseSensitive);
+                }
+                finally
+                {
+                    globalPathProperty.GetSetMethod(true).Invoke(null, new object[] { previousPath });
+                }
             }
         }
 
