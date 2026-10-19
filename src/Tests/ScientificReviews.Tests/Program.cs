@@ -10,6 +10,15 @@ namespace ScientificReviews.Tests
         {
             List<string> failures = new List<string>();
 
+            RunTest(nameof(ColumnEditServiceTests.Merge_PreviewsWithoutMutationAndHandlesDuplicatesAndMissingValues), ColumnEditServiceTests.Merge_PreviewsWithoutMutationAndHandlesDuplicatesAndMissingValues, failures);
+            RunTest(nameof(ColumnEditServiceTests.CopySetReplaceAndRemove_RespectScopeAndLiteralCaseMatching), ColumnEditServiceTests.CopySetReplaceAndRemove_RespectScopeAndLiteralCaseMatching, failures);
+            RunTest(nameof(ColumnEditServiceTests.Plan_RejectsInvalidColumnsAndEmptyFindBeforeMutation), ColumnEditServiceTests.Plan_RejectsInvalidColumnsAndEmptyFindBeforeMutation, failures);
+            RunTest(nameof(SmartSearchFilterTests.TryParse_MatchesCaseByDefaultAndCanIgnoreCase), SmartSearchFilterTests.TryParse_MatchesCaseByDefaultAndCanIgnoreCase, failures);
+            RunTest(nameof(WorkflowRegressionTests.MainForm_CaseSettingAppliesToSmartClassicAndAsyncSearch), WorkflowRegressionTests.MainForm_CaseSettingAppliesToSmartClassicAndAsyncSearch, failures);
+            RunTest(nameof(WorkflowRegressionTests.MainForm_ColumnEditsRespectSelectionAndUndoRedo), WorkflowRegressionTests.MainForm_ColumnEditsRespectSelectionAndUndoRedo, failures);
+            RunTest(nameof(WorkflowRegressionTests.ColumnDialog_PreviewsScopesAndInvalidatesChangedOptions), WorkflowRegressionTests.ColumnDialog_PreviewsScopesAndInvalidatesChangedOptions, failures);
+            RunTest(nameof(WorkflowRegressionTests.MainForm_ColumnMenuSurvivesClosingAndReopening), WorkflowRegressionTests.MainForm_ColumnMenuSurvivesClosingAndReopening, failures);
+
             RunTest(nameof(WorkflowRegressionTests.ArchiveHistory_RestoresEditsDeletionAndSavedState), WorkflowRegressionTests.ArchiveHistory_RestoresEditsDeletionAndSavedState, failures);
             RunTest(nameof(WorkflowRegressionTests.Backups_KeepLatestAndRequestedNumberOfSnapshots), WorkflowRegressionTests.Backups_KeepLatestAndRequestedNumberOfSnapshots, failures);
             RunTest(nameof(WorkflowRegressionTests.CtrlBackspace_DeletesWordSelectionAndSupportsUndo), WorkflowRegressionTests.CtrlBackspace_DeletesWordSelectionAndSupportsUndo, failures);

@@ -42,14 +42,14 @@ namespace ScientificReviews.Helpers
             _root = root;
         }
 
-        public static SmartSearchParseResult TryParse(string query)
+        public static SmartSearchParseResult TryParse(string query, bool caseSensitive = true)
         {
             if (string.IsNullOrWhiteSpace(query))
                 return SmartSearchParseResult.FromFilter(new SmartSearchFilter(null));
 
             try
             {
-                Parser parser = new Parser(query);
+                Parser parser = new Parser(query, caseSensitive);
                 SearchNode root = parser.Parse();
                 return SmartSearchParseResult.FromFilter(new SmartSearchFilter(root));
             }
@@ -85,17 +85,19 @@ namespace ScientificReviews.Helpers
         {
             private readonly string _field;
             private readonly string _value;
+            private readonly StringComparison _comparison;
 
-            public TermNode(string field, string value)
+            public TermNode(string field, string value, bool caseSensitive)
             {
                 _field = string.IsNullOrWhiteSpace(field) ? null : field.Trim();
                 _value = value ?? string.Empty;
+                _comparison = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
             }
 
             public override bool Evaluate(BibtexEntry entry)
             {
                 return GetCandidateValues(entry, _field)
-                    .Any(candidate => candidate?.IndexOf(_value, StringComparison.OrdinalIgnoreCase) >= 0);
+                    .Any(candidate => candidate?.IndexOf(_value, _comparison) >= 0);
             }
         }
 
@@ -210,11 +212,13 @@ namespace ScientificReviews.Helpers
         private sealed class Parser
         {
             private readonly List<string> _tokens;
+            private readonly bool _caseSensitive;
             private int _position;
 
-            public Parser(string query)
+            public Parser(string query, bool caseSensitive)
             {
                 _tokens = Tokenize(query);
+                _caseSensitive = caseSensitive;
             }
 
             public SearchNode Parse()
@@ -339,7 +343,7 @@ namespace ScientificReviews.Helpers
                 if (TryCreateNumericComparisonNode(field, value, out SearchNode numericComparisonNode))
                     return numericComparisonNode;
 
-                return new TermNode(field, value);
+                return new TermNode(field, value, _caseSensitive);
             }
 
             private bool TryParseSeparatedComparison(string token, out SearchNode node)

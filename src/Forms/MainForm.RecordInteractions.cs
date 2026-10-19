@@ -383,7 +383,7 @@ namespace ScientificReviews.Forms
                 return;
 
             DataGridView.HitTestInfo hitTest = dataGridView1.HitTest(e.X, e.Y);
-            if (hitTest.RowIndex >= 0)
+            if (hitTest.RowIndex >= 0 || hitTest.Type == DataGridViewHitTestType.ColumnHeader)
                 return;
 
             _gridBackgroundContextMenu?.Show(dataGridView1, new Point(e.X, e.Y));

@@ -225,8 +225,8 @@ namespace ScientificReviews.Tests
 
                 ToolStripTextBox search = (ToolStripTextBox)Field(form, "txtSearch").GetValue(form);
                 DataGridView grid = (DataGridView)Field(form, "dataGridView1").GetValue(form);
-                search.Text = "title:alpha";
-                search.Text = "title:beta";
+                search.Text = "title:Alpha";
+                search.Text = "title:Beta";
                 PumpUntil(() => grid.Rows.Count == 1 &&
                     ((BibtexEntry)((System.Data.DataRowView)grid.Rows[0].DataBoundItem).Row["Entry"]).Key == "beta");
 
@@ -235,6 +235,152 @@ namespace ScientificReviews.Tests
                 search.Text = "gamma";
                 PumpUntil(() => grid.Rows.Count == 1 &&
                     ((BibtexEntry)((System.Data.DataRowView)grid.Rows[0].DataBoundItem).Row["Entry"]).Key == "gamma");
+            }
+        }
+
+        public static void MainForm_CaseSettingAppliesToSmartClassicAndAsyncSearch()
+        {
+            using (TestDirectory directory = new TestDirectory())
+            using (MainForm form = CreateForm(directory.Path))
+            {
+                var records = new List<BibtexEntry> { Entry("one", "Alpha result"), Entry("two", "alpha result") };
+                Field(form, "entries").SetValue(form, records);
+                var grid = (DataGridView)Field(form, "dataGridView1").GetValue(form);
+                var search = (ToolStripTextBox)Field(form, "txtSearch").GetValue(form);
+                var settings = ScientificReviews.Program.AppSettings;
+                Equal(true, settings.Data.SearchCaseSensitive);
+                foreach (bool smart in new[] { true, false })
+                {
+                    settings.Data.UseSmartSearch = smart;
+                    settings.Data.SearchCaseSensitive = true;
+                    string query = smart ? "title:\"Alpha result\"" : "Alpha result";
+                    Invoke(form, "LoadData", records.ToArray(), query);
+                    Equal(1, grid.Rows.Count);
+                    settings.Data.SearchCaseSensitive = false;
+                    Invoke(form, "LoadData", records.ToArray(), query);
+                    Equal(2, grid.Rows.Count);
+                    settings.Data.SearchCaseSensitive = true;
+                    search.Text = "";
+                    search.Text = query;
+                    PumpUntil(() => grid.Rows.Count == 1);
+                    Equal("one", ((BibtexEntry)((System.Data.DataRowView)grid.Rows[0].DataBoundItem).Row["Entry"]).Key);
+                }
+                settings.Data.SearchCaseSensitive = false;
+                settings.SaveSettings();
+                settings.Data.SearchCaseSensitive = true;
+                settings.LoadSettings();
+                Equal(false, settings.Data.SearchCaseSensitive);
+            }
+        }
+
+        public static void MainForm_ColumnEditsRespectSelectionAndUndoRedo()
+        {
+            using (TestDirectory directory = new TestDirectory())
+            using (MainForm form = CreateForm(directory.Path))
+            {
+                var records = new List<BibtexEntry> { Entry("one", "Original"), Entry("two", "Untouched") };
+                Field(form, "entries").SetValue(form, records);
+                Invoke(form, "LoadData", records.ToArray(), "");
+                Invoke(form, "Changed", false);
+                var changes = ColumnEditService.Plan(new[] { records[0] }, new ColumnEditOptions
+                    { Operation = ColumnEditOperation.SetValue, Target = "title", Value = "Edited" });
+                Invoke(form, "ApplyColumnChanges", changes);
+                Equal("Edited", Records(form)[0].GetTagValue("title"));
+                Equal("Untouched", Records(form)[1].GetTagValue("title"));
+                Equal(true, Dirty(form));
+                Invoke(form, "RestoreArchiveHistory", false);
+                Equal("Original", Records(form)[0].GetTagValue("title"));
+                Equal(false, Dirty(form));
+                Invoke(form, "RestoreArchiveHistory", true);
+                Equal("Edited", Records(form)[0].GetTagValue("title"));
+                Equal("Untouched", Records(form)[1].GetTagValue("title"));
+            }
+        }
+
+        public static void MainForm_ColumnMenuSurvivesClosingAndReopening()
+        {
+            using (TestDirectory directory = new TestDirectory())
+            {
+                ContextMenuStrip menu;
+                using (MainForm form = CreateForm(directory.Path))
+                {
+                    var records = new List<BibtexEntry> { Entry("one", "Title") };
+                    records[0].Tags = records[0].Tags.Concat(new[] { new BibtexTag("note", "Note") }).ToArray();
+                    Field(form, "entries").SetValue(form, records);
+                    Invoke(form, "LoadData", records.ToArray(), "");
+                    var grid = (DataGridView)Field(form, "dataGridView1").GetValue(form);
+                    menu = (ContextMenuStrip)Field(form, "_columnContextMenu").GetValue(form);
+                    foreach (string column in new[] { "title", "note", "Key", "title" })
+                    {
+                        var click = new DataGridViewCellMouseEventArgs(grid.Columns[column].Index, -1, 0, 0,
+                            new MouseEventArgs(MouseButtons.Right, 1, 0, 0, 0));
+                        Invoke(form, "dataGridView1_ColumnHeaderMouseClick", grid, click);
+                        Equal(true, menu.Visible);
+                        Equal(column, (string)Field(form, "_contextColumnName").GetValue(form));
+                        Equal(column != "Key", menu.Items[0].Enabled);
+                        menu.Close(ToolStripDropDownCloseReason.AppClicked);
+                        Application.DoEvents();
+                        Equal(false, menu.IsDisposed);
+                        Equal(false, menu.Visible);
+                    }
+
+                    // Exercise the real menu command and its nested modal message loop.
+                    Invoke(form, "dataGridView1_ColumnHeaderMouseClick", grid,
+                        new DataGridViewCellMouseEventArgs(grid.Columns["title"].Index, -1, 0, 0,
+                            new MouseEventArgs(MouseButtons.Right, 1, 0, 0, 0)));
+                    bool editorOpened = false;
+                    using (var timer = new System.Windows.Forms.Timer { Interval = 10 })
+                    {
+                        timer.Tick += (sender, args) =>
+                        {
+                            var editor = Application.OpenForms.OfType<ColumnEditForm>().FirstOrDefault();
+                            if (editor == null) return;
+                            editorOpened = true;
+                            timer.Stop();
+                            editor.DialogResult = DialogResult.Cancel;
+                            editor.Close();
+                        };
+                        timer.Start();
+                        menu.Items[0].PerformClick();
+                    }
+                    Equal(true, editorOpened);
+                    Equal(false, menu.IsDisposed);
+                }
+                Equal(true, menu.IsDisposed);
+            }
+        }
+
+        public static void ColumnDialog_PreviewsScopesAndInvalidatesChangedOptions()
+        {
+            var first = Entry("one", "First");
+            var second = Entry("two", "Second");
+            using (var dialog = new ColumnEditForm(new[] { "title" }, new[] { first, second },
+                new[] { first }, new[] { second }, true))
+            {
+                const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+                Func<string, object> field = name => typeof(ColumnEditForm).GetField(name, flags).GetValue(dialog);
+                Action preview = () => typeof(ColumnEditForm).GetMethod("PreviewChanges", flags).Invoke(dialog, null);
+                var operation = (ComboBox)field("_operation");
+                var scope = (ComboBox)field("_scope");
+                var value = (TextBox)field("_value");
+                var apply = (Button)field("_apply");
+                operation.SelectedIndex = (int)ColumnEditOperation.SetValue;
+                value.Text = "Changed";
+                preview();
+                Equal(2, dialog.Changes.Count);
+                Equal(true, apply.Enabled);
+                scope.SelectedIndex = 1;
+                Equal(false, apply.Enabled);
+                Equal(0, dialog.Changes.Count);
+                preview();
+                Equal(first, dialog.Changes.Single().Entry);
+                scope.SelectedIndex = 2;
+                preview();
+                Equal(second, dialog.Changes.Single().Entry);
+                Equal("Second", second.GetTagValue("title"));
+                value.Text = "Different";
+                Equal(false, apply.Enabled);
+                Equal(0, dialog.Changes.Count);
             }
         }
 

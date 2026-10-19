@@ -30,6 +30,7 @@ Scientific Reviews is a Windows desktop tool for researchers who work with BibTe
 - Classic full-table search across rendered BibTeX content remains available as a fallback mode
 - Search mode toggle remembers the last selected `Smart search` / classic mode between application runs
 - Record editing through the property grid and tag editor
+- Whole-column editing from `Window -> Columns merge/copy/replace` or by right-clicking a tag column header, with a preview and undo/redo
 - `Ctrl+Z` undoes archive changes, including tag edits, deletion, paste and bulk operations; `Ctrl+Y` / `Ctrl+Shift+Z` redo them (up to 50 steps, with a memory limit for large archives)
 - Text editors retain normal text undo; `Ctrl+Backspace` deletes the previous word and supports undo
 - HTTP/HTTPS links in the read-only BibTeX preview open in the default browser, preserving URL capitalization
@@ -57,6 +58,20 @@ The main search box supports two modes:
   - comma-separated values act as `OR`
 
 The `Smart search` checkbox next to the search box switches between these modes. Hovering over the search box shows a tooltip with example syntax for the active mode.
+
+Both modes match letter case by default. Turn off `Project -> Settings -> Case-sensitive search` to ignore letter case; this preference is saved between runs. Smart-search field names and boolean operators remain case-insensitive, and numeric comparisons are unaffected.
+
+### Whole-column editing
+
+Open `Window -> Columns merge/copy/replace` or right-click a tag column header and choose `Columns merge/copy/replace`. Choose all records, records visible under the current search, or selected records as the scope. Entry keys and entry types are excluded from this tag editor.
+
+- `Merge columns` appends non-empty source values to the target using a configurable separator, keeping identical values once. Source tags are kept unless `Remove source column after merging` is checked.
+- `Copy column` overwrites target values from the source. Records without a source tag are skipped; an empty source value overwrites the target with an empty value.
+- `Set all values` replaces the entire target column with one value, creating missing tags. Empty values create empty tags.
+- `Find and replace text` replaces literal text in existing target values, with its own `Match case` toggle. Empty replacement text deletes matches.
+- `Remove column values` deletes all occurrences of the target tag within the chosen scope.
+
+Click `Preview` to see the number of changed records and the first five before/after examples, then `Apply`. Changing options requires a new preview. Each applied operation can be undone with `Ctrl+Z` and redone with `Ctrl+Y`.
 
 ### Clipboard and record transfer
 

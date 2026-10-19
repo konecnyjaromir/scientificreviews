@@ -55,6 +55,7 @@ namespace ScientificReviews.Forms
             InitializeReportCenter();
             UpdateWindowTitle();
             InitializeRecordContextMenu();
+            InitializeColumnEditingUi();
             InitializeRecordPanelToggleUi();
             dataGridView1.CellMouseDoubleClick += dataGridView1_CellMouseDoubleClick;
             dataGridView1.CellMouseDown += dataGridView1_CellMouseDown;
@@ -854,6 +855,14 @@ namespace ScientificReviews.Forms
 
             DataGridViewColumn clickedColumn = dataGridView1.Columns[e.ColumnIndex];
             string sortColumnName = GetSortColumnName(clickedColumn);
+            if (e.Button == MouseButtons.Right)
+            {
+                _contextColumnName = sortColumnName;
+                _editColumnValuesMenuItem.Enabled = ColumnEditService.IsEditableColumn(sortColumnName) && !IsBlockingUiActive;
+                _columnContextMenu.Show(dataGridView1, dataGridView1.PointToClient(Cursor.Position));
+                return;
+            }
+            if (e.Button != MouseButtons.Left) return;
             if (string.IsNullOrWhiteSpace(sortColumnName) || string.Equals(sortColumnName, "Entry", StringComparison.OrdinalIgnoreCase))
                 return;
 

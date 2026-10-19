@@ -42,6 +42,7 @@ namespace ScientificReviews.Forms
             _searchCancellation = cancellation;
             string query = txtSearch.Text;
             bool smartSearch = UseSmartSearch;
+            bool caseSensitive = SearchCaseSensitive;
             BibtexEntry[] source = entries.ToArray();
             string[] columns = (Program.AppSettings.Data.Columns ?? Array.Empty<string>()).ToArray();
             string sortColumn = _currentSortColumnName;
@@ -54,7 +55,7 @@ namespace ScientificReviews.Forms
                 PreparedSearchResult result = await Task.Run(() =>
                 {
                     string validationMessage;
-                    BibtexEntry[] matches = ApplySearchFilter(source, query, smartSearch, cancellation.Token, out validationMessage);
+                    BibtexEntry[] matches = ApplySearchFilter(source, query, smartSearch, caseSensitive, cancellation.Token, out validationMessage);
                     cancellation.Token.ThrowIfCancellationRequested();
                     matches = ApplyCurrentSort(matches, sortColumn, sortDirection, cancellation.Token);
                     DataTable table = BuildTable(matches, source, columns, cancellation.Token);
@@ -87,6 +88,8 @@ namespace ScientificReviews.Forms
                 cancellation.Dispose();
             }
         }
+
+        private bool SearchCaseSensitive => Program.AppSettings?.Data?.SearchCaseSensitive ?? true;
 
         private bool UseSmartSearch
         {
@@ -125,13 +128,14 @@ namespace ScientificReviews.Forms
 
         private BibtexEntry[] ApplySearchFilter(IEnumerable<BibtexEntry> sourceEntries, string search, out string validationMessage)
         {
-            return ApplySearchFilter(sourceEntries, search, UseSmartSearch, CancellationToken.None, out validationMessage);
+            return ApplySearchFilter(sourceEntries, search, UseSmartSearch, SearchCaseSensitive, CancellationToken.None, out validationMessage);
         }
 
         private BibtexEntry[] ApplySearchFilter(
             IEnumerable<BibtexEntry> sourceEntries,
             string search,
             bool useSmartSearch,
+            bool caseSensitive,
             CancellationToken cancellationToken,
             out string validationMessage)
         {
@@ -144,9 +148,9 @@ namespace ScientificReviews.Forms
                 return candidates;
 
             if (!useSmartSearch)
-                return ApplyClassicSearch(candidates, search, cancellationToken);
+                return ApplyClassicSearch(candidates, search, caseSensitive, cancellationToken);
 
-            SmartSearchParseResult parseResult = SmartSearchFilter.TryParse(search);
+            SmartSearchParseResult parseResult = SmartSearchFilter.TryParse(search, caseSensitive);
             if (!parseResult.Success)
             {
                 validationMessage = $"{SmartSearchErrorPrefix} {parseResult.ErrorMessage}";
@@ -163,10 +167,9 @@ namespace ScientificReviews.Forms
             return matches.ToArray();
         }
 
-        private BibtexEntry[] ApplyClassicSearch(IEnumerable<BibtexEntry> sourceEntries, string search, CancellationToken cancellationToken)
+        private BibtexEntry[] ApplyClassicSearch(IEnumerable<BibtexEntry> sourceEntries, string search, bool caseSensitive, CancellationToken cancellationToken)
         {
-            string normalizedSearch = (search ?? string.Empty).ToLowerInvariant();
-            string[] searchTerms = normalizedSearch
+            string[] searchTerms = (search ?? string.Empty)
                 .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(item => item.Trim())
                 .Where(item => item.Length > 0)
@@ -180,7 +183,7 @@ namespace ScientificReviews.Forms
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 string serializedEntry = bibtexExporter.EntryToString(entry) ?? string.Empty;
-                if (searchTerms.Any(term => serializedEntry.IndexOf(term, StringComparison.OrdinalIgnoreCase) >= 0))
+                if (searchTerms.Any(term => serializedEntry.IndexOf(term, caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase) >= 0))
                     filtered.Add(entry);
             }
 
@@ -205,13 +208,16 @@ namespace ScientificReviews.Forms
                 _searchModeCheckBoxHost.ToolTipText = "Classic full-text search is active. Check to switch to smart query search.";
                 txtSearch.ToolTipText = "Classic mode searches the whole record. Separate values by comma for OR.";
             }
+            txtSearch.ToolTipText += SearchCaseSensitive
+                ? " Case-sensitive (change in Settings)."
+                : " Case-insensitive (change in Settings).";
         }
 
         private void UpdateSearchValidationStatus(string preferredStatus = null)
         {
             if (UseSmartSearch && string.IsNullOrWhiteSpace(txtSearch.Text) == false)
             {
-                SmartSearchParseResult parseResult = SmartSearchFilter.TryParse(txtSearch.Text);
+                SmartSearchParseResult parseResult = SmartSearchFilter.TryParse(txtSearch.Text, SearchCaseSensitive);
                 if (!parseResult.Success)
                 {
                     lblStatus.Text = $"{SmartSearchErrorPrefix} {parseResult.ErrorMessage}";

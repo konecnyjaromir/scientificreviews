@@ -254,6 +254,12 @@ namespace ScientificReviews
         [Browsable(false)]
         public bool UseSmartSearch { get; set; } = true;
 
+        [Category("Search")]
+        [DisplayName("Case-sensitive search")]
+        [Description("Match letter case in both smart and classic search. Field names and boolean operators remain case-insensitive.")]
+        [DefaultValue(true)]
+        public bool SearchCaseSensitive { get; set; } = true;
+
         [Browsable(false)]
         public List<CustomPipelineDefinition> CustomPipelines { get; set; } = new List<CustomPipelineDefinition>();
 

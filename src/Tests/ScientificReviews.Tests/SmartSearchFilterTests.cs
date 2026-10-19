@@ -15,7 +15,7 @@ namespace ScientificReviews.Tests
                 new BibtexTag("author", "Jiri Novak"),
                 new BibtexTag("year", "2024"));
 
-            SmartSearchParseResult result = SmartSearchFilter.TryParse("title:\"machine learning\" AND author:novak AND NOT year:2023");
+            SmartSearchParseResult result = SmartSearchFilter.TryParse("title:\"machine learning\" AND author:novak AND NOT year:2023", false);
 
             AssertTrue(result.Success);
             AssertTrue(result.Filter.IsMatch(entry));
@@ -43,7 +43,7 @@ namespace ScientificReviews.Tests
                 new BibtexTag("title", "Systematic literature review"),
                 new BibtexTag("journal", "Expert Systems"));
 
-            SmartSearchParseResult result = SmartSearchFilter.TryParse("review journal:expert");
+            SmartSearchParseResult result = SmartSearchFilter.TryParse("review journal:expert", false);
 
             AssertTrue(result.Success);
             AssertTrue(result.Filter.IsMatch(entry));
@@ -118,6 +118,18 @@ namespace ScientificReviews.Tests
                 Type = type,
                 Tags = tags
             };
+        }
+
+        public static void TryParse_MatchesCaseByDefaultAndCanIgnoreCase()
+        {
+            var entry = CreateEntry("MixedKey", "Article", new BibtexTag("title", "Alpha beta"), new BibtexTag("year", "2026"));
+            AssertFalse(SmartSearchFilter.TryParse("title:alpha").Filter.IsMatch(entry));
+            AssertTrue(SmartSearchFilter.TryParse("TITLE:Alpha and not title:Beta AND year>=2025").Filter.IsMatch(entry));
+            AssertTrue(SmartSearchFilter.TryParse("title:alpha", false).Filter.IsMatch(entry));
+            AssertFalse(SmartSearchFilter.TryParse("key:mixedkey").Filter.IsMatch(entry));
+            AssertTrue(SmartSearchFilter.TryParse("key:MixedKey").Filter.IsMatch(entry));
+            AssertFalse(SmartSearchFilter.TryParse("\"alpha beta\"").Filter.IsMatch(entry));
+            AssertTrue(SmartSearchFilter.TryParse("\"alpha beta\"", false).Filter.IsMatch(entry));
         }
 
         private static void AssertTrue(bool value)
