@@ -4,6 +4,7 @@ name: Auto Release (.NET 4.8)
 # 1. bumps AssemblyVersion x.y.z.b in src/Properties/AssemblyInfo.cs, commits it and pushes tag vx.y.z.b
 # 2. builds Release and publishes GitHub Release with:
 #    - ScientificReviews-win-Setup.exe + Velopack update packages (installed app updates itself, see src/Helpers/AppUpdater.cs)
+#    - ScientificReviews-win-Portable.zip (Velopack portable: no installer, updates itself)
 #    - ScientificReviews.zip (standalone, no installer, no automatic updates)
 # Velopack requires SemVer2 (3 parts), installer version is x.y.b (build b increases with every release).
 
@@ -160,8 +161,16 @@ jobs:
           }
 
           Add-Content -Path $tempNotes -Value "`n---`n"
-          Add-Content -Path $tempNotes -Value "**Install:** download ``ScientificReviews-win-Setup.exe`` - the installed application updates itself automatically.`n"
-          Add-Content -Path $tempNotes -Value "**Standalone:** ``ScientificReviews.zip`` - unzip anywhere and run ``ScientificReviews.exe`` (no automatic updates).`n"
+          Add-Content -Path $tempNotes -Value "## Downloads`n"
+          Add-Content -Path $tempNotes -Value "| File | Installation | Automatic updates | Settings and data |"
+          Add-Content -Path $tempNotes -Value "|---|---|---|---|"
+          Add-Content -Path $tempNotes -Value "| ``ScientificReviews-win-Setup.exe`` | Installer (recommended) | Yes | ``%LocalAppData%\VSB-TUO\ScientificReviews`` |"
+          Add-Content -Path $tempNotes -Value "| ``ScientificReviews-win-Portable.zip`` | None, unzip anywhere | Yes | ``%LocalAppData%\VSB-TUO\ScientificReviews`` |"
+          Add-Content -Path $tempNotes -Value "| ``ScientificReviews.zip`` | None, unzip anywhere | No | Next to ``ScientificReviews.exe`` |`n"
+          Add-Content -Path $tempNotes -Value "- **Setup.exe** - installs for the current user (no admin rights, adds .NET Framework 4.8 if missing), creates Start menu and desktop shortcuts."
+          Add-Content -Path $tempNotes -Value "- **Portable.zip** - portable version *with* automatic updates: unzip into any writable folder (e.g. USB drive, Documents) and run ``ScientificReviews.exe``. Keep ``Update.exe`` and the ``current`` folder next to it; updates replace ``current``. Nothing is installed, delete the folder to remove it."
+          Add-Content -Path $tempNotes -Value "- **ScientificReviews.zip** - standalone build *without* automatic updates: unzip anywhere and run ``ScientificReviews.exe``; settings stay next to the executable, new versions are installed manually.`n"
+          Add-Content -Path $tempNotes -Value "Moving from the standalone zip: use ``Project -> Import Settings`` to bring the old ``settings.json`` along.`n"
 
       # 5. Setup MSBuild
       - name: Setup MSBuild

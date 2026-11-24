@@ -82,7 +82,8 @@ If **no flag** is found:
 - **Release assets**:
   - `ScientificReviews-win-Setup.exe` - Velopack installer
   - `ScientificReviews-{x.y.b}-full.nupkg` (+ `-delta.nupkg` from the second Velopack release on), `releases.win.json`, `RELEASES`, `assets.win.json` - update feed read by the installed app
-  - `ScientificReviews.zip` - standalone/portable build, no automatic updates
+  - `ScientificReviews-win-Portable.zip` - Velopack portable (no installer, `Update.exe` + `current\`, updates itself, data in `%LocalAppData%` like the installed app)
+  - `ScientificReviews.zip` - standalone build output, no automatic updates, data next to the executable
 
 ---
 

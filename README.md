@@ -435,12 +435,21 @@ When the optimization is triggered, Notifications first shows `Please wait, proc
 
 ## Installation and Updates
 
-Every [GitHub Release](https://github.com/konecnyjaromir/scientificreviews/releases) contains two variants:
+Every [GitHub Release](https://github.com/konecnyjaromir/scientificreviews/releases) contains three variants:
 
-- `ScientificReviews-win-Setup.exe` - installs the application for the current user (no administrator rights, installs .NET Framework 4.8 when missing) and creates Start menu and desktop shortcuts. The installed application checks for a new version on startup and offers to install it; the update runs after the usual unsaved-changes check and restarts the application. Disable it with `Settings -> Check for updates`, check manually with `About -> Check for updates`. Settings, journals database, logs and default backups are stored in `%LocalAppData%\VSB-TUO\ScientificReviews`, so updates do not touch them.
-- `ScientificReviews.zip` - portable version, unzip anywhere and run `ScientificReviews.exe`. Settings and data stay next to the executable and the application is never updated automatically.
+| File | Installation | Automatic updates | Settings and data |
+|---|---|---|---|
+| `ScientificReviews-win-Setup.exe` | Installer (recommended) | Yes | `%LocalAppData%\VSB-TUO\ScientificReviews` |
+| `ScientificReviews-win-Portable.zip` | None, unzip anywhere | Yes | `%LocalAppData%\VSB-TUO\ScientificReviews` |
+| `ScientificReviews.zip` | None, unzip anywhere | No | Next to `ScientificReviews.exe` |
 
-When moving from the portable version to the installed one, use `Project -> Import Settings` to bring the old `settings.json` along.
+- `ScientificReviews-win-Setup.exe` - installs the application for the current user (no administrator rights, installs .NET Framework 4.8 when missing) and creates Start menu and desktop shortcuts. Uninstall from Windows `Settings -> Apps`.
+- `ScientificReviews-win-Portable.zip` - portable version **with automatic updates**. Nothing is installed and no shortcuts are created: unzip it into any folder you can write to (for example on a USB drive or in your Documents) and run `ScientificReviews.exe` from that folder. The zip also contains `Update.exe` and the `current` folder with the application itself; keep them together, updates replace the content of `current`. .NET Framework 4.8 must already be present (it is part of Windows 10/11). To remove it, delete the folder.
+- `ScientificReviews.zip` - standalone version **without automatic updates**: the plain build output. Unzip anywhere and run `ScientificReviews.exe`; settings, logs and default backups stay next to the executable. Suitable when updates must stay under manual control. A new version is installed by downloading and unzipping a new zip.
+
+The installed and the auto-updating portable version check for a new version on startup and offer to install it; the update runs after the usual unsaved-changes check and restarts the application. Disable it with `Settings -> Check for updates`, check manually with `About -> Check for updates`. Both keep settings, the journals database, logs and default backups in `%LocalAppData%\VSB-TUO\ScientificReviews` (shared between them), so updates never touch them.
+
+When moving from the standalone zip to the installed or auto-updating portable version, use `Project -> Import Settings` to bring the old `settings.json` along.
 
 ## License
 
