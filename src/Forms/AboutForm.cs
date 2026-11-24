@@ -1,3 +1,4 @@
+using ScientificReviews.Helpers;
 using System;
 using System.Diagnostics;
 using System.Drawing;
@@ -14,6 +15,11 @@ namespace ScientificReviews.Forms
         {
             InitializeAboutForm();
         }
+
+        /// <summary>
+        /// Set when the user clicked "Check for updates", the check itself runs in MainForm after this dialog closes.
+        /// </summary>
+        public bool CheckForUpdatesRequested { get; private set; }
 
         private void InitializeAboutForm()
         {
@@ -60,6 +66,24 @@ namespace ScientificReviews.Forms
 
             if (!string.IsNullOrWhiteSpace(copyright))
                 layout.Controls.Add(CreateTextLabel(copyright), 0, 5);
+
+            bool installed = AppUpdater.IsInstalledApp();
+            layout.Controls.Add(CreateTextLabel(installed
+                ? "Installation: installed (automatic updates from GitHub Releases)"
+                : "Installation: standalone (no automatic updates)"), 0, 6);
+
+            Button checkForUpdatesButton = new Button
+            {
+                AutoSize = true,
+                Text = "Check for updates",
+                Margin = new Padding(0, 8, 0, 0)
+            };
+            checkForUpdatesButton.Click += (sender, e) =>
+            {
+                CheckForUpdatesRequested = true;
+                Close();
+            };
+            layout.Controls.Add(checkForUpdatesButton, 0, 7);
 
             page.Controls.Add(layout);
             return page;

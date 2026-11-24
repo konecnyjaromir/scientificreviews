@@ -94,6 +94,12 @@ namespace ScientificReviews
 
         [Browsable(true)]
         [Category(APPLICATION_CAT)]
+        [DisplayName("Check for updates")]
+        [Description("If enabled, the installed application checks GitHub Releases for a new version on startup and offers to install it. The standalone zip version is never updated automatically. Manual check: About -> Check for updates.")]
+        public bool CheckForUpdates { get; set; } = true;
+
+        [Browsable(true)]
+        [Category(APPLICATION_CAT)]
         [DisplayName("Auto-preprocessing mode")]
         [Description("Selects which automatic preprocessing steps run after opening a BibTeX database: Off = none, Fast = local quick fixes and PDF pairing, Normal = the full preprocessing pipeline using the current settings of individual procedures, Deep = the full preprocessing pipeline with the most exhaustive metadata options.")]
         [TypeConverter(typeof(AutoPreprocessingModeConverter))]
@@ -223,9 +229,14 @@ namespace ScientificReviews
         [Browsable(true)]
         [Category(BACKUP_CAT)]
         [DisplayName("Backup folder")]
-        [Description("Folder where automatic backup BibTeX snapshots are stored. Defaults to the backup folder next to the application.")]
+        [Description("Folder where automatic backup BibTeX snapshots are stored. Defaults to the backup folder next to the settings file.")]
         [Editor(typeof(PathEditor), typeof(UITypeEditor))]
-        public string BackupFolder { get; set; } = System.IO.Path.Combine(System.AppDomain.CurrentDomain.BaseDirectory, "backup");
+        public string BackupFolder { get; set; } = DefaultBackupFolder;
+
+        // Installed app: next to settings in %LocalAppData% (application folder is replaced on every update)
+        internal static string DefaultBackupFolder => System.IO.Path.Combine(
+            string.IsNullOrWhiteSpace(Program.GlobalPath) ? System.AppDomain.CurrentDomain.BaseDirectory : Program.GlobalPath,
+            "backup");
 
         [Browsable(true)]
         [Category(BACKUP_CAT)]

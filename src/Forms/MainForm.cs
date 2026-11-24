@@ -985,12 +985,17 @@ namespace ScientificReviews.Forms
             RefreshGrid(statusMessage: "Grid refreshed.");
         }
 
-        private void aboutToolStripMenuItem_Click(object sender, EventArgs e)
+        private async void aboutToolStripMenuItem_Click(object sender, EventArgs e)
         {
+            bool checkForUpdates;
             using (AboutForm aboutForm = new AboutForm())
             {
                 aboutForm.ShowDialog(this);
+                checkForUpdates = aboutForm.CheckForUpdatesRequested;
             }
+
+            if (checkForUpdates)
+                await CheckForUpdatesAsync(interactive: true);
         }
 
         private async void updateJournalsDatabaseToolStripMenuItem_Click(object sender, EventArgs e)
@@ -1504,6 +1509,8 @@ namespace ScientificReviews.Forms
 
                 if (Program.AppSettings.Data.FirstTimeUseCompleted != true)
                     ShowFirstTimeUseGuide();
+
+                StartUpdateCheckOnStartup();
 
                 if (_startupFilePaths.Length > 0)
                 {

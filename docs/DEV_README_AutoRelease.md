@@ -67,7 +67,8 @@ If a release flag is found:
 6. Creates a git tag:
    - `v{x.y.z.b}`
 7. Builds the project and zips output into `ScientificReviews.zip`.
-8. Publishes a GitHub Release for the tag and uploads `ScientificReviews.zip`.
+8. Packs the build with Velopack (`vpk pack`, delta against the previous release when available).
+9. Publishes a GitHub Release for the tag with the Velopack assets (`vpk upload github`), then sets the release notes and uploads `ScientificReviews.zip`.
 
 If **no flag** is found:
 
@@ -77,8 +78,34 @@ If **no flag** is found:
 
 ## Output artifacts
 
-- **Tag**: `v{x.y.z.b}`
-- **Release asset**: `ScientificReviews.zip`
+- **Tag**: `v{x.y.z.b}` (pushed by the workflow on the version bump commit)
+- **Release assets**:
+  - `ScientificReviews-win-Setup.exe` - Velopack installer
+  - `ScientificReviews-{x.y.b}-full.nupkg` (+ `-delta.nupkg` from the second Velopack release on), `releases.win.json`, `RELEASES`, `assets.win.json` - update feed read by the installed app
+  - `ScientificReviews.zip` - standalone/portable build, no automatic updates
+
+---
+
+## Automatic updates (Velopack)
+
+The installed application updates itself from GitHub Releases using [Velopack](https://velopack.io) (same setup as Betotech_Sampledroid).
+
+- `src/Program.cs` - `VelopackApp.Build().Run()` must stay the **first** line of `Main` (install/update/uninstall hooks, the process may exit there). After `Application.Run` returns, a pending update confirmed by the user is applied and the app restarts.
+- `src/Helpers/AppUpdater.cs` - `UpdateManager` + `GithubSource` for the public repository, no token, stable releases only.
+- `src/Forms/MainForm.Updates.cs` - background check on startup (setting `Check for updates`, default on) and manual check from `About -> Check for updates`. After download the main window is closed through its normal path (unsaved-changes prompt, autosave, settings save), then `Program.Main` applies the update. If the close is cancelled, the update is installed on the next close; a downloaded package is also applied automatically on the next start.
+- **Data folder**: the installed app keeps `settings.json`, `journals.json`, `logs` and the default `backup` folder in `%LocalAppData%\VSB-TUO\ScientificReviews` (`Program.GlobalPath`), because Velopack replaces the application folder on every update. The standalone zip and build output keep the data next to the executable.
+
+### Installer version vs. assembly version
+
+Velopack requires SemVer2 (3 parts), so the package version is **`x.y.b`** (major.minor.build), e.g. assembly `1.1.3.12` -> installer `1.1.12`. The build number `b` increases with every release and never resets, so update ordering is always correct (including `(build)`-only releases). The update dialog shows this installer version; `About` shows the full assembly version.
+
+### Version of the Velopack tool
+
+`VPK_VERSION` in `.github/workflows/release.yml` must match the `Velopack` package version in `src/packages.config`.
+
+### Testing updates locally
+
+Updates only work in the installed app (`UpdateManager.IsInstalled`); running from `bin\` or from the zip skips the check. To test: install an older release with Setup.exe, then publish a newer release (or run the installed app against a newer release that already exists).
 
 ---
 

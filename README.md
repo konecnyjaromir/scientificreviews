@@ -433,7 +433,14 @@ When the optimization is triggered, Notifications first shows `Please wait, proc
 - Framework: .NET Framework 4.8
 - Input format: BibTeX (`.bib`)
 
-Scientific Reviews is distributed as a portable Windows application and does not require a separate installer.
+## Installation and Updates
+
+Every [GitHub Release](https://github.com/konecnyjaromir/scientificreviews/releases) contains two variants:
+
+- `ScientificReviews-win-Setup.exe` - installs the application for the current user (no administrator rights, installs .NET Framework 4.8 when missing) and creates Start menu and desktop shortcuts. The installed application checks for a new version on startup and offers to install it; the update runs after the usual unsaved-changes check and restarts the application. Disable it with `Settings -> Check for updates`, check manually with `About -> Check for updates`. Settings, journals database, logs and default backups are stored in `%LocalAppData%\VSB-TUO\ScientificReviews`, so updates do not touch them.
+- `ScientificReviews.zip` - portable version, unzip anywhere and run `ScientificReviews.exe`. Settings and data stay next to the executable and the application is never updated automatically.
+
+When moving from the portable version to the installed one, use `Project -> Import Settings` to bring the old `settings.json` along.
 
 ## License
 

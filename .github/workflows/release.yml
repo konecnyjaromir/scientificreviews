@@ -1,17 +1,34 @@
 name: Auto Release (.NET 4.8)
 
+# Release on push with a flag in the commit message: (major) / (minor) / (patch) / (build)
+# 1. bumps AssemblyVersion x.y.z.b in src/Properties/AssemblyInfo.cs, commits it and pushes tag vx.y.z.b
+# 2. builds Release and publishes GitHub Release with:
+#    - ScientificReviews-win-Setup.exe + Velopack update packages (installed app updates itself, see src/Helpers/AppUpdater.cs)
+#    - ScientificReviews.zip (standalone, no installer, no automatic updates)
+# Velopack requires SemVer2 (3 parts), installer version is x.y.b (build b increases with every release).
+
 on:
   # Trigger on push to main/master ONLY if the commit message contains specific flags
   push:
     branches:
       - main
       - master
-  
+
   # Keep manual trigger for testing (optional)
   workflow_dispatch:
 
 permissions:
   contents: write
+
+# Velopack delta packages are computed from the previous release: never run two releases at once
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  PACK_ID: ScientificReviews
+  MAIN_EXE: ScientificReviews.exe
+  VPK_VERSION: 1.2.161   # keep same as Velopack package version in src/packages.config
 
 jobs:
   build-and-release:
@@ -36,9 +53,11 @@ jobs:
       - name: Bump Version in AssemblyInfo
         id: bump_version
         shell: powershell
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
           $assemblyFile = "src/Properties/AssemblyInfo.cs"
-          
+
           # Check if file exists
           if (-not (Test-Path $assemblyFile)) {
             Write-Error "AssemblyInfo.cs not found at $assemblyFile"
@@ -47,20 +66,20 @@ jobs:
 
           # Read the file content
           $content = Get-Content -Path $assemblyFile -Raw
-          
+
           # Regex to find [assembly: AssemblyVersion("1.0.0.0")]
           $pattern = '\[assembly: AssemblyVersion\("(\d+)\.(\d+)\.(\d+)\.(\d+)"\)\]'
-          
+
           if ($content -match $pattern) {
             $major = [int]$matches[1]
             $minor = [int]$matches[2]
             $patch = [int]$matches[3]
             $build = [int]$matches[4]
-            
+
             Write-Host "Current Version: $major.$minor.$patch.$build"
-            
-            # Get Commit Message
-            $commitMsg = "${{ github.event.head_commit.message }}"
+
+            # Get Commit Message (from env: quotes in the message must not break the script)
+            $commitMsg = $env:COMMIT_MSG
             if ([string]::IsNullOrEmpty($commitMsg)) { $commitMsg = "manual trigger (build)" }
 
             # Logic: Build increments EVERY TIME
@@ -79,31 +98,34 @@ jobs:
               $newPatch = 0 # Standard behavior: Reset patch on Minor bump
             } elseif ($commitMsg -match '\(patch\)') {
               $newPatch = $patch + 1
-            } 
+            }
             # If (build) or no other flag, only $newBuild is updated (already done above)
 
             $newVersion = "$newMajor.$newMinor.$newPatch.$newBuild"
-            Write-Host "New Version: $newVersion"
-            
+            # Velopack (SemVer2): major.minor.build - build never resets, so the order of versions is kept
+            $packVersion = "$newMajor.$newMinor.$newBuild"
+            Write-Host "New Version: $newVersion (installer version $packVersion)"
+
             # Replace in content
             $newContent = $content -replace $pattern, "[assembly: AssemblyVersion(""$newVersion"")]"
-            
+
             # Also update AssemblyFileVersion if present, usually good practice
             $fileVersionPattern = '\[assembly: AssemblyFileVersion\("(\d+)\.(\d+)\.(\d+)\.(\d+)"\)\]'
             $newContent = $newContent -replace $fileVersionPattern, "[assembly: AssemblyFileVersion(""$newVersion"")]"
 
             # Write back to file
             Set-Content -Path $assemblyFile -Value $newContent -Encoding UTF8
-            
+
             # Set output for next steps
             echo "version=$newVersion" >> $env:GITHUB_OUTPUT
+            echo "pack_version=$packVersion" >> $env:GITHUB_OUTPUT
             echo "version_changed=true" >> $env:GITHUB_OUTPUT
           } else {
-            Write-Warning "Could not find AssemblyVersion pattern in $assemblyFile"
-            echo "version_changed=false" >> $env:GITHUB_OUTPUT
+            Write-Error "Could not find AssemblyVersion pattern in $assemblyFile"
+            exit 1
           }
 
-      # 3. Commit and Push the Version Bump
+      # 3. Commit and Push the Version Bump, tag the bump commit
       - name: Commit and Push Version Bump
         if: steps.bump_version.outputs.version_changed == 'true'
         run: |
@@ -112,26 +134,34 @@ jobs:
           git add src/Properties/AssemblyInfo.cs
           git commit -m "Bump version to ${{ steps.bump_version.outputs.version }} [skip ci]"
           git push
+          git tag "v${{ steps.bump_version.outputs.version }}"
+          git push origin "v${{ steps.bump_version.outputs.version }}"
 
       # 4. Prepare Release Notes
       - name: Prepare Release Notes
         id: release_notes
         shell: powershell
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
-          $notesFile = "RELEASE_NOTES.md" 
+          $notesFile = "RELEASE_NOTES.md"
           $tempNotes = "final_release_notes.tmp"
-          
+
           # Add commit message as summary
           Add-Content -Path $tempNotes -Value "## Commit Message`n"
-          Add-Content -Path $tempNotes -Value "${{ github.event.head_commit.message }}`n"
+          Add-Content -Path $tempNotes -Value "$env:COMMIT_MSG`n"
           Add-Content -Path $tempNotes -Value "---`n"
 
           if (Test-Path $notesFile) {
             $fileContent = Get-Content -Path $notesFile -Raw
             Add-Content -Path $tempNotes -Value "$fileContent"
           } else {
-            Set-Content -Path $tempNotes -Value "Automated release based on commit."
+            Add-Content -Path $tempNotes -Value "Automated release based on commit."
           }
+
+          Add-Content -Path $tempNotes -Value "`n---`n"
+          Add-Content -Path $tempNotes -Value "**Install:** download ``ScientificReviews-win-Setup.exe`` - the installed application updates itself automatically.`n"
+          Add-Content -Path $tempNotes -Value "**Standalone:** ``ScientificReviews.zip`` - unzip anywhere and run ``ScientificReviews.exe`` (no automatic updates).`n"
 
       # 5. Setup MSBuild
       - name: Setup MSBuild
@@ -149,17 +179,59 @@ jobs:
       - name: Build App
         run: msbuild src/ScientificReviews.csproj /p:Configuration=Release /p:Platform="Any CPU" /p:OutputPath=./publish
 
-      # 9. Zip the output
+      # 9. Zip the output (standalone version)
       - name: Zip Build
         run: Compress-Archive -Path ./src/publish/* -DestinationPath ScientificReviews.zip
 
-      # 10. Create Release
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
+      # 10. Velopack: installer + update packages
+      - name: Setup .NET SDK (for vpk)
+        uses: actions/setup-dotnet@v4
         with:
-          tag_name: v${{ steps.bump_version.outputs.version }}
-          name: Release v${{ steps.bump_version.outputs.version }}
-          body_path: final_release_notes.tmp
-          generate_release_notes: true
-          files: |
-            ScientificReviews.zip
+          dotnet-version: 9.0.x
+
+      - name: Install vpk
+        shell: pwsh
+        run: dotnet tool install -g vpk --version $env:VPK_VERSION
+
+      - name: Download previous release (delta updates)
+        shell: pwsh
+        run: |
+          vpk download github --repoUrl https://github.com/${{ github.repository }} --token ${{ secrets.GITHUB_TOKEN }} -o artifacts\Releases
+          if ($LASTEXITCODE -ne 0) { Write-Warning "No previous Velopack release downloaded - full package only."; $global:LASTEXITCODE = 0 }
+
+      - name: Pack
+        shell: pwsh
+        run: >-
+          vpk pack
+          --packId $env:PACK_ID
+          --packVersion ${{ steps.bump_version.outputs.pack_version }}
+          --packDir src\publish
+          --mainExe $env:MAIN_EXE
+          --packTitle "Scientific Reviews"
+          --packAuthors "VSB-TUO"
+          --framework net48
+          --icon src\education.ico
+          --releaseNotes final_release_notes.tmp
+          -o artifacts\Releases
+
+      # 11. Create Release (Velopack assets) and attach standalone zip
+      - name: Publish GitHub Release
+        shell: pwsh
+        run: >-
+          vpk upload github
+          --repoUrl https://github.com/${{ github.repository }}
+          --token ${{ secrets.GITHUB_TOKEN }}
+          -o artifacts\Releases
+          --publish
+          --merge
+          --releaseName "Release v${{ steps.bump_version.outputs.version }}"
+          --tag v${{ steps.bump_version.outputs.version }}
+
+      - name: Attach standalone zip and release notes
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $tag = "v${{ steps.bump_version.outputs.version }}"
+          gh release edit $tag --repo ${{ github.repository }} --notes-file final_release_notes.tmp
+          gh release upload $tag ScientificReviews.zip --repo ${{ github.repository }} --clobber

@@ -13,6 +13,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Windows.Forms;
+using Velopack;
 
 namespace ScientificReviews
 {
@@ -21,6 +22,11 @@ namespace ScientificReviews
         public const string SETTINGS_FILE_JSON = "settings.json";
         public const string JOURNALS_JSON = "journals.json";
         public const string APP_NAME = "Scientific reviews";
+        /// <summary>
+        /// Folder with settings, journals database, logs and default backups.
+        /// Next to the executable for the standalone zip, %LocalAppData%\VSB-TUO\ScientificReviews for the installed app
+        /// (Velopack replaces the application folder on every update).
+        /// </summary>
         public static string GlobalPath { get; private set; }
         public static string SettingsFilePath => string.IsNullOrWhiteSpace(GlobalPath)
             ? SETTINGS_FILE_JSON
@@ -34,11 +40,11 @@ namespace ScientificReviews
         [STAThread]
         static void Main(string[] args)
         {
+            // Must be first: handles Velopack install/update/uninstall hooks (process may exit inside Run)
+            VelopackApp.Build().Run();
+
             try
             {
-
-
-
                 ServicePointManager.Expect100Continue = true;
                 ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls
                                | SecurityProtocolType.Tls11
@@ -51,12 +57,12 @@ namespace ScientificReviews
                 Application.SetUnhandledExceptionMode(UnhandledExceptionMode.ThrowException);
                 AppDomain.CurrentDomain.UnhandledException += new UnhandledExceptionEventHandler(CurrentDomain_UnhandledException);
 
-                GlobalPath = Path.GetDirectoryName(Application.ExecutablePath);
+                GlobalPath = ResolveDataDirectory();
                 Thread.CurrentThread.Name = "Main Thread";
                 LogsInitialize();
                 LoadSettings();
 
-                JournalsDatabase = new JsonDatabase<JournalsDatabase>(JOURNALS_JSON);
+                JournalsDatabase = new JsonDatabase<JournalsDatabase>(Path.Combine(GlobalPath, JOURNALS_JSON));
                 JournalsDatabase.Load();
             }
 #if !DEBUG
@@ -69,6 +75,28 @@ namespace ScientificReviews
 
             Application.AddMessageFilter(new TextEditingShortcuts());
             Application.Run(new Forms.MainForm(args));
+
+            // Update confirmed in MainForm: the window closed through its normal unsaved-changes/backup checks
+            AppUpdater.ApplyPendingUpdate();
+        }
+
+        private static string ResolveDataDirectory()
+        {
+            string applicationDirectory = Path.GetDirectoryName(Application.ExecutablePath);
+            if (!AppUpdater.IsInstalledApp())
+                return applicationDirectory;
+
+            try
+            {
+                string dataDirectory = Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "VSB-TUO", "ScientificReviews");
+                Directory.CreateDirectory(dataDirectory);
+                return dataDirectory;
+            }
+            catch (Exception)
+            {
+                return applicationDirectory;
+            }
         }
 
         private static void LogsInitialize()
